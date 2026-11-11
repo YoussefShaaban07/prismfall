@@ -41,7 +41,7 @@ Three-day build. Each session picks up the next unchecked items, playtests with 
 - [x] Boss intro cinematic (camera push, letterbox, slow-mo, name card)
 - [x] Local top-10 leaderboard with run details (Hangar → Records)
 - [x] Accessibility: reduce-flashing mode, high-contrast enemy bullets
-- [ ] Unit tests (vitest) for upgrades/meta/progression + CI check
+- [x] Unit tests (vitest, 15 tests) for upgrades/meta/progression/spatial grid, run in CI before deploy
 
 ### Day 3 — polish & ship
 - [x] Menu/controller navigation (D-pad/arrows + A/Enter, B/Esc back), settings from main menu, control reference
@@ -50,6 +50,7 @@ Three-day build. Each session picks up the next unchecked items, playtests with 
 - [ ] Full QA pass (desktop + phone sizes), README with screenshots, GitHub Pages deploy
 
 ## Session log
+- **S2c (Nov 10 night)**: boss intro cinematic, top-10 leaderboard, accessibility options, vitest suite + CI.
 - **S2b (Nov 10 night)**: 8-weapon pool, lighter scorch decals, bot now sidesteps bullets/hazards. 6-run sample: deaths at 3:53–10:09, 1 win — good roguelite curve before hangar upgrades.
 - **S2 (Nov 10 night)**: boss signatures + hazards; fixed negative frame-delta bug that blew up post-processing after picking upgrades; balance (more repairs, cubic late HP); bloom/bullet readability; README + screenshots.
 - **S1c (Nov 10 eve)**: new enemies, material/tone-mapping fixes (ACES was whitening accents), tutorial, PWA, auto quality.
