@@ -33,6 +33,8 @@ export class Pickups {
   private p = new THREE.Vector3();
   private s = new THREE.Vector3();
   private beamGeo: THREE.CylinderGeometry;
+  /** Comet streaks behind crystals the magnet is reeling in. */
+  streaks: THREE.InstancedMesh;
 
   constructor(private scene: THREE.Scene, private assets: Assets, private g: Game) {
     const geo = new THREE.OctahedronGeometry(0.28, 0);
@@ -55,6 +57,32 @@ export class Pickups {
     this.gemMesh.castShadow = true;
     for (let i = 0; i < this.max; i++) this.gemMesh.setColorAt(i, GEM_COLORS[0]);
     scene.add(this.gemMesh);
+    {
+      const sg = new THREE.PlaneGeometry(1, 1);
+      sg.rotateX(-Math.PI / 2); // lie on XZ; uv.y runs along local -z
+      sg.translate(0, 0, 0.5); // head at the origin, tail trailing along +z
+      const sm = new THREE.ShaderMaterial({
+        transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+        vertexShader: /* glsl */ `
+          varying vec2 vUv; varying vec3 vCol;
+          void main(){ vUv = uv; vCol = instanceColor; gl_Position = projectionMatrix * viewMatrix * modelMatrix * instanceMatrix * vec4(position, 1.0); }`,
+        fragmentShader: /* glsl */ `
+          varying vec2 vUv; varying vec3 vCol;
+          void main(){
+            float along = vUv.y;               // 1 at the head, 0 at the tail
+            float across = 1.0 - abs(vUv.x - 0.5) * 2.0;
+            float core = pow(across, 3.0 - along * 1.5);
+            float a = pow(along, 1.6) * core;
+            gl_FragColor = vec4((vCol * 1.6 + vec3(0.25) * along * core) * a, 1.0);
+          }`,
+      });
+      this.streaks = new THREE.InstancedMesh(sg, sm, this.max);
+      this.streaks.count = 0;
+      this.streaks.frustumCulled = false;
+      this.streaks.renderOrder = 1;
+      for (let i = 0; i < this.max; i++) this.streaks.setColorAt(i, GEM_COLORS[0]);
+      scene.add(this.streaks);
+    }
     this.beamGeo = new THREE.CylinderGeometry(0.25, 0.5, 9, 20, 1, true);
     this.beamGeo.translate(0, 4.5, 0);
   }
@@ -210,5 +238,25 @@ export class Pickups {
     this.gemMesh.count = this.gems.length;
     this.gemMesh.instanceMatrix.needsUpdate = true;
     if (this.gemMesh.instanceColor) this.gemMesh.instanceColor.needsUpdate = true;
+
+    // streaks: only for crystals in flight toward the ship, length follows speed
+    let n = 0;
+    for (let i = 0; i < this.gems.length; i++) {
+      const gm = this.gems[i];
+      if (!gm.mag) continue;
+      const sp = Math.hypot(gm.vx, gm.vz);
+      if (sp < 4) continue;
+      const sc = gm.v >= 20 ? 2 : gm.v >= 5 ? 1.5 : gm.v >= 2 ? 1.2 : 1;
+      const len = Math.min(2.4, sp * 0.07) * (0.8 + sc * 0.2);
+      this.e.set(0, Math.atan2(-gm.vx, -gm.vz), 0);
+      this.q.setFromEuler(this.e);
+      this.m.compose(this.p.set(gm.x, gm.y - 0.05, gm.z), this.q, this.s.set(0.32 * sc, 1, len));
+      this.streaks.setMatrixAt(n, this.m);
+      this.streaks.setColorAt(n, this.gemColor(gm.v));
+      n++;
+    }
+    this.streaks.count = n;
+    this.streaks.instanceMatrix.needsUpdate = true;
+    if (this.streaks.instanceColor) this.streaks.instanceColor.needsUpdate = true;
   }
 }

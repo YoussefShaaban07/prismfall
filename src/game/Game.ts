@@ -8,7 +8,7 @@ import { UI, type Settings } from '../ui/UI';
 import { Arena } from './Arena';
 import { Particles, Debris, Smoke } from './Particles';
 import { Effects } from './Effects';
-import { Player } from './Player';
+import { Player, SHIP_YAW } from './Player';
 import { EnemyManager, type Enemy } from './Enemies';
 import { BossController } from './Boss';
 import { Projectiles } from './Projectiles';
@@ -373,6 +373,49 @@ export class Game {
   private setShowShip(id: ShipId) {
     const def = SHIPS.find((x) => x.id === id)!;
     this.setShowModel(def.model, 4.2, heroMapper(def.accent, 0.5));
+    // engines idling on the pad: same nozzle layout as the flying ship, scaled to the showroom model
+    const holder = new THREE.Group();
+    const model = this.showShip!;
+    this.showroom.remove(model);
+    model.position.set(0, 0, 0);
+    model.rotation.y = SHIP_YAW;
+    holder.add(model);
+    const k = 4.2 / 2.4;
+    const fMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(def.accent).multiplyScalar(3), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+    const coreMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 1, 1).multiplyScalar(2.2), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+    this.showFlames.length = 0;
+    for (const sx of [-0.42, 0.42]) {
+      const f = new THREE.Mesh(this.flameGeo, fMat);
+      f.position.set(sx * k, 0.38 * k, -1.0 * k);
+      f.scale.setScalar(k);
+      const core = new THREE.Mesh(this.flameGeo, coreMat);
+      core.scale.set(0.45, 0.45, 0.6);
+      f.add(core);
+      holder.add(f);
+      this.showFlames.push(f);
+    }
+    holder.position.y = 2.2;
+    this.showShip = holder;
+    this.showroom.add(holder);
+  }
+  private showFlames: THREE.Mesh[] = [];
+  private flameGeo = (() => {
+    const g = new THREE.ConeGeometry(0.16, 1, 12, 1, true);
+    g.rotateX(-Math.PI / 2);
+    g.translate(0, 0, -0.5);
+    return g;
+  })();
+  /** Idle thrust flicker for the hangar ship: a slow breath plus fast turbulence. */
+  private flickerShowFlames() {
+    if (!this.showShip) return;
+    const k = 4.2 / 2.4;
+    for (let i = 0; i < this.showFlames.length; i++) {
+      const f = this.showFlames[i];
+      if (f.parent !== this.showShip) continue;
+      const breath = 0.75 + Math.sin(this.time * 2.1 + i * 1.7) * 0.12;
+      const z = breath * (0.85 + Math.random() * 0.3);
+      f.scale.set(k * (0.92 + Math.random() * 0.12), k * (0.92 + Math.random() * 0.12), k * z);
+    }
   }
 
   private setShowModel(model: ModelName, size: number, mapper: ReturnType<typeof heroMapper>) {
@@ -564,6 +607,8 @@ export class Game {
 
   /** Debug: advance visuals by dt without the rAF loop (for deterministic screenshots). */
   debugFrame(dt: number, render = true) {
+    // deterministic captures always render at full resolution
+    if (this.r.renderScale < 1) this.r.setRenderScale(1);
     this.time += dt;
     if (this.state === 'play') this.update(dt);
     this.updateCamera(dt);
@@ -583,6 +628,7 @@ export class Game {
     requestAnimationFrame(this.loop);
     if (this.debugHold) { this.last = now; return; }
     const rawMs = now - this.last;
+    this.realDt = clamp(rawMs / 1000, 0, 0.05);
     let dt = clamp(rawMs / 1000, 0, 0.05);
     this.last = now;
     this.time += dt;
@@ -760,6 +806,7 @@ export class Game {
     if (this.showShip) {
       this.showShip.rotation.y = this.time * 0.5;
       this.showShip.position.y = 2.2 + Math.sin(this.time * 1.5) * 0.2;
+      this.flickerShowFlames();
     }
     this.arena.groundUniforms.uPulse.value = 0.3;
     this.particles.update(dt);
@@ -774,6 +821,13 @@ export class Game {
     const cam = this.r.camera;
     const aspect = this.r.width / this.r.height;
     this.r.bokeh.enabled = this.state === 'menu' && this.hangarOpen && this.r.quality !== 'low';
+    // hold the punch during the freeze, then release over ~0.4 s (real time, so hit-stop can't stall it)
+    if (this.freezeT <= 0 || this.state !== 'play') this.punch = Math.max(0, this.punch - this.realDt * 2.4);
+    const fov = 48 * (1 - (this.settings.calm ? 0 : this.punch * this.punch * 0.09));
+    if (Math.abs(cam.fov - fov) > 0.01) {
+      cam.fov = fov;
+      cam.updateProjectionMatrix();
+    }
     if (this.state === 'photo') {
       const ph = this.photo, k = this.input.keys;
       if (k.has('ArrowLeft') || k.has('KeyA')) ph.yaw -= dt * 1.2;
@@ -866,10 +920,48 @@ export class Game {
     }
     this.shake = Math.max(0, this.shake - dt * 2.2);
     this.camLook.set(cam.position.x + sx, 0, cam.position.z - h * 0.62 + sy);
+    // hit-stop punch-in: a quick narrowing of the lens that drifts toward the moment, then eases out
+    if (this.punch > 0.001 && !this.settings.calm) {
+      const k = this.punch * this.punch * (3 - 2 * this.punch);
+      this.camLook.x += (this.punchX - this.camLook.x) * 0.18 * k;
+      this.camLook.z += (this.punchZ - this.camLook.z) * 0.18 * k;
+    }
     cam.lookAt(this.camLook);
-    // keep the shadow frustum centred on the action
-    this.r.sun.position.set(P.x + this.sunOff.x, this.sunOff.y, P.z + this.sunOff.z);
-    this.r.sun.target.position.set(P.x, 0, P.z);
+    // keep the shadow frustum centred on the action, snapped to whole shadow texels in light
+    // space so shadow edges don't crawl and shimmer while the camera glides
+    this.placeShadow(P.x, P.z);
+  }
+
+  private punch = 0;
+  private punchX = 0;
+  private punchZ = 0;
+  private realDt = 0.016;
+  /** Lens punch toward a world point; stacks up to 1. */
+  punchAt(x: number, z: number, amount: number) {
+    if (amount < this.punch) return;
+    this.punch = Math.min(1, amount);
+    this.punchX = x;
+    this.punchZ = z;
+  }
+
+  private shX = new THREE.Vector3();
+  private shY = new THREE.Vector3();
+  private shZ = new THREE.Vector3();
+  private shC = new THREE.Vector3();
+  private placeShadow(x: number, z: number) {
+    const sun = this.r.sun;
+    const sc = sun.shadow.camera;
+    const texel = (sc.right - sc.left) / sun.shadow.mapSize.x;
+    const Z = this.shZ.copy(this.sunOff).normalize();
+    const X = this.shX.set(0, 1, 0).cross(Z).normalize();
+    const Y = this.shY.copy(Z).cross(X);
+    const c = this.shC.set(x, 0, z);
+    const u = Math.round(c.dot(X) / texel) * texel;
+    const v = Math.round(c.dot(Y) / texel) * texel;
+    const w = c.dot(Z);
+    c.set(0, 0, 0).addScaledVector(X, u).addScaledVector(Y, v).addScaledVector(Z, w);
+    sun.target.position.copy(c);
+    sun.position.copy(c).add(this.sunOff);
   }
 
   /* ======================= simulation ======================= */
@@ -1148,7 +1240,10 @@ export class Game {
     this.particles.burst(e.x, e.def.hover + 0.3, e.z, col, big ? 40 : 14, big ? 12 : 8, 0.6, big ? 1 : 0.6, 0.6);
     this.particles.burst(e.x, e.def.hover + 0.3, e.z, this.colors.white, big ? 10 : 4, 5, 0.25, 0.8, 0.3);
     this.debris.spawn(e.x, e.def.hover, e.z, this.colors.debris, big ? 10 : 3, big ? 9 : 6, big ? 1.4 : 0.8);
-    if (e.elite) this.freezeT = Math.max(this.freezeT, 0.06);
+    if (e.elite) {
+      this.freezeT = Math.max(this.freezeT, 0.06);
+      this.punchAt(e.x, e.z, 0.6);
+    }
     if (e.affix === 'volatile') {
       // volatile elites detonate: big blast that hurts nearby enemies and the player
       this.hazards.blast(e.x, e.z, 5.5, 0.7, e.dmg * 1.2, 0xff4a2a);
@@ -1205,6 +1300,7 @@ export class Game {
     const col = this.boss.color.clone().multiplyScalar(3);
     this.freezeT = 0.1;
     this.slowT = 1.4;
+    if (this.boss.e) this.punchAt(this.boss.e.x, this.boss.e.z, 1);
     this.shake = 1.6;
     this.ui.flash();
     this.audio.sfx('bossdie');
@@ -1353,6 +1449,7 @@ export class Game {
       P.hp = P.maxHp * 0.5;
       P.inv = 3;
       this.freezeT = 0.15;
+      this.punchAt(P.x, P.z, 0.8);
       this.ui.flash('rgba(255,180,90,0.7)');
       this.ui.banner('PHOENIX PROTOCOL', 'Hull restored · one life left', '#ffb347', 2200);
       this.audio.sfx('evolve');
@@ -1481,6 +1578,7 @@ export class Game {
       // evolution cutscene: freeze, white flash, prismatic shock rings, a burst in the weapon's colour
       this.freezeT = 0.25;
       this.slowT = 0.9;
+      this.punchAt(P.x, P.z, 0.9);
       this.ui.flash('rgba(255,250,235,0.85)');
       for (let i = 0; i < 3; i++) this.fx.ring(P.x, P.z, 8 + i * 6, [0xffd84f, 0xff4fd8, 0x5ef2ff][i], 0.7 + i * 0.2, 2);
       this.fx.shock(P.x, P.z, 22, 1.6, 0.9);
