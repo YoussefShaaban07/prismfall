@@ -58,7 +58,7 @@ export class Player {
   constructor(scene: THREE.Scene, assets: Assets) {
     this.assets = assets;
     this.scene = scene;
-    this.ship = assets.object('craft_speederA', 2.4, heroMapper(0x37e8ff, 1.8));
+    this.ship = assets.object('craft_speederA', 2.4, heroMapper(0x37e8ff, 0.9));
     this.ship.rotation.y = SHIP_YAW;
     const holder = new THREE.Group();
     holder.add(this.ship);
@@ -95,7 +95,7 @@ export class Player {
     this.magnetRing.position.y = 0.08;
     scene.add(this.magnetRing);
 
-    this.light = new THREE.PointLight(0x4fe6ff, 7, 14, 1.6);
+    this.light = new THREE.PointLight(0x4fe6ff, 4, 14, 1.6);
     this.light.position.y = 2.5;
     this.root.add(this.light);
     scene.add(this.root);
@@ -132,7 +132,7 @@ export class Player {
     this.shipDef = def;
     const holder = this.root.userData.holder as THREE.Group;
     holder.remove(this.ship);
-    this.ship = this.assets.object(def.model, 2.4, heroMapper(def.accent, 1.8));
+    this.ship = this.assets.object(def.model, 2.4, heroMapper(def.accent, 0.9));
     this.ship.rotation.y = SHIP_YAW;
     this.ship.userData.built = true;
     holder.add(this.ship);

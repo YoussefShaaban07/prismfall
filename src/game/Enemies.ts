@@ -39,7 +39,7 @@ export interface Enemy {
   slow: number;
 }
 
-const INSTANCED: EType[] = ['drone', 'dart', 'spitter', 'meteor', 'shard', 'brute', 'wraith'];
+const INSTANCED: EType[] = ['drone', 'dart', 'spitter', 'meteor', 'shard', 'brute', 'wraith', 'turret', 'bomber'];
 
 interface TypeRender {
   meshes: THREE.InstancedMesh[];
@@ -66,7 +66,8 @@ export class EnemyManager {
     for (const type of INSTANCED) {
       const def = EDEFS[type];
       const model = assets.get(def.model);
-      const mapper = alienMapper(def.color, 2.4, type === 'meteor' || type === 'shard' ? 1.6 : 1.1);
+      const glow: Partial<Record<EType, number>> = { drone: 1.6, dart: 1.6, spitter: 1.3, brute: 0.75, wraith: 1.4, turret: 0.6, bomber: 1.2 };
+      const mapper = alienMapper(def.color, glow[type] ?? 1.4, type === 'meteor' || type === 'shard' ? 1.6 : 1.1);
       const flash = new THREE.InstancedBufferAttribute(new Float32Array(def.max), 1);
       flash.setUsage(THREE.DynamicDrawUsage);
       const meshes: THREE.InstancedMesh[] = [];
@@ -240,6 +241,58 @@ export class EnemyManager {
           tz = (uz + ux * w) * spd;
           break;
         }
+        case 'turret': {
+          tx = tz = 0;
+          steer = 10;
+          e.timer -= dt;
+          if (e.spawnT <= 0 && d < 26) {
+            if (e.timer <= 0) {
+              e.st = 3;
+              e.timer = rand(2.6, 3.4);
+              e.sub = 0;
+            }
+            if (e.st > 0) {
+              e.sub -= dt;
+              if (e.sub <= 0) {
+                e.sub = 0.16;
+                e.st--;
+                const a = Math.atan2(ux, uz) + rand(-0.06, 0.06);
+                g.proj.enemyShot(e.x + Math.sin(a) * 1.1, e.z + Math.cos(a) * 1.1, Math.sin(a) * 13, Math.cos(a) * 13, e.dmg, 0x39d0ff, 0.8);
+                g.audio.sfx('shoot');
+              }
+            }
+          }
+          break;
+        }
+        case 'bomber': {
+          e.timer -= dt;
+          if (e.st === 0) {
+            if (d < 7 && e.spawnT <= 0) {
+              e.st = 1;
+              e.timer = 0.6;
+              g.fx.ring(e.x, e.z, 3.2, 0xff2a2a, 0.6, 2.5);
+            }
+          } else if (e.st === 1) {
+            tx *= 0.15;
+            tz *= 0.15;
+            e.flash = Math.floor(e.timer * 20) % 2 ? 0.08 : 0;
+            if (e.timer <= 0) {
+              e.st = 2;
+              e.timer = 0.9;
+              e.aimx = ux;
+              e.aimz = uz;
+            }
+          } else {
+            tx = e.aimx * 13;
+            tz = e.aimz * 13;
+            steer = 14;
+            if (e.timer <= 0 || d < e.r + P.r + 0.6) {
+              g.detonate(e);
+              continue;
+            }
+          }
+          break;
+        }
         case 'boss':
           g.boss.update(e, dt, ux, uz, d);
           tx = e.vx;
@@ -293,7 +346,7 @@ export class EnemyManager {
       // facing
       const sp = Math.hypot(e.vx, e.vz);
       if (e.type !== 'meteor' && e.type !== 'shard') {
-        const target = e.type === 'dart' && e.st === 1 ? Math.atan2(e.aimx, e.aimz) : sp > 0.3 ? Math.atan2(e.vx, e.vz) : e.yaw;
+        const target = e.type === 'turret' ? Math.atan2(dx, dz) : e.type === 'dart' && e.st === 1 ? Math.atan2(e.aimx, e.aimz) : sp > 0.3 ? Math.atan2(e.vx, e.vz) : e.yaw;
         e.yaw += angleDiff(e.yaw, target) * Math.min(1, dt * 8);
       }
 
@@ -345,11 +398,15 @@ export class EnemyManager {
         const bank = Math.sin(time * 2 + e.id) * 0.15;
         roll = bank;
       }
+      if (e.type === 'bomber') {
+        pitch = Math.PI / 2;
+        roll = time * 8;
+      }
       if (e.type === 'dart' && e.st === 1) {
         sc *= 1 + Math.sin(time * 40) * 0.06;
         pitch = -0.25;
       }
-      const yawOff = e.type === 'meteor' || e.type === 'shard' ? 0 : SHIP_YAW;
+      const yawOff = e.type === 'meteor' || e.type === 'shard' || e.type === 'bomber' ? 0 : SHIP_YAW;
       this.e.set(pitch, e.yaw + yawOff, roll, 'YXZ');
       this.q.setFromEuler(this.e);
       this.p.set(e.x, y, e.z);

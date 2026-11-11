@@ -94,6 +94,7 @@ export class Game {
   achT = 0;
   runAch: string[] = [];
   paidShards = 0;
+  tutStep = 0;
   killsAtEndless = 0;
   bossesAtEndless = 0;
   settings: Settings;
@@ -265,7 +266,7 @@ export class Game {
     this.player.magnetRing.visible = true;
     Object.assign(this, {
       dmgLog: {}, T: 0, kills: 0, score: 0, combo: 0, comboT: 0, maxCombo: 0, damageDealt: 0, pendingLevels: 0,
-      bossesKilled: 0, nextBoss: BOSS_TIMES[0], bossWarn: 0, won: false, endless: false, rerolls: 3 + upLv(this.meta, 'rerolls'), untouchedT: 0, achT: 0, runAch: [], paidShards: 0,
+      bossesKilled: 0, nextBoss: BOSS_TIMES[0], bossWarn: 0, won: false, endless: false, rerolls: 3 + upLv(this.meta, 'rerolls'), untouchedT: 0, achT: 0, runAch: [], paidShards: 0, tutStep: this.meta.seenTutorial ? 99 : 0,
       spawnAcc: 0, nextSurge: 50, nextElite: 95, freezeT: 0, slowT: 0, deathT: 0, victoryT: 0, shake: 0, hurtT: 0,
     });
     this.input.releaseAll();
@@ -474,6 +475,8 @@ export class Game {
       if (this.comboT <= 0) this.combo = 0;
     }
 
+    this.tutorial();
+
     // achievements
     if (!P.dead) this.untouchedT += dt;
     this.achT -= dt;
@@ -597,6 +600,8 @@ export class Game {
     if (T > 95) w.push(['spitter', 1.5 + T / 110]);
     if (T > 130) w.push(['brute', 0.8 + T / 160]);
     if (T > 200) w.push(['wraith', 1 + T / 120]);
+    if (T > 170) w.push(['bomber', 1.2 + T / 160]);
+    if (T > 240 && this.enemies.count('turret') < 3 + Math.floor(T / 120)) w.push(['turret', 0.35]);
     return pickWeighted(w);
   }
 
@@ -624,7 +629,7 @@ export class Game {
     e.hp -= amt;
     this.damageDealt += amt;
     e.flash = 0.08;
-    const heavy = e.type === 'boss' ? 0.05 : e.type === 'brute' || e.elite ? 0.3 : 1;
+    const heavy = e.type === 'boss' ? 0.05 : e.type === 'turret' ? 0 : e.type === 'brute' || e.elite ? 0.3 : 1;
     e.kx += kx * heavy;
     e.kz += kz * heavy;
     if (this.settings.numbers && (crit || amt >= 25 || chance(0.35))) {
@@ -724,6 +729,21 @@ export class Game {
     } else {
       this.ui.banner('MOTHERSHIP DOWN', `+${(4000 * this.bossesKilled).toLocaleString()} score`, '#c86bff', 2200);
     }
+  }
+
+  /** Seeker mine explosion: hurts the player if close, always dies. */
+  detonate(e: Enemy) {
+    if (e.dead) return;
+    e.dead = true;
+    const P = this.player;
+    const r = 3.2;
+    const col = new THREE.Color(1, 0.25, 0.2).multiplyScalar(3);
+    this.particles.burst(e.x, 1, e.z, col, 30, 12, 0.5, 0.9, 0.5);
+    this.fx.ring(e.x, e.z, r, 0xff3a2a, 0.35, 3);
+    this.fx.scorch(e.x, e.z, 2.2);
+    this.audio.sfx('boom');
+    this.shake = Math.max(this.shake, 0.45);
+    if (!P.dead && Math.hypot(P.x - e.x, P.z - e.z) < r + P.r) this.hurtPlayer(e.dmg, null);
   }
 
   hurtPlayer(dmg: number, src: Enemy | null) {
@@ -873,6 +893,32 @@ export class Game {
     this.player.inv = Math.max(this.player.inv, 0.8);
     this.state = 'play';
     this.last = performance.now();
+  }
+
+  /* ======================= first-run tutorial ======================= */
+
+  private tutorial() {
+    if (this.tutStep >= 99) return;
+    const touch = this.input.touchUsed;
+    const pad = this.input.gamepadUsed;
+    const steps: [number, () => boolean, string][] = [
+      [0, () => this.T > 0.5, touch ? '<b>Drag anywhere</b> to fly' : pad ? '<b>Left stick</b> to fly' : '<b>WASD</b> or <b>arrow keys</b> to fly'],
+      [1, () => this.T > 5, 'Your weapons <b>fire automatically</b>. Focus on staying alive.'],
+      [2, () => this.pickups.gems.length > 0 && this.T > 9, 'Grab the glowing <b>crystals</b> to level up'],
+      [3, () => this.T > 16, touch ? 'Tap <b>DASH</b> to phase through enemies and bullets' : pad ? 'Press <b>A</b> to dash through enemies and bullets' : 'Press <b>SPACE</b> to dash through enemies and bullets'],
+      [4, () => this.T > 26, 'Bosses land at <b>2:30</b>, <b>5:00</b> and <b>7:30</b>. Survive to <b>10:00</b>.'],
+    ];
+    const s = steps.find((x) => x[0] === this.tutStep);
+    if (!s) {
+      this.tutStep = 99;
+      this.meta.seenTutorial = true;
+      saveMeta(this.meta);
+      return;
+    }
+    if (s[1]()) {
+      this.ui.hint(s[2], 4200);
+      this.tutStep++;
+    }
   }
 
   /* ======================= achievements ======================= */

@@ -249,13 +249,13 @@ export function alienMapper(color: THREE.ColorRepresentation, glow = 2.6, rimK =
         m = new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: glow, roughness: 0.3, metalness: 0.2 });
         break;
       case 'metal':
-        m = new THREE.MeshStandardMaterial({ color: 0x4a4560, roughness: 0.35, metalness: 0.75 });
+        m = new THREE.MeshStandardMaterial({ color: 0x343044, roughness: 0.7, metalness: 0.2, envMapIntensity: 0.35 });
         break;
       case 'metalDark':
-        m = new THREE.MeshStandardMaterial({ color: 0x2a2638, roughness: 0.4, metalness: 0.7 });
+        m = new THREE.MeshStandardMaterial({ color: 0x1e1a2a, roughness: 0.7, metalness: 0.2, envMapIntensity: 0.35 });
         break;
       case 'dark':
-        m = new THREE.MeshStandardMaterial({ color: 0x0c0a12, roughness: 0.5, metalness: 0.4 });
+        m = new THREE.MeshStandardMaterial({ color: 0x0c0a12, roughness: 0.6, metalness: 0.3, envMapIntensity: 0.35 });
         break;
       case 'rock':
       case 'rockTrack':

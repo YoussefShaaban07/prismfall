@@ -431,6 +431,15 @@ export class UI {
     }
   }
 
+  hint(html: string, dur = 4000) {
+    const el = $('#hint');
+    el.innerHTML = html;
+    el.classList.add('on');
+    clearTimeout(this.hintTimer);
+    this.hintTimer = window.setTimeout(() => el.classList.remove('on'), dur);
+  }
+  private hintTimer = 0;
+
   toast(title: string, desc: string) {
     this.toastQ.push({ t: title, d: desc });
     if (!this.toastBusy) this.nextToast();
@@ -511,6 +520,7 @@ const TEMPLATE = /* html */ `
   <div id="joy" class="joy"><div class="knob"></div></div>
   <button id="dashBtn" class="dashbtn hidden"><div id="dashRing" class="ring"></div><span>DASH</span></button>
   <div id="dashHint" class="dashhint">SPACE · DASH</div>
+  <div id="hint" class="hint"></div>
 </div>
 
 <div id="menu" class="screen hidden">

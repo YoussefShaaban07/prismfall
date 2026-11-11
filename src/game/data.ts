@@ -2,7 +2,7 @@ import type { ModelName } from '../core/Assets';
 
 /* ======================= ENEMIES ======================= */
 
-export type EType = 'drone' | 'dart' | 'spitter' | 'meteor' | 'shard' | 'brute' | 'wraith' | 'boss';
+export type EType = 'drone' | 'dart' | 'spitter' | 'meteor' | 'shard' | 'brute' | 'wraith' | 'turret' | 'bomber' | 'boss';
 
 export interface EDef {
   name: string;
@@ -27,6 +27,8 @@ export const EDEFS: Record<EType, EDef> = {
   shard: { name: 'Shard', hp: 9, speed: 4.7, radius: 0.42, damage: 6, xp: 1, score: 6, color: 0xffd23a, model: 'meteor_half', size: 0.95, hover: 0.35, max: 200 },
   brute: { name: 'Hauler', hp: 140, speed: 1.8, radius: 1.25, damage: 22, xp: 9, score: 70, color: 0xff3b3b, model: 'craft_cargoB', size: 2.6, hover: 0.9, max: 60 },
   wraith: { name: 'Phantom', hp: 42, speed: 4.4, radius: 0.65, damage: 13, xp: 4, score: 35, color: 0x6a7bff, model: 'craft_speederC', size: 1.45, hover: 1.0, max: 90 },
+  turret: { name: 'Sentry Pod', hp: 110, speed: 0, radius: 0.95, damage: 10, xp: 6, score: 60, color: 0x39d0ff, model: 'turret_single', size: 2.1, hover: 0, max: 14 },
+  bomber: { name: 'Seeker Mine', hp: 18, speed: 3.0, radius: 0.55, damage: 20, xp: 2, score: 25, color: 0xff2a2a, model: 'rocket_topA', size: 1.1, hover: 0.9, max: 50 },
   boss: { name: 'Boss', hp: 2000, speed: 2.2, radius: 2.6, damage: 30, xp: 0, score: 3000, color: 0xc86bff, model: 'craft_cargoA', size: 6, hover: 1.4, max: 1 },
 };
 
