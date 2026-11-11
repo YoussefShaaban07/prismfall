@@ -23,7 +23,7 @@ import { heroMapper, alienMapper, type ModelName } from '../core/Assets';
 import { LOOKS } from './Boss';
 import { EDEFS as ED } from './data';
 
-type State = 'menu' | 'play' | 'levelup' | 'paused' | 'over';
+type State = 'menu' | 'play' | 'levelup' | 'paused' | 'over' | 'photo';
 
 const C = (r: number, g: number, b: number, k = 1) => new THREE.Color(r, g, b).multiplyScalar(k);
 
@@ -125,6 +125,7 @@ export class Game {
     true, 'centripetal',
   );
   cineT = 0;
+  photo = { yaw: 0.6, pitch: 0.5, dist: 22, drag: null as null | { x: number; y: number } };
   private timed: { t: number; fn: () => void }[] = [];
   after(t: number, fn: () => void) { this.timed.push({ t, fn }); }
   storm = { k: 0, t: 0, dur: 0, next: 200, flashT: 0 };
@@ -173,6 +174,20 @@ export class Game {
 
     this.applySettings(this.settings);
     this.bindUI();
+    canvas.addEventListener('pointerdown', (e) => { if (this.state === 'photo') this.photo.drag = { x: e.clientX, y: e.clientY }; });
+    addEventListener('pointerup', () => (this.photo.drag = null));
+    addEventListener('pointermove', (e) => {
+      const d = this.photo.drag;
+      if (this.state !== 'photo' || !d) return;
+      this.photo.yaw -= (e.clientX - d.x) * 0.006;
+      this.photo.pitch = Math.min(1.45, Math.max(0.05, this.photo.pitch + (e.clientY - d.y) * 0.004));
+      d.x = e.clientX; d.y = e.clientY;
+    });
+    canvas.addEventListener('wheel', (e) => {
+      if (this.state !== 'photo') return;
+      this.photo.dist = Math.min(60, Math.max(5, this.photo.dist * (1 + Math.sign(e.deltaY) * 0.1)));
+      e.preventDefault();
+    }, { passive: false });
     this.ui.showMenu(this.meta.stats.bestScore, this.meta.stats.bestTime, this.input.touchUsed, this.meta.shards);
     this.ui.setMapLabel(this.meta.map, this.nightUnlocked());
     this.ui.renderMods(this.meta);
@@ -215,6 +230,7 @@ export class Game {
       else ui.closeHangar();
     };
     ui.onDaily = () => this.startRun(true);
+    ui.onPhoto = () => this.togglePhoto();
     ui.onShareCard = () => ({
       snap: this.snap, victory: this.won, score: Math.round(this.score), time: this.T, level: this.player.level, kills: this.kills,
       bosses: this.bossesKilled, ship: this.player.shipDef.name, sector: this.night ? 'NIGHT SHIFT' : 'DUSK OUTPOST',
@@ -273,6 +289,7 @@ export class Game {
       ui.renderHangar(this.meta, this.previewShip);
     };
     this.input.onPause = () => {
+      if (this.state === 'photo') { this.togglePhoto(); return; }
       if (this.state !== 'play' && ui.back()) return;
       this.togglePause();
     };
@@ -292,6 +309,7 @@ export class Game {
       if (this.state === 'menu' && code === 'Enter' && !(document.activeElement instanceof HTMLButtonElement)) this.startRun();
       if (this.state === 'over' && code === 'Enter') this.startRun();
       if (code === 'KeyM') this.audio.toggleMute();
+      if (code === 'F2') this.togglePhoto();
     };
     this.input.onPadButton = (i) => {
       // D-pad / A / B drive menus whenever a screen is open
@@ -488,7 +506,23 @@ export class Game {
     this.showroom.visible = true;
   }
 
+  /** Photo mode: freeze the action, hide the HUD, orbit a free camera (drag / arrows, wheel to zoom). */
+  togglePhoto() {
+    if (this.state === 'play' || this.state === 'paused') {
+      if (this.state === 'paused') this.ui.hidePause();
+      this.state = 'photo';
+      this.input.releaseAll();
+      document.body.classList.add('photo');
+      this.ui.hint('PHOTO MODE · drag or arrows to orbit · wheel to zoom · F2 to exit', 3000);
+    } else if (this.state === 'photo') {
+      document.body.classList.remove('photo');
+      this.state = 'play';
+      this.last = performance.now();
+    }
+  }
+
   togglePause() {
+    if (this.state === 'photo') return this.togglePhoto();
     if (this.state === 'play') this.pause();
     else if (this.state === 'paused') this.resume();
   }
@@ -655,6 +689,19 @@ export class Game {
     const cam = this.r.camera;
     const aspect = this.r.width / this.r.height;
     this.r.bokeh.enabled = this.state === 'menu' && this.hangarOpen && this.r.quality !== 'low';
+    if (this.state === 'photo') {
+      const ph = this.photo, k = this.input.keys;
+      if (k.has('ArrowLeft') || k.has('KeyA')) ph.yaw -= dt * 1.2;
+      if (k.has('ArrowRight') || k.has('KeyD')) ph.yaw += dt * 1.2;
+      if (k.has('ArrowUp') || k.has('KeyW')) ph.pitch = Math.min(1.45, ph.pitch + dt * 0.8);
+      if (k.has('ArrowDown') || k.has('KeyS')) ph.pitch = Math.max(0.05, ph.pitch - dt * 0.8);
+      const P = this.player;
+      const cp = Math.cos(ph.pitch);
+      cam.position.set(P.x + Math.sin(ph.yaw) * cp * ph.dist, 0.6 + Math.sin(ph.pitch) * ph.dist, P.z + Math.cos(ph.yaw) * cp * ph.dist);
+      cam.lookAt(P.x, 1, P.z);
+      cam.clearViewOffset();
+      return;
+    }
     if (this.state === 'menu' && this.hangarOpen) {
       const a = this.time * 0.25;
       const dist = this.r.width > this.r.height ? 10 : 15;

@@ -61,6 +61,7 @@ export class UI {
   onHangar: (open: boolean) => void = () => {};
   onMapToggle: () => void = () => {};
   onDaily: () => void = () => {};
+  onPhoto: () => void = () => {};
   onShareCard: () => CardData | null = () => null;
   onCodex: (open: boolean, kind: 'enemy' | 'boss' | 'ship', id: string) => void = () => {};
   private codexTab: 'enemy' | 'boss' | 'weapon' = 'enemy';
@@ -102,6 +103,7 @@ export class UI {
     $('#hangarBtn').addEventListener('click', () => this.onHangar(true));
     $('#mapBtn').addEventListener('click', () => this.onMapToggle());
     $('#dailyBtn').addEventListener('click', () => this.onDaily());
+    $('#photoBtn').addEventListener('click', () => this.onPhoto());
     $('#shareBtn').addEventListener('click', () => this.openShare());
     $('#shareClose').addEventListener('click', () => this.hide('#shareScreen'));
     $('#codexBtn').addEventListener('click', () => this.openCodex());
@@ -925,6 +927,7 @@ const TEMPLATE = /* html */ `
     <h2>PAUSED</h2>
     <div id="build" class="build"></div>
     <button id="pauseSettingsBtn" class="btn ghost">SETTINGS</button>
+    <button id="photoBtn" class="btn ghost">PHOTO MODE (F2)</button>
     <button id="resumeBtn" class="btn primary">RESUME</button>
     <button id="quitBtn" class="btn ghost">QUIT TO MENU</button>
   </div>
