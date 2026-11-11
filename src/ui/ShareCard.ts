@@ -1,3 +1,4 @@
+import { t } from './i18n';
 import { fmtNum, fmtTime } from '../core/util';
 
 export interface CardData {
@@ -47,18 +48,18 @@ export function renderShareCard(d: CardData): HTMLCanvasElement {
   g.fillText('PRISMFALL', 60, 110);
   g.shadowBlur = 0;
 
-  g.font = "700 22px Orbitron, sans-serif";
+  g.font = "700 22px Orbitron, Cairo, sans-serif";
   g.fillStyle = d.victory ? '#7ff6ff' : '#ff8aa0';
-  g.fillText(d.victory ? 'COLONY SAVED' : 'SIGNAL LOST', 62, 160);
+  g.fillText(t(d.victory ? 'COLONY SAVED' : 'SIGNAL LOST'), 62, 160);
 
-  g.font = "600 18px Rajdhani, sans-serif";
+  g.font = "600 18px Rajdhani, Cairo, sans-serif";
   g.fillStyle = 'rgba(255,255,255,0.6)';
-  g.fillText(`${d.ship} · ${d.sector}${d.mods.length ? ' · ' + d.mods.join(', ') : ''}`, 62, 192);
+  g.fillText(`${d.ship} · ${t(d.sector)}${d.mods.length ? ' · ' + d.mods.join(', ') : ''}`, 62, 192);
 
-  g.font = "700 16px Orbitron, sans-serif";
+  g.font = "700 16px Orbitron, Cairo, sans-serif";
   g.fillStyle = 'rgba(255,255,255,0.55)';
-  g.fillText('SCORE', 62, 262);
-  g.font = "900 84px Orbitron, sans-serif";
+  g.fillText(t('SCORE'), 62, 262);
+  g.font = "900 84px Orbitron, Cairo, sans-serif";
   g.fillStyle = '#ffd84f';
   g.shadowColor = 'rgba(255,216,79,0.5)';
   g.shadowBlur = 20;
@@ -73,15 +74,15 @@ export function renderShareCard(d: CardData): HTMLCanvasElement {
   ];
   stats.forEach(([k, v], i) => {
     const x = 62 + i * 165;
-    g.font = "700 13px Orbitron, sans-serif";
+    g.font = "700 13px Orbitron, Cairo, sans-serif";
     g.fillStyle = 'rgba(255,255,255,0.5)';
-    g.fillText(k, x, 410);
-    g.font = "900 32px Orbitron, sans-serif";
+    g.fillText(t(k), x, 410);
+    g.font = "900 32px Orbitron, Cairo, sans-serif";
     g.fillStyle = '#ffffff';
     g.fillText(v, x, 450);
   });
 
-  g.font = "600 18px Rajdhani, sans-serif";
+  g.font = "600 18px Rajdhani, Cairo, sans-serif";
   g.fillStyle = 'rgba(94,242,255,0.85)';
   g.fillText('youssefshaaban07.github.io/prismfall', 62, H - 50);
   return c;

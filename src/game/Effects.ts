@@ -1,3 +1,4 @@
+import { t } from '../ui/i18n';
 import * as THREE from 'three';
 import { rand, TAU } from '../core/util';
 
@@ -220,7 +221,7 @@ export class Effects {
       f = { el, x, y, z, t: 0, dur: 0.8, active: false, vy: 0 };
       this.floaters.push(f);
     }
-    f.el.textContent = txt;
+    f.el.textContent = t(txt);
     f.el.className = 'floater ' + cls;
     f.x = x + rand(-0.3, 0.3);
     f.y = y;

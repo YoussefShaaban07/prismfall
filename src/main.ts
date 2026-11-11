@@ -5,6 +5,7 @@ import '@fontsource/rajdhani/latin-500.css';
 import '@fontsource/rajdhani/latin-600.css';
 import '@fontsource/rajdhani/latin-700.css';
 import './style.css';
+import './ui/i18n'; // must run before game modules read the data tables
 import { Assets } from './core/Assets';
 import { Renderer } from './core/Renderer';
 import { Game } from './game/Game';

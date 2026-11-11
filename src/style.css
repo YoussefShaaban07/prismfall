@@ -7,8 +7,8 @@
   --ink: #0b0610;
   --panel: rgba(16, 9, 26, 0.78);
   --line: rgba(255, 255, 255, 0.12);
-  --display: 'Orbitron', 'Segoe UI', system-ui, sans-serif;
-  --body: 'Rajdhani', 'Segoe UI', system-ui, sans-serif;
+  --display: 'Orbitron', 'Cairo', 'Segoe UI', system-ui, sans-serif;
+  --body: 'Rajdhani', 'Cairo', 'Segoe UI', system-ui, sans-serif;
   --st: env(safe-area-inset-top, 0px);
   --sb: env(safe-area-inset-bottom, 0px);
   --sl: env(safe-area-inset-left, 0px);
@@ -238,8 +238,8 @@ body.lowhp #ui::before {
 .settings { width: 100%; display: grid; gap: 10px; padding: 14px; border-radius: 14px; background: rgba(255, 255, 255, .03); border: 1px solid var(--line); }
 .set { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 16px; font-weight: 600; }
 .seg { display: flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-.qbtn { font-family: var(--display); font-size: 11px; letter-spacing: .12em; padding: 8px 12px; background: transparent; border: 0; color: rgba(255, 255, 255, .6); }
-.qbtn.on { background: rgba(94, 242, 255, .2); color: #fff; }
+.qbtn, .lbtn { font-family: var(--display); font-size: 11px; letter-spacing: .12em; padding: 8px 12px; background: transparent; border: 0; color: rgba(255, 255, 255, .6); }
+.qbtn.on, .lbtn.on { background: rgba(94, 242, 255, .2); color: #fff; }
 input[type='range'] { width: 180px; accent-color: var(--cyan); }
 input[type='checkbox'] { width: 20px; height: 20px; accent-color: var(--cyan); }
 
@@ -477,3 +477,18 @@ body.photo #hud > *:not(#hint):not(.top), body.photo #hud .top .left, body.photo
   background: rgba(6, 10, 20, 0.72); border: 1px solid rgba(95, 230, 255, 0.35);
   padding: 5px 8px; border-radius: 6px; letter-spacing: 0.02em;
 }
+
+/* ---------- Arabic ---------- */
+/* letter-spacing breaks Arabic letter joining, so it goes everywhere in Arabic mode */
+html[lang='ar'] body, html[lang='ar'] body * { letter-spacing: 0 !important; }
+/* panel contents read right-to-left, but screens keep their placement: the 3D camera is framed
+   around the menu column on the left and the hangar/codex panels on the right */
+html[lang='ar'] .menuwrap, html[lang='ar'] .panel, html[lang='ar'] .hpanel, html[lang='ar'] .lvwrap,
+html[lang='ar'] .toast, html[lang='ar'] .hint { direction: rtl; }
+html[lang='ar'] .goal, html[lang='ar'] .kills, html[lang='ar'] .combo, html[lang='ar'] .banner,
+html[lang='ar'] .bosscard, html[lang='ar'] .bossname, html[lang='ar'] .floater, html[lang='ar'] .dashhint { unicode-bidi: plaintext; }
+html[lang='ar'] .brief { direction: rtl; text-align: right; }
+html[lang='ar'] .tagline, html[lang='ar'] .sblurb, html[lang='ar'] .ctip, html[lang='ar'] .howlist { line-height: 1.7; }
+/* the logo and numbers stay Latin */
+html[lang='ar'] .logo, html[lang='ar'] .prelogo, html[lang='ar'] .score, html[lang='ar'] .timer { direction: ltr; }
+

@@ -14,16 +14,17 @@ A 3D neon survival shooter set on a Mars colony. A crystal swarm has fallen from
 
 ## Features
 
-- **Real-time 3D** with Three.js: PBR materials, HDR environment lighting, shadows, GTAO ambient occlusion, bloom, SMAA, depth of field, screen-space shockwave distortion, god rays and a cinematic colour grade
+- **Real-time 3D** with Three.js: PBR materials, HDR environment lighting, texel-snapped shadows, GTAO ambient occlusion, bloom, SMAA/FXAA, depth of field, screen-space shockwave distortion, god rays and a cinematic colour grade
 - **Combat VFX**: dissolve deaths, fireballs, lit smoke, glowing-hot shrapnel, ribbon engine trails, ground light pools and pooled explosion lights
 - **Mars colony arena**: displaced terrain with dunes, mesas and a mountain range, energy force-field with impact ripples, colony buildings, rockets, prism crystals, clouds, lens flare, twin moons and dust/ion storms
 - **9 enemy types**, each with its own behavior: dashing lancers, gunships, splitting meteors, blinking phantoms, sentry pods and seeker mines, plus golden elites
-- **6 weapons with evolutions**: Prism Blaster, Halo Blades, Chain Arc, Seeker Swarm, Pulse Nova and Ion Lance. Max a weapon and pair it with the right module to evolve it
+- **8 weapons with evolutions**: Prism Blaster, Halo Blades, Chain Arc, Seeker Swarm, Pulse Nova, Ion Lance, Wingman Drones and Gravity Mines. Max a weapon and pair it with the right module to evolve it
 - **8 passive modules** and level-up cards with rerolls
 - **4 boss fights**, each with a signature attack (carpet bombing, acid rain, laser sweeps), ending with the Prism Core at 10:00. Then endless mode
 - **Hangar meta-progression**: earn Prism Shards, unlock 6 ships with different stats and starting weapons, buy permanent upgrades, earn 12 achievements
 - **Adaptive soundtrack**: procedural synthwave that builds with the action, layered with sound effects
-- **Plays everywhere**: keyboard, gamepad, or touch (floating joystick + dash button); auto graphics quality
+- **Plays everywhere**: keyboard, gamepad, or touch (floating joystick + dash button); dynamic resolution driven by measured GPU time keeps it near 60 fps
+- **English and Arabic** (full right-to-left UI with the Cairo font): Settings → Language
 
 | Hangar | Boss fight | Phone |
 |---|---|---|
@@ -39,6 +40,7 @@ A 3D neon survival shooter set on a Mars colony. A crystal swarm has fallen from
 | Pause | Esc / P | Start | ❚❚ button |
 | Mute | M | | |
 | Photo mode | F2 (drag / arrows to orbit, wheel to zoom) | | Pause → Photo Mode |
+| Performance overlay | F3 (FPS, GPU ms, render scale) | | |
 
 ## Run locally
 

@@ -72,7 +72,7 @@ Three-day build. Each session picks up the next unchecked items, playtests with 
 ### Day 3 — extra depth
 - [x] Codex: 3D showroom previews of scanned enemies and bosses, lore, tactics, weapon evolutions
 - [x] Music variety: boss theme (D minor, 134 bpm), Night Shift (E minor, 104 bpm), victory sting
-- [ ] Arabic language option (RTL-aware UI, Arabic-capable font)
+- [x] Arabic language option (RTL-aware UI, Cairo font, every screen, codex lore and in-run text)
 - [x] Run summary share card (frame snapshot + stats, download / native share)
 - [x] Story intro: typewriter mission briefing on first launch (skippable)
 - [~] Perf pass: instance colors only uploaded on change (sync ~0.9 ms at 500 enemies, sim ~2.3 ms at 750); still to check particle caps on phones
@@ -85,6 +85,7 @@ Three-day build. Each session picks up the next unchecked items, playtests with 
 - [ ] Full QA pass (desktop + phone sizes), README with screenshots, GitHub Pages deploy
 
 ## Session log
+- **S18b (Nov 11 evening)**: Arabic language (Settings → Language; auto-picked for Arabic browsers): 330+ strings incl. codex lore, number-aware lookup, RTL panels that keep the 3D framing, reading-direction arrows; fixed default-HIGH boot never applying its tier (SMAA and full-res AO were still on).
 - **S18 (Nov 11 afternoon)**: GPU audit on a real integrated GPU (Radeon, 1920x889: scene 55 ms, GTAO 56 ms, SMAA 10 ms per frame). Added GPU timer queries, dynamic resolution (50–100%, 60 fps budget), half-res GTAO with fewer taps on HIGH, FXAA instead of SMAA on HIGH, HIGH pixel ratio capped at 1.25, Voronoi fissures skipped outside the arena, frozen frames held behind blurred level-up/pause overlays, F3 perf overlay. Texel-snapped shadow frustum (no shadow crawl), hit-stop lens punch-in, comet streaks on magnetised crystals, idling engine flames on the hangar ship.
 - **S17b (Nov 11 afternoon)**: GitHub Pages enabled (source: GitHub Actions); first live deploy.
 - **S17 (Nov 11 afternoon)**: minimap radar sweep + pulsing boss ping, 30 fps minimap refresh.

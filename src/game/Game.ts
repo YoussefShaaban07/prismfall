@@ -22,6 +22,7 @@ import { ACHIEVEMENTS, MODS, SHIPS, UPGRADES, dailySetup, loadMeta, modMult, sav
 import { heroMapper, alienMapper, type ModelName } from '../core/Assets';
 import { LOOKS } from './Boss';
 import { renderIcons } from '../ui/Icons';
+import { t, tf } from '../ui/i18n';
 import { WEAPONS as WDEF, PASSIVES as PDEF } from './data';
 import { EDEFS as ED } from './data';
 
@@ -772,7 +773,7 @@ export class Game {
       this.settings.quality = q === 'ultra' ? 'high' : 'low';
       this.applySettings(this.settings);
       R.setRenderScale(0.8);
-      this.ui.toast('GRAPHICS ADJUSTED', `Switched to ${this.settings.quality.toUpperCase()} for smoother play (Pause → Graphics)`);
+      this.ui.toast('GRAPHICS ADJUSTED', tf('Switched to {0} for smoother play (Pause → Graphics)', t(this.settings.quality.toUpperCase())));
     } else if (!locked && !this.autoQDone && q === 'high' && R.renderScale >= 1 && gpu > 0 && gpu < 6 && frame < 18 && !('ontouchstart' in window)) {
       this.autoQDone = true;
       this.settings.quality = 'ultra';
@@ -1109,7 +1110,7 @@ export class Game {
       if (this.bossWarn <= 0) {
         this.boss.spawn(this.pendingFinal);
         this.cineT = 3.4;
-        this.ui.bossCard(this.boss.name, this.pendingFinal ? 'FINAL BATTLE' : `MOTHERSHIP ${['I', 'II', 'III', 'IV', 'V'][this.bossesKilled] ?? this.bossesKilled + 1}`);
+        this.ui.bossCard(this.boss.name, this.pendingFinal ? 'FINAL BATTLE' : tf('MOTHERSHIP {0}', ['I', 'II', 'III', 'IV', 'V'][this.bossesKilled] ?? this.bossesKilled + 1));
         if (this.endless || this.won) this.nextBoss = T + 100;
         else {
           const idx = BOSS_TIMES.indexOf(this.nextBoss);
@@ -1157,7 +1158,7 @@ export class Game {
       const pool: EType[] = T > 240 ? ['brute', 'wraith', 'spitter'] : ['brute', 'spitter', 'meteor'];
       const p = this.spawnPoint(20, 26);
       const e = this.enemies.spawn(pool[Math.floor(Math.random() * pool.length)], p.x, p.z, true);
-      if (e) this.ui.banner('ELITE DETECTED', `${{ shielded: 'Shielded', regen: 'Regenerating', volatile: 'Volatile' }[e.affix as 'shielded'] ?? 'Golden'} ${e.def.name} · drops supplies`, '#ffd84f', 1800);
+      if (e) this.ui.banner('ELITE DETECTED', tf('{0} {1} · drops supplies', t({ shielded: 'Shielded', regen: 'Regenerating', volatile: 'Volatile' }[e.affix as 'shielded'] ?? 'Golden'), e.def.name), '#ffd84f', 1800);
     }
   }
 

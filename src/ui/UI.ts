@@ -5,6 +5,7 @@ import { ENEMY_LORE, BOSS_LORE, WEAPON_TIPS } from '../game/codex';
 import { renderShareCard, type CardData } from './ShareCard';
 import type { Quality } from '../core/Renderer';
 import { ACHIEVEMENTS, MODS, SHIPS, UPGRADES, dailySetup, modMult, upLv, type MetaState, type ModId, type ShipId, type UpgradeId } from '../game/meta';
+import { t, tf, translateDom, isAr, LANG, setLang, type Lang } from './i18n';
 
 export interface Settings {
   quality: Quality;
@@ -33,6 +34,9 @@ export interface RunStats {
   victory: boolean; time: number; level: number; kills: number; score: number; maxCombo: number; bosses: number;
   best: number; newBest: boolean; damage: number; weapons: Map<WeaponId, number>; evolved: Set<WeaponId>;
 }
+
+/** reading-direction arrow for "this becomes that" */
+const ARROW = isAr ? '←' : '→';
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string, root: ParentNode = document) => root.querySelector(sel) as T;
 
@@ -80,6 +84,7 @@ export class UI {
   constructor(public settings: Settings) {
     this.root = document.getElementById('ui')!;
     this.root.innerHTML = TEMPLATE;
+    translateDom(this.root);
     this.hud = $('#hud');
     this.joy = $('#joy');
     this.knob = $('#joy .knob');
@@ -155,20 +160,20 @@ export class UI {
     this.hideAll();
     this.show('#menu');
     $('#menuShards').innerHTML = `<span class="shard">◆</span> ${fmtNum(shards)}`;
-    $('#bestTxt').innerHTML = best > 0 ? `BEST <b>${fmtNum(best)}</b> &nbsp;·&nbsp; LONGEST <b>${fmtTime(bestTime)}</b>` : 'No runs yet. The colony is counting on you.';
-    $('#ctlHint').textContent = touch ? 'Drag anywhere to fly · Tap DASH to dodge' : 'WASD / Arrows to fly · SPACE to dash · ESC to pause · Gamepad supported';
+    $('#bestTxt').innerHTML = best > 0 ? tf('BEST <b>{0}</b> &nbsp;·&nbsp; LONGEST <b>{1}</b>', fmtNum(best), fmtTime(bestTime)) : t('No runs yet. The colony is counting on you.');
+    $('#ctlHint').textContent = t(touch ? 'Drag anywhere to fly · Tap DASH to dodge' : 'WASD / Arrows to fly · SPACE to dash · ESC to pause · Gamepad supported');
   }
 
   renderMods(meta: MetaState) {
     const m = modMult(meta.mods);
-    $('#modsBtn').innerHTML = `MUTATORS${meta.mods.length ? ` <span class="mshards">×${m.toFixed(2)}</span>` : ''}`;
-    $('#modsMult').textContent = `SCORE ×${m.toFixed(2)}`;
+    $('#modsBtn').innerHTML = `${t('MUTATORS')}${meta.mods.length ? ` <span class="mshards">×${m.toFixed(2)}</span>` : ''}`;
+    $('#modsMult').textContent = tf('SCORE ×{0}', m.toFixed(2));
     const list = $('#modList');
     list.innerHTML = MODS.map((d) => `<button class="modrow ${meta.mods.includes(d.id) ? 'on' : ''}" data-m="${d.id}"><b>${d.name}</b><span>${d.desc}</span><em>×${d.mult}</em></button>`).join('');
     list.querySelectorAll<HTMLElement>('[data-m]').forEach((b) => b.addEventListener('click', () => this.onModToggle(b.dataset.m as ModId)));
     const ds = dailySetup();
     const best = meta.daily[ds.key];
-    $('#dailyBtn').innerHTML = `DAILY <small>${SHIPS.find((x) => x.id === ds.ship)!.name} · ${ds.mods.map((id) => MODS.find((x) => x.id === id)!.name).join(' + ')}${best ? ` · best ${fmtNum(best)}` : ''}</small>`;
+    $('#dailyBtn').innerHTML = `${t('DAILY')} <small>${SHIPS.find((x) => x.id === ds.ship)!.name} · ${ds.mods.map((id) => MODS.find((x) => x.id === id)!.name).join(' + ')}${best ? ` · ${tf('best {0}', fmtNum(best))}` : ''}</small>`;
   }
 
   private openShare() {
@@ -188,8 +193,9 @@ export class UI {
         const blob = await new Promise<Blob | null>((r) => c.toBlob(r, 'image/png'));
         if (!blob) return;
         const file = new File([blob], 'prismfall.png', { type: 'image/png' });
-        if (nav.canShare && nav.canShare({ files: [file] })) await navigator.share({ files: [file], title: 'PRISMFALL', text: `I scored ${Math.round(d.score).toLocaleString()} in PRISMFALL` });
-        else await navigator.share({ title: 'PRISMFALL', text: `I scored ${Math.round(d.score).toLocaleString()} in PRISMFALL`, url: location.href });
+        const text = tf('I scored {0} in PRISMFALL', Math.round(d.score).toLocaleString('en-US'));
+        if (nav.canShare && nav.canShare({ files: [file] })) await navigator.share({ files: [file], title: 'PRISMFALL', text });
+        else await navigator.share({ title: 'PRISMFALL', text, url: location.href });
       } catch {
         /* user cancelled or unsupported */
       }
@@ -204,7 +210,7 @@ export class UI {
       'A crystal swarm has fallen through the atmosphere. The Prism is waking.',
       'Colony shields hold for ten minutes. Their motherships will land before then.',
       'You are the last interceptor in the air. Hold the line, pilot.',
-    ];
+    ].map(t);
     const el = $('#briefing');
     const body = $('.brief', el);
     body.innerHTML = '';
@@ -269,9 +275,9 @@ export class UI {
       info.style.setProperty('--c', hex(d.color));
       info.innerHTML = seen
         ? `<div class="sname">${d.name.toUpperCase()}</div><div class="sblurb">${ENEMY_LORE[id].lore}</div>
-           <div class="ctip"><b>TACTICS</b> ${ENEMY_LORE[id].tip}</div>
-           <div class="cstats"><span>HULL <b>${d.hp}</b></span><span>SPEED <b>${d.speed || '—'}</b></span><span>IMPACT <b>${d.damage}</b></span><span>XP <b>${d.xp}</b></span></div>`
-        : `<div class="sname">UNKNOWN</div><div class="sblurb">Destroy one to scan it into the Codex.</div>`;
+           <div class="ctip"><b>${t('TACTICS')}</b> ${ENEMY_LORE[id].tip}</div>
+           <div class="cstats"><span>${t('HULL')} <b>${d.hp}</b></span><span>${t('SPEED')} <b>${d.speed || '—'}</b></span><span>${t('IMPACT')} <b>${d.damage}</b></span><span>${t('XP')} <b>${d.xp}</b></span></div>`
+        : `<div class="sname">${t('UNKNOWN')}</div><div class="sblurb">${t('Destroy one to scan it into the Codex.')}</div>`;
       this.onCodex(true, seen ? 'enemy' : 'ship', id);
     } else if (this.codexTab === 'boss') {
       list.innerHTML = BOSS_LORE.map((b, i) => {
@@ -283,8 +289,8 @@ export class UI {
       const seen = m.seen.includes('boss' + i);
       info.style.setProperty('--c', '#c86bff');
       info.innerHTML = seen
-        ? `<div class="sname">${b.name}</div><div class="sblurb">${b.lore}</div><div class="ctip"><b>TACTICS</b> ${b.tip}</div>`
-        : `<div class="sname">UNKNOWN</div><div class="sblurb">Defeat this mothership to scan it.</div>`;
+        ? `<div class="sname">${b.name}</div><div class="sblurb">${b.lore}</div><div class="ctip"><b>${t('TACTICS')}</b> ${b.tip}</div>`
+        : `<div class="sname">${t('UNKNOWN')}</div><div class="sblurb">${t('Defeat this mothership to scan it.')}</div>`;
       this.onCodex(true, seen ? 'boss' : 'ship', String(i));
     } else {
       const ids = Object.keys(WEAPONS) as WeaponId[];
@@ -292,7 +298,7 @@ export class UI {
       const w = WEAPONS[this.codexSel as WeaponId];
       info.style.setProperty('--c', w.color);
       info.innerHTML = `<div class="sname">${w.icon} ${w.name.toUpperCase()}</div><div class="sblurb">${w.blurb} ${WEAPON_TIPS[w.id]}</div>
-        <div class="ctip"><b>EVOLUTION</b> Max level + ${PASSIVES[w.evoNeeds].name} → <span style="color:${w.color}">${w.evoName}</span>. ${w.levels[5].replace('EVOLVED: ', '')}</div>`;
+        <div class="ctip"><b>${t('EVOLUTION')}</b> ${tf('Max level + {0}', PASSIVES[w.evoNeeds].name)} ${ARROW} <span style="color:${w.color}">${w.evoName}</span>. ${w.levels[5].replace(/^(EVOLVED|متطوّر): /, '')}</div>`;
       this.onCodex(true, 'ship', '');
     }
     list.querySelectorAll<HTMLElement>('[data-c]').forEach((el) =>
@@ -305,7 +311,9 @@ export class UI {
 
   setMapLabel(map: 'dusk' | 'night', unlocked: boolean) {
     const b = $('#mapBtn');
-    b.innerHTML = map === 'night' ? 'SECTOR · <b>NIGHT SHIFT</b> <small>×1.5 score</small>' : `SECTOR · <b>DUSK OUTPOST</b>${unlocked ? '' : ' <small>🔒 Night Shift</small>'}`;
+    b.innerHTML = map === 'night'
+      ? `${t('SECTOR')} · <b>${t('NIGHT SHIFT')}</b> <small>${tf('×{0} score', '1.5')}</small>`
+      : `${t('SECTOR')} · <b>${t('DUSK OUTPOST')}</b>${unlocked ? '' : ` <small>🔒 ${t('Night Shift')}</small>`}`;
     b.classList.toggle('night', map === 'night');
   }
 
@@ -338,12 +346,12 @@ export class UI {
     if (key !== this.lastHud) {
       this.lastHud = key;
       $('#hpTxt').textContent = `${Math.ceil(Math.max(0, s.hp))} / ${Math.ceil(s.maxHp)}`;
-      $('#lvTxt').textContent = `LV ${s.level}`;
+      $('#lvTxt').textContent = tf('LV {0}', s.level);
       $('#timer').textContent = fmtTime(s.time);
-      $('#kills').textContent = `${fmtNum(s.kills)} KILLS`;
+      $('#kills').textContent = tf('{0} KILLS', fmtNum(s.kills));
       $('#score').textContent = fmtNum(s.score);
       const left = FINAL_TIME - s.time;
-      $('#goal').textContent = s.endless ? 'ENDLESS MODE' : s.won ? 'CORE DESTROYED' : left > 0 ? `CORE ARRIVES IN ${fmtTime(left)}` : 'DESTROY THE CORE';
+      $('#goal').textContent = s.endless ? t('ENDLESS MODE') : s.won ? t('CORE DESTROYED') : left > 0 ? tf('CORE ARRIVES IN {0}', fmtTime(left)) : t('DESTROY THE CORE');
     }
     const ring = $('#dashRing') as HTMLElement;
     ring.style.setProperty('--p', `${Math.round(s.dashFrac * 100)}`);
@@ -352,7 +360,7 @@ export class UI {
     dh.classList.toggle('ready', s.dashFrac >= 1);
     const combo = $('#combo');
     if (s.combo >= 10) {
-      combo.textContent = `${s.combo}× COMBO`;
+      combo.textContent = tf('{0}× COMBO', s.combo);
       combo.classList.add('on');
       combo.style.setProperty('--s', String(1 + Math.min(0.6, s.combo / 300)));
     } else combo.classList.remove('on');
@@ -469,7 +477,7 @@ export class UI {
       return;
     }
     bb.classList.remove('hidden');
-    $('#bossName').textContent = name;
+    $('#bossName').textContent = t(name);
     ($('#bossFill') as HTMLElement).style.width = `${Math.max(0, frac * 100)}%`;
     // white damage trail that catches up after a short delay
     const now = performance.now();
@@ -482,8 +490,8 @@ export class UI {
 
   banner(title: string, sub: string, color = '#5ef2ff', dur = 2600) {
     const b = $('#banner');
-    $('.b1', b).textContent = title;
-    $('.b2', b).textContent = sub;
+    $('.b1', b).textContent = t(title);
+    $('.b2', b).textContent = t(sub);
     b.style.setProperty('--c', color);
     b.classList.remove('on');
     void b.offsetWidth;
@@ -494,8 +502,8 @@ export class UI {
 
   bossCard(name: string, sub: string) {
     const el = $('#bossCard');
-    $('.bc1', el).textContent = sub;
-    $('.bc2', el).textContent = name;
+    $('.bc1', el).textContent = t(sub);
+    $('.bc2', el).textContent = t(name);
     el.classList.remove('on');
     void el.offsetWidth;
     el.classList.add('on');
@@ -524,9 +532,9 @@ export class UI {
         <div class="key">${i + 1}</div>
         <div class="ic">${c.iconId && this.icons.get(c.iconId) ? `<img src="${this.icons.get(c.iconId)}" alt="" />` : `<span>${c.icon}</span>`}</div>
         <div class="txt">
-          <div class="tag">${c.tag}</div>
-          <div class="nm">${c.name}</div>
-          <div class="ds">${c.desc}</div>
+          <div class="tag">${t(c.tag)}</div>
+          <div class="nm">${t(c.name)}</div>
+          <div class="ds">${t(c.desc)}</div>
           ${c.max ? `<div class="pips">${Array.from({ length: c.max }, (_, k) => `<i class="${k < c.level ? 'on' : ''}"></i>`).join('')}</div>` : ''}
         </div>
       </button>`,
@@ -536,7 +544,7 @@ export class UI {
       el.addEventListener('click', () => this.pick(Number(el.dataset.i)));
     });
     const rb = $('#rerollBtn');
-    rb.textContent = `↻ REROLL (${rerolls})`;
+    rb.textContent = tf('↻ REROLL ({0})', rerolls);
     rb.toggleAttribute('disabled', rerolls <= 0);
     this.show('#levelup');
     // brief lockout so a held drag/tap doesn't instantly pick a card
@@ -568,8 +576,8 @@ export class UI {
 
   /* ---------- pause ---------- */
   showPause(weapons: Map<WeaponId, number>, passives: Map<PassiveId, number>, evolved: Set<WeaponId>) {
-    const w = [...weapons].map(([id, lv]) => `<div class="bi" style="--c:${WEAPONS[id].color}"><span>${WEAPONS[id].icon}</span><b>${evolved.has(id) ? WEAPONS[id].evoName : WEAPONS[id].name}</b><em>${evolved.has(id) ? 'EVO' : 'LV ' + lv}</em></div>`).join('');
-    const p = [...passives].map(([id, lv]) => `<div class="bi" style="--c:${PASSIVES[id].color}"><span>${PASSIVES[id].icon}</span><b>${PASSIVES[id].name}</b><em>LV ${lv}</em></div>`).join('');
+    const w = [...weapons].map(([id, lv]) => `<div class="bi" style="--c:${WEAPONS[id].color}"><span>${WEAPONS[id].icon}</span><b>${evolved.has(id) ? WEAPONS[id].evoName : WEAPONS[id].name}</b><em>${evolved.has(id) ? t('EVO') : tf('LV {0}', lv)}</em></div>`).join('');
+    const p = [...passives].map(([id, lv]) => `<div class="bi" style="--c:${PASSIVES[id].color}"><span>${PASSIVES[id].icon}</span><b>${PASSIVES[id].name}</b><em>${tf('LV {0}', lv)}</em></div>`).join('');
     $('#build').innerHTML = w + p;
     this.show('#pause');
   }
@@ -689,6 +697,10 @@ export class UI {
       this.onSettings(s);
     });
     sync();
+    document.querySelectorAll<HTMLButtonElement>('.lbtn').forEach((b) => {
+      b.classList.toggle('on', b.dataset.l === LANG);
+      b.addEventListener('click', () => setLang(b.dataset.l as Lang));
+    });
   }
 
   /* ---------- hangar ---------- */
@@ -711,9 +723,9 @@ export class UI {
       const sd = SHIPS.find((x) => x.id === preview)!;
       const owned = meta.owned.includes(sd.id);
       const sel = meta.ship === sd.id;
-      const btn = sel ? '<button class="btn small" disabled>SELECTED</button>'
-        : owned ? `<button class="btn primary small" id="shipAct">SELECT</button>`
-        : `<button class="btn primary small ${meta.shards < sd.cost ? 'poor' : ''}" id="shipAct">UNLOCK · ◆ ${sd.cost}</button>`;
+      const btn = sel ? `<button class="btn small" disabled>${t('SELECTED')}</button>`
+        : owned ? `<button class="btn primary small" id="shipAct">${t('SELECT')}</button>`
+        : `<button class="btn primary small ${meta.shards < sd.cost ? 'poor' : ''}" id="shipAct">${tf('UNLOCK · ◆ {0}', sd.cost)}</button>`;
       body.innerHTML = `
         <div class="shiplist">${SHIPS.map((x) => `<button class="shipchip ${x.id === preview ? 'on' : ''} ${meta.owned.includes(x.id) ? '' : 'locked'}" data-id="${x.id}" style="--c:#${x.accent.toString(16).padStart(6, '0')}">${x.name}${meta.ship === x.id ? ' ✓' : meta.owned.includes(x.id) ? '' : ' 🔒'}</button>`).join('')}</div>
         <div class="shipinfo" style="--c:#${sd.accent.toString(16).padStart(6, '0')}">
@@ -734,9 +746,9 @@ export class UI {
         const cost = u.cost(lv);
         return `<div class="uprow">
           <div class="uic">${u.icon}</div>
-          <div class="utx"><b>${u.name}</b><span>${lv > 0 ? u.desc(lv) : u.desc(1).replace(/^/, 'Next: ')}${!maxed && lv > 0 ? ` <em>→ ${u.desc(lv + 1)}</em>` : ''}</span>
+          <div class="utx"><b>${u.name}</b><span>${lv > 0 ? u.desc(lv) : tf('Next: {0}', u.desc(1))}${!maxed && lv > 0 ? ` <em>${ARROW} ${u.desc(lv + 1)}</em>` : ''}</span>
             <div class="pips">${Array.from({ length: u.max }, (_, k) => `<i class="${k < lv ? 'on' : ''}"></i>`).join('')}</div></div>
-          <button class="btn small ${maxed ? '' : meta.shards < cost ? 'poor' : 'primary'}" data-u="${u.id}" ${maxed ? 'disabled' : ''}>${maxed ? 'MAX' : '◆ ' + cost}</button>
+          <button class="btn small ${maxed ? '' : meta.shards < cost ? 'poor' : 'primary'}" data-u="${u.id}" ${maxed ? 'disabled' : ''}>${maxed ? t('MAX') : '◆ ' + cost}</button>
         </div>`;
       }).join('')}</div>`;
       body.querySelectorAll<HTMLElement>('[data-u]').forEach((b) => b.addEventListener('click', () => this.onBuy(b.dataset.u as UpgradeId)));
@@ -744,14 +756,14 @@ export class UI {
       const st = meta.stats;
       body.innerHTML = `
         <div class="recgrid">
-          <div class="st"><label>RUNS</label><b>${fmtNum(st.runs)}</b></div>
-          <div class="st"><label>VICTORIES</label><b>${fmtNum(st.wins)}</b></div>
-          <div class="st"><label>BEST SCORE</label><b>${fmtNum(st.bestScore)}</b></div>
-          <div class="st"><label>LONGEST</label><b>${fmtTime(st.bestTime)}</b></div>
-          <div class="st"><label>TOTAL KILLS</label><b>${fmtNum(st.kills)}</b></div>
-          <div class="st"><label>BOSSES</label><b>${fmtNum(st.bosses)}</b></div>
+          <div class="st"><label>${t('RUNS')}</label><b>${fmtNum(st.runs)}</b></div>
+          <div class="st"><label>${t('VICTORIES')}</label><b>${fmtNum(st.wins)}</b></div>
+          <div class="st"><label>${t('BEST SCORE')}</label><b>${fmtNum(st.bestScore)}</b></div>
+          <div class="st"><label>${t('LONGEST')}</label><b>${fmtTime(st.bestTime)}</b></div>
+          <div class="st"><label>${t('TOTAL KILLS')}</label><b>${fmtNum(st.kills)}</b></div>
+          <div class="st"><label>${t('BOSSES')}</label><b>${fmtNum(st.bosses)}</b></div>
         </div>
-        <div class="toplist"><div class="th">TOP RUNS</div>${meta.top.length ? meta.top.map((t, i) => `<div class="tr ${t.win ? 'win' : ''}"><em>${i + 1}</em><b>${fmtNum(t.score)}</b><span>${fmtTime(t.time)} · LV ${t.level} · ${SHIPS.find((x) => x.id === t.ship)?.name ?? ''}${t.win ? ' · ★' : ''}</span></div>`).join('') : '<div class="tr"><span>No runs yet</span></div>'}</div>
+        <div class="toplist"><div class="th">${t('TOP RUNS')}</div>${meta.top.length ? meta.top.map((r, i) => `<div class="tr ${r.win ? 'win' : ''}"><em>${i + 1}</em><b>${fmtNum(r.score)}</b><span>${tf('{0} · LV {1} · {2}', fmtTime(r.time), r.level, SHIPS.find((x) => x.id === r.ship)?.name ?? '')}${r.win ? ' · ★' : ''}</span></div>`).join('') : `<div class="tr"><span>${t('No runs yet')}</span></div>`}</div>
         <div class="achlist">${ACHIEVEMENTS.map((a) => {
           const got = meta.achievements.includes(a.id);
           return `<div class="ach ${got ? 'got' : ''}"><div class="ai">${got ? '★' : '☆'}</div><div><b>${a.name}</b><span>${a.desc}</span></div><em>◆ ${a.reward}</em></div>`;
@@ -761,7 +773,7 @@ export class UI {
 
   hint(html: string, dur = 4000) {
     const el = $('#hint');
-    el.innerHTML = html;
+    el.innerHTML = t(html);
     el.classList.add('on');
     clearTimeout(this.hintTimer);
     this.hintTimer = window.setTimeout(() => el.classList.remove('on'), dur);
@@ -783,8 +795,8 @@ export class UI {
       return;
     }
     this.toastBusy = true;
-    $('.tt', el).textContent = n.t;
-    $('.td', el).textContent = n.d;
+    $('.tt', el).textContent = t(n.t);
+    $('.td', el).textContent = t(n.d);
     el.classList.remove('on');
     void el.offsetWidth;
     el.classList.add('on');
@@ -801,20 +813,20 @@ export class UI {
 
   showOver(st: RunStats) {
     this.hud.classList.add('hidden');
-    $('#overTitle').textContent = st.victory ? 'COLONY SAVED' : 'SIGNAL LOST';
-    $('#overSub').textContent = st.victory ? 'The Prism Core is shattered. Mars breathes again.' : 'Your ship went down. The swarm advances.';
+    $('#overTitle').textContent = t(st.victory ? 'COLONY SAVED' : 'SIGNAL LOST');
+    $('#overSub').textContent = t(st.victory ? 'The Prism Core is shattered. Mars breathes again.' : 'Your ship went down. The swarm advances.');
     $('#over').classList.toggle('win', st.victory);
     const ev = [...st.weapons].map(([id, lv]) => `<span style="color:${WEAPONS[id].color}">${WEAPONS[id].icon} ${st.evolved.has(id) ? WEAPONS[id].evoName : WEAPONS[id].name + ' ' + lv}</span>`).join('');
     $('#stats').innerHTML = `
-      <div class="st big"><label>SCORE</label><b>${fmtNum(st.score)}</b>${st.newBest ? '<em>NEW BEST</em>' : ''}</div>
-      <div class="st"><label>SURVIVED</label><b>${fmtTime(st.time)}</b></div>
-      <div class="st"><label>LEVEL</label><b>${st.level}</b></div>
-      <div class="st"><label>KILLS</label><b>${fmtNum(st.kills)}</b></div>
-      <div class="st"><label>MAX COMBO</label><b>${fmtNum(st.maxCombo)}</b></div>
-      <div class="st"><label>BOSSES</label><b>${st.bosses}</b></div>
-      <div class="st"><label>DAMAGE</label><b>${fmtNum(st.damage)}</b></div>
+      <div class="st big"><label>${t('SCORE')}</label><b>${fmtNum(st.score)}</b>${st.newBest ? `<em>${t('NEW BEST')}</em>` : ''}</div>
+      <div class="st"><label>${t('SURVIVED')}</label><b>${fmtTime(st.time)}</b></div>
+      <div class="st"><label>${t('LEVEL')}</label><b>${st.level}</b></div>
+      <div class="st"><label>${t('KILLS')}</label><b>${fmtNum(st.kills)}</b></div>
+      <div class="st"><label>${t('MAX COMBO')}</label><b>${fmtNum(st.maxCombo)}</b></div>
+      <div class="st"><label>${t('BOSSES')}</label><b>${st.bosses}</b></div>
+      <div class="st"><label>${t('DAMAGE')}</label><b>${fmtNum(st.damage)}</b></div>
       <div class="loadout">${ev}</div>
-      <div class="st big shards"><label>PRISM SHARDS EARNED</label><b>◆ ${fmtNum(st.shards)}</b></div>
+      <div class="st big shards"><label>${t('PRISM SHARDS EARNED')}</label><b>◆ ${fmtNum(st.shards)}</b></div>
       ${st.achievements.length ? `<div class="loadout ach-new">${st.achievements.map((a) => `<span>★ ${a}</span>`).join('')}</div>` : ''}`;
     $('#endlessBtn').classList.toggle('hidden', !st.victory);
     this.show('#over');
@@ -823,7 +835,7 @@ export class UI {
 
 function bar(label: string, v: number) {
   const p = Math.round(Math.max(0.08, Math.min(1, v)) * 100);
-  return `<div class="sbar"><label>${label}</label><div><i style="width:${p}%"></i></div></div>`;
+  return `<div class="sbar"><label>${t(label)}</label><div><i style="width:${p}%"></i></div></div>`;
 }
 
 function slot(icon: string, color: string, lv: number, evo: boolean, passive = false) {
@@ -883,7 +895,7 @@ const TEMPLATE = /* html */ `
 <div id="how" class="screen modal hidden">
   <div class="panel">
     <h2>HOW TO PLAY</h2>
-    <ul class="howlist">
+    <ul class="howlist" data-i18n="howlist">
       <li><b>Fly</b> with WASD / arrows, a gamepad stick, or drag anywhere on touch screens.</li>
       <li><b>Weapons fire automatically.</b> Focus on positioning.</li>
       <li><b>Dash</b> (Space / Shift / A button / DASH) to phase through enemies and bullets.</li>
@@ -893,7 +905,7 @@ const TEMPLATE = /* html */ `
       <li>Supply drops: <span style="color:#ff5e7e">repair canister</span>, <span style="color:#4fffe0">tractor dish</span> (pulls all crystals), <span style="color:#ffaa33">payload</span> (clears the screen).</li>
     </ul>
     <div class="evos">
-      ${Object.values(WEAPONS).map((w) => `<div style="--c:${w.color}"><span>${w.icon}</span> ${w.name} + ${PASSIVES[w.evoNeeds].name} → <b>${w.evoName}</b></div>`).join('')}
+      ${Object.values(WEAPONS).map((w) => `<div style="--c:${w.color}"><span>${w.icon}</span> ${w.name} + ${PASSIVES[w.evoNeeds].name} ${ARROW} <b>${w.evoName}</b></div>`).join('')}
     </div>
     <button id="howClose" class="btn">GOT IT</button>
   </div>
@@ -902,11 +914,11 @@ const TEMPLATE = /* html */ `
 <div id="credits" class="screen modal hidden">
   <div class="panel">
     <h2>CREDITS</h2>
-    <p>Design, code, shaders, procedural audio: built with <b>Three.js</b>, TypeScript and Vite.</p>
+    <div data-i18n="credits"><p>Design, code, shaders, procedural audio: built with <b>Three.js</b>, TypeScript and Vite.</p>
     <p><b>3D models:</b> Kenney (kenney.nl), "Space Kit" (CC0) and "Starter Kit FPS" drone (MIT).</p>
     <p><b>HDR lighting:</b> Poly Haven HDRIs via pmndrs/assets (CC0).</p>
     <p><b>Normal maps:</b> pmndrs/assets (CC0).</p>
-    <p><b>Fonts:</b> Orbitron and Rajdhani (SIL Open Font License).</p>
+    <p><b>Fonts:</b> Orbitron, Rajdhani and Cairo (SIL Open Font License).</p></div>
     <button id="creditsClose" class="btn">CLOSE</button>
   </div>
 </div>
@@ -990,8 +1002,10 @@ const TEMPLATE = /* html */ `
       <div class="set"><label>Damage numbers</label><input id="numChk" type="checkbox"></div>
       <div class="set"><label>Reduce flashing</label><input id="calmChk" type="checkbox"></div>
       <div class="set"><label>High-contrast enemy bullets</label><input id="contrastChk" type="checkbox"></div>
+      <div class="set"><label>Language</label><div class="seg">
+        <button class="lbtn" data-l="en">EN</button><button class="lbtn" data-l="ar">عربي</button></div></div>
     </div>
-    <div class="ctlhelp">
+    <div class="ctlhelp" data-i18n="ctlhelp">
       <b>Keyboard</b> WASD move · Space dash · 1/2/3 pick · R reroll · Esc pause · M mute<br/>
       <b>Gamepad</b> Stick move · A dash · X/Y/B pick · LB reroll · Start pause · D-pad navigates menus
     </div>
