@@ -105,6 +105,7 @@ export class Game {
   private camLook = new THREE.Vector3();
   private last = performance.now();
   private snapCam = false;
+  cineT = 0;
   private fpsAcc = 0;
   private fpsN = 0;
   private autoQDone = false;
@@ -296,11 +297,12 @@ export class Game {
     Object.assign(this, {
       dmgLog: {}, T: 0, kills: 0, score: 0, combo: 0, comboT: 0, maxCombo: 0, damageDealt: 0, pendingLevels: 0,
       bossesKilled: 0, nextBoss: BOSS_TIMES[0], bossWarn: 0, won: false, endless: false, rerolls: 3 + upLv(this.meta, 'rerolls'), untouchedT: 0, achT: 0, runAch: [], paidShards: 0, tutStep: this.meta.seenTutorial ? 99 : 0,
-      spawnAcc: 0, nextSurge: 50, nextElite: 95, freezeT: 0, slowT: 0, deathT: 0, victoryT: 0, shake: 0, hurtT: 0,
+      cineT: 0, spawnAcc: 0, nextSurge: 50, nextElite: 95, freezeT: 0, slowT: 0, deathT: 0, victoryT: 0, shake: 0, hurtT: 0,
     });
     this.input.releaseAll();
     this.input.enabled = true;
     this.state = 'play';
+    document.body.classList.remove('cine');
     this.ui.startRun(this.input.touchUsed);
     this.ui.banner('DEFEND THE COLONY', 'Survive · Level up · Evolve', '#5ef2ff', 2400);
     // opening ring of drones dropping in
@@ -325,7 +327,8 @@ export class Game {
     this.weapons.reset();
     this.ui.hideHud();
     this.audio.intensity = 0;
-    document.body.classList.remove('lowhp');
+    document.body.classList.remove('lowhp', 'cine');
+    this.cineT = 0;
     this.ui.showMenu(this.meta.stats.bestScore, this.meta.stats.bestTime, this.input.touchUsed, this.meta.shards);
     this.showroom.visible = true;
   }
@@ -376,6 +379,11 @@ export class Game {
       if (this.slowT > 0) {
         this.slowT -= dt;
         dt *= 0.3;
+      }
+      if (this.cineT > 0) {
+        this.cineT -= dt;
+        document.body.classList.toggle('cine', this.cineT > 0);
+        dt *= 0.2;
       }
       this.update(dt);
     } else if (this.state === 'menu') {
@@ -468,6 +476,14 @@ export class Game {
       return;
     }
     const P = this.player;
+    const be = this.boss.e;
+    if (this.cineT > 0 && be) {
+      this.camPos.set(be.x + 4, 9, be.z + 13);
+      cam.position.lerp(this.camPos, 1 - Math.exp(-3 * dt));
+      this.camLook.set(be.x, 3, be.z);
+      cam.lookAt(this.camLook);
+      return;
+    }
     // portrait screens need more height to see sideways
     const zoom = aspect < 1 ? Math.pow(1 / aspect, 0.55) : 1;
     const bossZoom = this.boss.e ? 1.15 : 1;
@@ -594,6 +610,8 @@ export class Game {
       this.bossWarn -= dt;
       if (this.bossWarn <= 0) {
         this.boss.spawn(this.pendingFinal);
+        this.cineT = 2.4;
+        this.ui.bossCard(this.boss.name, this.pendingFinal ? 'FINAL BATTLE' : `MOTHERSHIP ${['I', 'II', 'III', 'IV', 'V'][this.bossesKilled] ?? this.bossesKilled + 1}`);
         if (this.endless || this.won) this.nextBoss = T + 100;
         else {
           const idx = BOSS_TIMES.indexOf(this.nextBoss);
@@ -1074,6 +1092,10 @@ export class Game {
       if (this.state !== 'play') break;
       if (bot && !this.player.dead) this.botSteer();
       this.update(dt);
+    }
+    if (this.cineT > 0) {
+      this.cineT = 0;
+      document.body.classList.remove('cine');
     }
     return {
       state: this.state, T: Math.round(this.T), hp: Math.round(this.player.hp), level: this.player.level, kills: this.kills,

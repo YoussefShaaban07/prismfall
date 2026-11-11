@@ -257,6 +257,16 @@ export class UI {
     this.bannerTimer = window.setTimeout(() => b.classList.remove('on'), dur);
   }
 
+  bossCard(name: string, sub: string) {
+    const el = $('#bossCard');
+    $('.bc1', el).textContent = sub;
+    $('.bc2', el).textContent = name;
+    el.classList.remove('on');
+    void el.offsetWidth;
+    el.classList.add('on');
+    setTimeout(() => el.classList.remove('on'), 2600);
+  }
+
   flash(color = 'rgba(255,255,255,0.7)') {
     const f = $('#flash');
     f.style.background = color;
@@ -567,6 +577,8 @@ function slot(icon: string, color: string, lv: number, evo: boolean, passive = f
 
 const TEMPLATE = /* html */ `
 <div id="flash"></div>
+<div id="letterbox"><i></i><i></i></div>
+<div id="bossCard" class="bosscard"><div class="bc1"></div><div class="bc2"></div></div>
 <div id="floaters"></div>
 
 <div id="hud" class="hidden">

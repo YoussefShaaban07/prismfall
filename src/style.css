@@ -368,3 +368,13 @@ input[type='checkbox'] { width: 20px; height: 20px; accent-color: var(--cyan); }
 .ctlhelp { font-size: 14px; color: rgba(255, 255, 255, .65); line-height: 1.6; text-align: center; }
 .ctlhelp b { color: var(--cyan); font-family: var(--display); font-size: 10px; letter-spacing: .2em; margin-right: 6px; }
 #settingsScreen { z-index: 6; }
+#letterbox i { position: fixed; left: 0; right: 0; height: 0; background: #000; z-index: 3; transition: height .45s cubic-bezier(.3, .8, .3, 1); pointer-events: none; }
+#letterbox i:first-child { top: 0; }
+#letterbox i:last-child { bottom: 0; }
+body.cine #letterbox i { height: 11vh; }
+body.cine #hud .top, body.cine #minimap, body.cine .combo { opacity: 0; transition: opacity .3s; }
+.bosscard { position: fixed; left: 0; right: 0; bottom: 16vh; text-align: center; z-index: 4; pointer-events: none; opacity: 0; }
+.bosscard.on { animation: bossCard 2.6s ease forwards; }
+@keyframes bossCard { 0% { opacity: 0; transform: translateX(-40px); letter-spacing: .1em; } 15%, 80% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateX(40px); } }
+.bosscard .bc1 { font-family: var(--display); font-size: 12px; letter-spacing: .6em; color: #ff8aa0; text-shadow: 0 0 10px #ff2050; }
+.bosscard .bc2 { font-family: var(--display); font-weight: 900; font-size: clamp(30px, 6vw, 68px); letter-spacing: .18em; color: #fff; text-shadow: 0 0 30px #c86bff, 0 0 4px #fff; }
