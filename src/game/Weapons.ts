@@ -153,6 +153,14 @@ export class WeaponSystem {
             cur = g.enemies.nearest(cur.x, cur.z, 8, visited);
           }
           g.fx.lightning(pts, i === 5 ? 0xd9b8ff : 0xb48bff, 0.22);
+          // side forks that crackle off each hop
+          for (let k = 1; k < pts.length; k++) {
+            if (Math.random() < 0.6) {
+              const p0 = pts[k];
+              const fa = rand(0, TAU), fl = rand(1.2, 2.6);
+              g.fx.lightning([p0, new THREE.Vector3(p0.x + Math.cos(fa) * fl, 0.4, p0.z + Math.sin(fa) * fl)], 0x9a7bff, 0.12);
+            }
+          }
         }
         if (any) g.audio.sfx('zap');
         return any;
@@ -261,6 +269,10 @@ export class WeaponSystem {
       if (perp < w + e.r) g.damage(e, dmg, dx * 4, dz * 4);
     }
     g.fx.beam(P.x, P.z, a, len, w * 1.4, evo ? 0xffc04a : 0xffe14f, 0.35);
+    // molten scorch line along the beam path + heat shimmer at the muzzle
+    if (Math.random() < 0.5) for (let t = 3; t < len; t += 6) g.fx.scorch(P.x + dx * t, P.z + dz * t, w * 1.1);
+    g.fx.shock(P.x + dx * 1.5, P.z + dz * 1.5, 3, 0.5, 0.25);
+    g.lighting.flash(P.x + dx * len * 0.4, P.z + dz * len * 0.4, 0xffd060, 22, len * 0.7, 0.25);
     for (let k = 0; k < 14; k++) {
       const t = rand(0, len);
       g.particles.emit(P.x + dx * t, 1, P.z + dz * t, rand(-2, 2), rand(0, 2), rand(-2, 2), 0.4, 0.5, g.colors.yellow, 3);

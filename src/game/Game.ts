@@ -662,6 +662,15 @@ export class Game {
     }
     const P = this.player;
     const be = this.boss.e;
+    if (this.victoryT > 0) {
+      document.body.classList.add('cine');
+      const a = this.time * 0.5;
+      this.camPos.set(P.x + Math.sin(a) * 18, 10, P.z + Math.cos(a) * 18);
+      cam.position.lerp(this.camPos, 1 - Math.exp(-2 * dt));
+      this.camLook.set(P.x, 3, P.z);
+      cam.lookAt(this.camLook);
+      return;
+    }
     if (this.cineT > 0 && be) {
       this.camPos.set(be.x + 4, 9, be.z + 13);
       cam.position.lerp(this.camPos, 1 - Math.exp(-3 * dt));
@@ -760,8 +769,21 @@ export class Game {
     // music intensity
     this.audio.intensity = this.boss.e ? 3 : this.T > 240 ? 2 : this.T > 60 ? 1 : 0;
 
-    // victory sequence
+    // victory sequence: fireworks over the colony
     if (this.victoryT > 0) {
+      if (Math.random() < dt * 3.5) {
+        const a = rand(0, TAU), d = rand(6, 22);
+        const x = P.x + Math.cos(a) * d, z = P.z + Math.sin(a) * d, y = rand(6, 12);
+        const cols = [this.colors.cyan, this.colors.pink, this.colors.yellow, this.colors.violet, this.colors.green];
+        const c = cols[Math.floor(Math.random() * cols.length)];
+        for (let k = 0; k < 30; k++) {
+          const u = rand(-1, 1), th = rand(0, TAU), sp = rand(7, 10);
+          const rr = Math.sqrt(1 - u * u);
+          this.particles.emit(x, y, z, rr * Math.cos(th) * sp, u * sp, rr * Math.sin(th) * sp, rand(0.9, 1.4), 0.32, c, 1.6, -5);
+        }
+        this.lighting.flash(x, z, c, 12, 22, 0.5);
+        this.audio.sfx('kill');
+      }
       this.victoryT -= dt;
       if (this.victoryT <= 0) this.endRun(true);
     }
@@ -777,6 +799,20 @@ export class Game {
       });
       const b = this.boss.e;
       this.ui.setBoss(b ? this.boss.name : null, b ? b.hp / b.maxHp : 0);
+    }
+    // off-screen threat arrows
+    {
+      const pts: { x: number; y: number; boss: boolean }[] = [];
+      const v = new THREE.Vector3();
+      for (const e of this.enemies.list) {
+        if (e.type !== 'boss' && !e.elite) continue;
+        v.set(e.x, 1, e.z).project(this.r.camera);
+        if (Math.abs(v.x) > 1.02 || Math.abs(v.y) > 1.02 || v.z > 1) {
+          if (v.z > 1) { v.x *= -1; v.y *= -1; }
+          pts.push({ x: v.x, y: v.y, boss: e.type === 'boss' });
+        }
+      }
+      this.ui.threats(pts);
     }
     this.mmT -= dt;
     if (this.mmT <= 0) {
@@ -1002,7 +1038,7 @@ export class Game {
     this.pickups.dropPower('magnet', e.x - 2, e.z);
     if (final && !this.won) {
       this.won = true;
-      this.victoryT = 3;
+      this.victoryT = 5;
       this.ui.banner('CORE DESTROYED', 'The colony is saved', '#7ff6ff', 3200);
       setTimeout(() => this.audio.sfx('victory'), 900);
       // shatter every remaining enemy
@@ -1401,6 +1437,7 @@ export class Game {
 
   private endRun(victory: boolean) {
     if (this.state === 'over') return;
+    document.body.classList.remove('cine');
     this.captureSnap();
     this.state = 'over';
     this.input.enabled = false;

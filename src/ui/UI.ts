@@ -415,6 +415,28 @@ export class UI {
     c.restore();
   }
 
+  /** Edge-of-screen arrows pointing at off-screen bosses / elites. pts are NDC (x,y) + kind. */
+  threats(pts: { x: number; y: number; boss: boolean }[]) {
+    const root = $('#threats');
+    while (root.children.length < pts.length) {
+      const d = document.createElement('div');
+      d.className = 'threat';
+      root.appendChild(d);
+    }
+    const W = innerWidth, H = innerHeight, m = 46;
+    [...root.children].forEach((el, i) => {
+      const h = el as HTMLElement;
+      const p = pts[i];
+      if (!p) { h.style.display = 'none'; return; }
+      const ang = Math.atan2(-p.y, p.x);
+      const k = Math.min((W / 2 - m) / Math.abs(Math.cos(ang) || 1e-4), (H / 2 - m) / Math.abs(Math.sin(ang) || 1e-4));
+      const x = W / 2 + Math.cos(ang) * k, y = H / 2 + Math.sin(ang) * k;
+      h.style.display = 'block';
+      h.className = 'threat ' + (p.boss ? 'boss' : 'elite');
+      h.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%) rotate(${ang}rad)`;
+    });
+  }
+
   setBoss(name: string | null, frac: number) {
     const bb = $('#bossBar');
     if (!name) {
@@ -790,6 +812,7 @@ const TEMPLATE = /* html */ `
     </div>
   </div>
   <canvas id="minimap" width="150" height="150"></canvas>
+  <div id="threats"></div>
   <div id="combo" class="combo"></div>
   <div id="bossBar" class="bossbar hidden"><div id="bossName" class="bossname"></div><div class="bosstrack"><div id="bossFill"></div></div></div>
   <div id="banner" class="banner"><div class="b1"></div><div class="b2"></div></div>

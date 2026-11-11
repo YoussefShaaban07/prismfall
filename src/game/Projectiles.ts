@@ -145,7 +145,11 @@ export class Projectiles {
             b.hit.add(e.id);
             const sp = Math.hypot(b.vx, b.vz);
             g.damage(e, b.dmg, (b.vx / sp) * 3, (b.vz / sp) * 3);
-            g.particles.burst(b.x, 1, b.z, b.color, 4, 6, 0.25, 0.35, 0.3);
+            // sparks spray forward along the bolt's travel direction
+            for (let k = 0; k < 5; k++) {
+              const sa = Math.atan2(b.vx, b.vz) + rand(-0.6, 0.6), ss = rand(5, 11);
+              g.particles.emit(b.x, 1, b.z, Math.sin(sa) * ss, rand(1, 4), Math.cos(sa) * ss, 0.22, 0.28, b.color, 4, -12);
+            }
             if (b.pierce-- <= 0) {
               dead = true;
               break;

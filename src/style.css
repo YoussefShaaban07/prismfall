@@ -442,3 +442,9 @@ body.cine #hud .top, body.cine #minimap, body.cine .combo { opacity: 0; transiti
 #hpFill::after { content: ''; position: absolute; inset: 0 0 50% 0; background: linear-gradient(180deg, rgba(255, 255, 255, .35), transparent); }
 .lv { animation: lvGlow 3s ease-in-out infinite; }
 @keyframes lvGlow { 50% { box-shadow: 0 0 16px rgba(94, 242, 255, .45); } }
+#threats { position: fixed; inset: 0; pointer-events: none; }
+.threat { position: absolute; left: 0; top: 0; width: 0; height: 0; border-left: 18px solid var(--tc, #ffd84f); border-top: 11px solid transparent; border-bottom: 11px solid transparent; filter: drop-shadow(0 0 8px var(--tc, #ffd84f)); animation: thr .8s ease-in-out infinite alternate; }
+.threat.boss { --tc: #ff4fd8; border-left-width: 26px; border-top-width: 15px; border-bottom-width: 15px; }
+.threat.elite { --tc: #ffd84f; }
+@keyframes thr { to { opacity: .45; } }
+body.cine #threats { display: none; }
