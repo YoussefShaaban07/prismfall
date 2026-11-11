@@ -184,10 +184,22 @@ export class Debris {
   private e = new THREE.Euler();
   private v = new THREE.Vector3();
   private sc = new THREE.Vector3();
+  heat: THREE.InstancedBufferAttribute;
 
   constructor(scene: THREE.Scene) {
     const geo = new THREE.TetrahedronGeometry(0.22);
-    const mat = new THREE.MeshStandardMaterial({ roughness: 0.4, metalness: 0.6, flatShading: true, emissive: 0xffffff, emissiveIntensity: 0.0 });
+    const mat = new THREE.MeshStandardMaterial({ roughness: 0.4, metalness: 0.6, flatShading: true });
+    this.heat = new THREE.InstancedBufferAttribute(new Float32Array(this.max), 1);
+    this.heat.setUsage(THREE.DynamicDrawUsage);
+    geo.setAttribute('aHeat', this.heat);
+    // glowing-hot shrapnel that cools to bare metal
+    mat.onBeforeCompile = (sh) => {
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aHeat;\nvarying float vHeat;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvHeat = aHeat;');
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vHeat;').replace(
+        '#include <emissivemap_fragment>',
+        '#include <emissivemap_fragment>\ntotalEmissiveRadiance += mix(vec3(1.0, 0.25, 0.05), vec3(1.0, 0.8, 0.4), vHeat) * vHeat * vHeat * 4.0;',
+      );
+    };
     this.mesh = new THREE.InstancedMesh(geo, mat, this.max);
     this.mesh.count = 0;
     this.mesh.castShadow = true;
@@ -237,7 +249,9 @@ export class Debris {
       this.m.compose(this.v.set(d.x, d.y, d.z), this.q, this.sc.set(s, s, s));
       this.mesh.setMatrixAt(i, this.m);
       this.mesh.setColorAt(i, d.c);
+      this.heat.array[i] = Math.max(0, (d.life - 0.6) / 1.0);
     }
+    this.heat.needsUpdate = true;
     this.mesh.count = it.length;
     this.mesh.instanceMatrix.needsUpdate = true;
     if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;

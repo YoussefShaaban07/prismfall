@@ -83,8 +83,26 @@ export class Player {
 
     // dash / i-frame shield
     this.shield = new THREE.Mesh(
-      new THREE.IcosahedronGeometry(1.5, 2),
-      new THREE.MeshBasicMaterial({ color: new THREE.Color(0.4, 0.95, 1).multiplyScalar(1.5), transparent: true, opacity: 0, wireframe: true, blending: THREE.AdditiveBlending, depthWrite: false }),
+      new THREE.SphereGeometry(1.55, 40, 20),
+      new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        uniforms: { uTime: { value: 0 }, uOpacity: { value: 0 }, uColor: { value: new THREE.Color(0.35, 0.95, 1) } },
+        vertexShader: /* glsl */ `
+          varying vec3 vN; varying vec3 vV; varying vec2 vUv;
+          void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position, 1.0); vN = normalize(mat3(modelMatrix) * normal); vV = normalize(cameraPosition - w.xyz); gl_Position = projectionMatrix * viewMatrix * w; }`,
+        fragmentShader: /* glsl */ `
+          uniform float uTime; uniform float uOpacity; uniform vec3 uColor; varying vec3 vN; varying vec3 vV; varying vec2 vUv;
+          float hex(vec2 p){ p.x *= 1.1547; p.y += mod(floor(p.x), 2.0) * 0.5; p = abs(fract(p) - 0.5); return abs(max(p.x * 1.5 + p.y, p.y * 2.0) - 1.0); }
+          void main(){
+            float f = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), 2.2);
+            float hx = 1.0 - smoothstep(0.0, 0.1, hex(vec2(vUv.x * 24.0, vUv.y * 12.0 + uTime * 0.6)));
+            float sweep = smoothstep(0.92, 1.0, sin(vUv.y * 18.0 - uTime * 7.0) * 0.5 + 0.5);
+            float a = (f * 1.4 + hx * (0.18 + f) + sweep * 0.35) * uOpacity;
+            gl_FragColor = vec4(uColor * a * 1.6, 1.0);
+          }`,
+      }),
     );
     this.shield.position.y = 0.5;
     this.root.add(this.shield);
@@ -142,6 +160,7 @@ export class Player {
     this.ship.userData.built = true;
     holder.add(this.ship);
     this.light.color.set(def.accent);
+    ((this.shield.material as THREE.ShaderMaterial).uniforms.uColor.value as THREE.Color).set(def.accent);
     for (const t of this.trails) t.setColor(def.accent);
     for (const f of this.flames) (f.material as THREE.MeshBasicMaterial).color.set(def.accent).multiplyScalar(3);
     this.buildGhosts();
@@ -260,8 +279,10 @@ export class Player {
     for (const f of this.flames) {
       f.scale.set(1, 1, thrust * (0.85 + Math.random() * 0.3));
     }
-    const sm = this.shield.material as THREE.MeshBasicMaterial;
-    sm.opacity = damp(sm.opacity, this.inv > 0 ? 0.55 : 0, 14, dt);
+    const sm = this.shield.material as THREE.ShaderMaterial;
+    sm.uniforms.uOpacity.value = damp(sm.uniforms.uOpacity.value as number, this.inv > 0 ? 0.8 : 0, 14, dt);
+    sm.uniforms.uTime.value = time;
+    this.shield.visible = (sm.uniforms.uOpacity.value as number) > 0.01;
     this.shield.rotation.y += dt * 2;
     this.shield.rotation.x += dt * 1.3;
     // blink on damage i-frames (not dash)

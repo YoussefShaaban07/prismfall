@@ -56,10 +56,10 @@ Three-day build. Each session picks up the next unchecked items, playtests with 
 - [x] Glowing prism crystal clusters embedded in the arena
 - [x] Weather: dust storms (day) and ion storms with lightning (night)
 - [x] Player hull damage sparks + smoke at critical hull
-- [ ] Shield shimmer shader (fresnel hex) instead of wireframe sphere
+- [x] Shield shimmer shader (fresnel hex + scan sweep)
 - [ ] Volumetric-looking god rays from the sun in menus
 - [ ] Screen-space reflections or wet sheen on landing pads
-- [ ] More detailed explosion: debris that glows hot then cools
+- [x] Debris shrapnel that glows hot then cools
 
 ### Day 3 — extra depth
 - [x] Codex: 3D showroom previews of scanned enemies and bosses, lore, tactics, weapon evolutions
