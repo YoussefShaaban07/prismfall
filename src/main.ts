@@ -1,9 +1,9 @@
-import '@fontsource/orbitron/500.css';
-import '@fontsource/orbitron/700.css';
-import '@fontsource/orbitron/900.css';
-import '@fontsource/rajdhani/500.css';
-import '@fontsource/rajdhani/600.css';
-import '@fontsource/rajdhani/700.css';
+import '@fontsource/orbitron/latin-500.css';
+import '@fontsource/orbitron/latin-700.css';
+import '@fontsource/orbitron/latin-900.css';
+import '@fontsource/rajdhani/latin-500.css';
+import '@fontsource/rajdhani/latin-600.css';
+import '@fontsource/rajdhani/latin-700.css';
 import './style.css';
 import { Assets } from './core/Assets';
 import { Renderer } from './core/Renderer';
@@ -25,6 +25,21 @@ async function boot() {
   pre?.classList.add('fade');
   setTimeout(() => pre?.remove(), 700);
   game.ui.loaded();
+
+  // offer "install as app" on desktop browsers that support it
+  let deferred: (Event & { prompt: () => Promise<void> }) | null = null;
+  const btn = document.getElementById('installBtn');
+  addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferred = e as Event & { prompt: () => Promise<void> };
+    btn?.classList.remove('hidden');
+  });
+  btn?.addEventListener('click', async () => {
+    if (!deferred) return;
+    await deferred.prompt().catch(() => {});
+    deferred = null;
+    btn.classList.add('hidden');
+  });
 }
 
 boot().catch((e) => {

@@ -533,6 +533,7 @@ const TEMPLATE = /* html */ `
       <button id="hangarBtn" class="btn">HANGAR <span id="menuShards" class="mshards"></span></button>
       <button id="howBtn" class="btn ghost">HOW TO PLAY</button>
       <button id="creditsBtn" class="btn ghost">CREDITS</button>
+      <button id="installBtn" class="btn ghost hidden">INSTALL APP</button>
     </div>
     <div id="bestTxt" class="best"></div>
     <div id="ctlHint" class="ctl"></div>

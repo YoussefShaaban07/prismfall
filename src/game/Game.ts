@@ -102,6 +102,9 @@ export class Game {
   private camPos = new THREE.Vector3(0, 40, 30);
   private camLook = new THREE.Vector3();
   private last = performance.now();
+  private fpsAcc = 0;
+  private fpsN = 0;
+  private autoQDone = false;
 
   constructor(canvas: HTMLCanvasElement, private assets: Assets, renderer: Renderer) {
     this.r = renderer;
@@ -151,7 +154,10 @@ export class Game {
     ui.onQuit = () => this.toMenu();
     ui.onEndless = () => this.continueEndless();
     ui.onClick = () => this.audio.sfx('click');
-    ui.onSettings = (s) => this.applySettings(s);
+    ui.onSettings = (s) => {
+      if (s.quality !== this.r.quality) store.set('prismfall.qualityLocked', true);
+      this.applySettings(s);
+    };
     ui.onHangar = (open) => {
       this.hangarOpen = open;
       this.previewShip = this.meta.ship;
@@ -336,6 +342,7 @@ export class Game {
     this.last = now;
     this.time += dt;
     this.input.update();
+    this.autoQuality(dt);
 
     if (this.state === 'play') {
       if (this.freezeT > 0) {
@@ -371,6 +378,26 @@ export class Game {
     this.hurtT = Math.max(0, this.hurtT - dt);
     this.r.render(this.time);
   };
+
+  /** Measure real frame times during play and step quality down once if the device struggles. */
+  private autoQuality(dt: number) {
+    if (this.autoQDone || this.state !== 'play' || this.T < 3) return;
+    this.fpsAcc += dt;
+    this.fpsN++;
+    if (this.fpsN < 240) return;
+    const avg = this.fpsAcc / this.fpsN;
+    this.autoQDone = true;
+    if (store.get('prismfall.qualityLocked', false)) return;
+    const q = this.settings.quality;
+    if (avg > 1 / 40 && q !== 'low') {
+      this.settings.quality = q === 'ultra' ? 'high' : 'low';
+      this.applySettings(this.settings);
+      this.ui.toast('GRAPHICS ADJUSTED', `Switched to ${this.settings.quality.toUpperCase()} for smoother play (Pause → Graphics)`);
+    } else if (avg < 1 / 75 && q === 'high' && !('ontouchstart' in window)) {
+      this.settings.quality = 'ultra';
+      this.applySettings(this.settings);
+    }
+  }
 
   private updateMenu(dt: number) {
     if (this.showShip) {

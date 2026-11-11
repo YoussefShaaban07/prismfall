@@ -30,15 +30,17 @@ Three-day build. Each session picks up the next unchecked items, playtests with 
 - [x] Hangar meta-progression: Prism Shards per run, 8 permanent upgrades, revive
 - [x] 6 selectable ships with unique stats + starting weapon, 3D showroom
 - [x] 12 achievements with shard rewards + in-run toasts
-- [ ] More enemy variety late game (turret bunkers, kamikaze swarms), boss attack variety
-- [ ] First-run tutorial prompts
+- [x] More enemy variety: Sentry Pods (turrets) and Seeker Mines (kamikaze); readable per-type glow
+- [ ] Boss attack variety pass
+- [x] First-run tutorial prompts (adapts to keyboard / gamepad / touch)
 
 ### Day 3 — polish & ship
 - [ ] Menu/controller navigation, key hints per device
-- [ ] PWA: manifest + offline cache so it installs as a desktop app
-- [ ] Auto quality based on measured FPS
+- [x] PWA: manifest + offline cache + INSTALL APP button for desktop
+- [x] Auto quality based on measured FPS (respects manual choice)
 - [ ] Full QA pass (desktop + phone sizes), README with screenshots, GitHub Pages deploy
 
 ## Session log
+- **S1c (Nov 10 eve)**: new enemies, material/tone-mapping fixes (ACES was whitening accents), tutorial, PWA, auto quality.
 - **S1b (Nov 10 eve)**: sound samples, balance rounds via bot sims, juice pass, hangar/ships/upgrades/achievements/records.
 - **S1 (Nov 10 eve)**: built the whole core loop and every system above; tuned bloom/glow so models read clearly; bosses enlarged; early-game spawn/XP rebalanced after bot runs (bot died ~2:30–4:00).
