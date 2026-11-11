@@ -96,9 +96,9 @@ export class Renderer {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
 
-    this.camera = new THREE.PerspectiveCamera(48, 1, 0.5, 600);
+    this.camera = new THREE.PerspectiveCamera(48, 1, 0.5, 1200);
     this.scene.background = new THREE.Color(0x1a0d12);
-    this.scene.fog = new THREE.Fog(0x2a1418, 70, 210);
+    this.scene.fog = new THREE.Fog(0x7a4a40, 90, 520);
 
     // lights: warm low sun (Mars dusk) + cool sky fill
     this.hemi = new THREE.HemisphereLight(0x9fb8ff, 0x4a2116, 0.55);

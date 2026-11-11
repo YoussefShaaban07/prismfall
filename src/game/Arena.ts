@@ -4,6 +4,41 @@ import { heroMapper } from '../core/Assets';
 import { ARENA_RADIUS } from './data';
 import { rand, TAU } from '../core/util';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { Lensflare, LensflareElement } from 'three/examples/jsm/objects/Lensflare.js';
+
+function flareTex(kind: 'core' | 'ring' | 'hex'): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d')!;
+  if (kind === 'core') {
+    const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+    gr.addColorStop(0, 'rgba(255,245,230,1)');
+    gr.addColorStop(0.15, 'rgba(255,200,150,0.8)');
+    gr.addColorStop(0.5, 'rgba(255,120,60,0.15)');
+    gr.addColorStop(1, 'rgba(255,100,40,0)');
+    g.fillStyle = gr;
+    g.fillRect(0, 0, 128, 128);
+  } else if (kind === 'ring') {
+    const gr = g.createRadialGradient(64, 64, 40, 64, 64, 64);
+    gr.addColorStop(0, 'rgba(255,255,255,0)');
+    gr.addColorStop(0.7, 'rgba(255,200,170,0.35)');
+    gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gr;
+    g.fillRect(0, 0, 128, 128);
+  } else {
+    g.fillStyle = 'rgba(255,255,255,0.35)';
+    g.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      g.lineTo(64 + Math.cos(a) * 56, 64 + Math.sin(a) * 56);
+    }
+    g.closePath();
+    g.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
 
 /** Merge every static mesh under root into one mesh per distinct material (huge draw-call saving). */
 function bakeStatic(root: THREE.Object3D, castShadow: boolean): THREE.Group {
@@ -86,6 +121,51 @@ function makeGroundTexture(size = 512): THREE.CanvasTexture {
   return tex;
 }
 
+/* ---------- terrain height: flat arena, dunes outside, ridged mountains on the horizon ---------- */
+function vhash(x: number, z: number) {
+  const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453;
+  return s - Math.floor(s);
+}
+function vnoise(x: number, z: number) {
+  const xi = Math.floor(x), zi = Math.floor(z);
+  const xf = x - xi, zf = z - zi;
+  const u = xf * xf * (3 - 2 * xf), v = zf * zf * (3 - 2 * zf);
+  const a = vhash(xi, zi), b = vhash(xi + 1, zi), c = vhash(xi, zi + 1), d = vhash(xi + 1, zi + 1);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+function fbm(x: number, z: number, oct = 5) {
+  let s = 0, amp = 0.5, f = 1;
+  for (let i = 0; i < oct; i++) {
+    s += vnoise(x * f, z * f) * amp;
+    f *= 2.03;
+    amp *= 0.5;
+  }
+  return s;
+}
+function ridged(x: number, z: number, oct = 5) {
+  let s = 0, amp = 0.5, f = 1;
+  for (let i = 0; i < oct; i++) {
+    const n = 1 - Math.abs(vnoise(x * f, z * f) * 2 - 1);
+    s += n * n * amp;
+    f *= 2.1;
+    amp *= 0.5;
+  }
+  return s;
+}
+const sstep = (a: number, b: number, x: number) => {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
+export function terrainHeight(x: number, z: number) {
+  const r = Math.hypot(x, z);
+  const R = ARENA_RADIUS;
+  if (r < R + 26) return 0;
+  const dunes = sstep(R + 26, R + 60, r) * (fbm(x * 0.025, z * 0.025, 4) - 0.35) * 9;
+  const mesas = sstep(R + 50, R + 110, r) * Math.pow(fbm(x * 0.012 + 7, z * 0.012 - 3, 4), 3) * 38;
+  const mountains = sstep(230, 370, r) * ridged(x * 0.005 + 3, z * 0.005 + 11, 5) * 75;
+  return Math.max(0, dunes) + mesas + mountains;
+}
+
 export class Arena {
   group = new THREE.Group();
   groundUniforms = {
@@ -101,6 +181,8 @@ export class Arena {
   dust: THREE.Points;
   beacons: THREE.Mesh[] = [];
   spinners: THREE.Object3D[] = [];
+  flare: Lensflare;
+  sunHolder = new THREE.Object3D();
 
   constructor(scene: THREE.Scene, assets: Assets) {
     scene.add(this.group);
@@ -108,7 +190,7 @@ export class Arena {
     const R = ARENA_RADIUS;
 
     /* ----- ground ----- */
-    const gtex = makeGroundTexture();
+    const gtex = makeGroundTexture(1024);
     gtex.repeat.set(26, 26);
     const groundMat = new THREE.MeshStandardMaterial({
       map: gtex,
@@ -128,6 +210,21 @@ export class Arena {
         .replace('#include <common>', `#include <common>
           varying vec3 vWPos; uniform vec2 uPlayer; uniform float uTime; uniform float uRadius; uniform float uPulse; uniform float uDanger; uniform float uNight;
           float gridLine(vec2 p, float s){ vec2 q = p / s; vec2 g = abs(fract(q - 0.5) - 0.5) / fwidth(q); return 1.0 - min(min(g.x, g.y), 1.0); }`)
+        .replace('#include <map_fragment>', `
+          #ifdef USE_MAP
+            vec4 texA = texture2D(map, vMapUv);
+            vec2 uv2 = mat2(0.8, -0.6, 0.6, 0.8) * vMapUv * 0.173 + 0.37;
+            vec4 texB = texture2D(map, uv2);
+            float mixK = smoothstep(0.35, 0.65, texture2D(map, vMapUv * 0.031).r);
+            vec4 sampledDiffuseColor = mix(texA, texB, 0.35 + mixK * 0.3);
+            diffuseColor *= sampledDiffuseColor;
+          #endif
+          {
+            // height and slope tint: dusty crests, darker rock in the gullies
+            float hgt = vWPos.y;
+            diffuseColor.rgb *= mix(vec3(1.0), vec3(1.25, 1.12, 1.0), smoothstep(10.0, 80.0, hgt));
+            diffuseColor.rgb *= mix(0.82, 1.0, smoothstep(0.0, 3.0, hgt) * 0.5 + 0.5);
+          }`)
         .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
           {
             vec2 p = vWPos.xz;
@@ -151,8 +248,12 @@ export class Arena {
             diffuseColor.rgb *= mix(vec3(1.0), vec3(0.62, 0.66, 0.9), uNight);
           }`);
     };
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(520, 520, 1, 1), groundMat);
-    ground.rotation.x = -Math.PI / 2;
+    const tg = new THREE.PlaneGeometry(800, 800, 300, 300);
+    tg.rotateX(-Math.PI / 2);
+    const tp = tg.getAttribute('position') as THREE.BufferAttribute;
+    for (let i = 0; i < tp.count; i++) tp.setY(i, terrainHeight(tp.getX(i), tp.getZ(i)));
+    tg.computeVertexNormals();
+    const ground = new THREE.Mesh(tg, groundMat);
     ground.receiveShadow = true;
     this.group.add(ground);
 
@@ -210,6 +311,7 @@ export class Arena {
     const place = (name: ModelName, size: number, r: number, a: number, rotJitter = true) => {
       const o = assets.object(name, size, base);
       o.position.set(Math.cos(a) * r, 0, Math.sin(a) * r);
+      o.position.y = terrainHeight(o.position.x, o.position.z);
       o.rotation.y = rotJitter ? rand(0, TAU) : -a + Math.PI / 2;
       statics.add(o);
       return o;
@@ -250,7 +352,8 @@ export class Arena {
       const r = R + rand(32, 90);
       const name: ModelName = Math.random() < 0.25 ? 'rock_crystalsLargeA' : Math.random() < 0.5 ? 'rock_largeB' : 'rock_largeA';
       const o = assets.object(name, rand(5, 14), base);
-      o.position.set(Math.cos(a) * r, -0.3, Math.sin(a) * r);
+      o.position.set(Math.cos(a) * r, 0, Math.sin(a) * r);
+      o.position.y = terrainHeight(o.position.x, o.position.z) - 0.6;
       o.rotation.y = rand(0, TAU);
       statics.add(o);
     }
@@ -286,6 +389,10 @@ export class Arena {
       fragmentShader: /* glsl */ `
         varying vec3 vDir; uniform float uTime; uniform float uNight;
         float h(vec3 p){ return fract(sin(dot(p, vec3(127.1,311.7,74.7))) * 43758.5453); }
+        float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
+        float n2(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
+          return mix(mix(h2(i), h2(i+vec2(1,0)), f.x), mix(h2(i+vec2(0,1)), h2(i+vec2(1,1)), f.x), f.y); }
+        float fbm2(vec2 p){ float s = 0.0, a = 0.5; for (int i = 0; i < 5; i++){ s += n2(p) * a; p = p * 2.03 + 1.7; a *= 0.5; } return s; }
         void main(){
           float y = vDir.y;
           vec3 horizon = mix(vec3(0.42, 0.17, 0.12), vec3(0.06, 0.08, 0.16), uNight);
@@ -303,6 +410,16 @@ export class Arena {
           // aurora ribbons on night maps
           float au = sin(vDir.x * 9.0 + uTime * 0.25 + sin(vDir.z * 7.0 + uTime * 0.1) * 1.5) * 0.5 + 0.5;
           col += vec3(0.1, 0.9, 0.6) * pow(au, 6.0) * smoothstep(0.15, 0.4, y) * smoothstep(0.85, 0.45, y) * 0.25 * uNight;
+          // high-altitude dust clouds, lit from the sun side
+          if (y > 0.0) {
+            vec2 cp = vDir.xz / (y + 0.12) * 1.6 + vec2(uTime * 0.012, uTime * 0.004);
+            float cl = fbm2(cp);
+            cl = smoothstep(0.48, 0.85, cl) * smoothstep(0.0, 0.12, y) * smoothstep(0.75, 0.25, y);
+            float sunSide = pow(max(dot(normalize(vec3(vDir.x, 0.0, vDir.z)), normalize(vec3(sd.x, 0.0, sd.z))), 0.0), 2.0);
+            vec3 cloudCol = mix(vec3(0.38, 0.17, 0.16), vec3(1.0, 0.55, 0.32), sunSide * (1.0 - uNight));
+            cloudCol = mix(cloudCol, vec3(0.08, 0.1, 0.18), uNight);
+            col = mix(col, cloudCol, cl * 0.7);
+          }
           // stars
           vec3 q = floor(vDir * 420.0);
           float st = step(0.9965 - uNight * 0.002, h(q)) * smoothstep(0.08, 0.5, y);
@@ -310,7 +427,7 @@ export class Arena {
           gl_FragColor = vec4(col, 1.0);
         }`,
     });
-    const sky = new THREE.Mesh(new THREE.SphereGeometry(400, 32, 16), this.skyMat);
+    const sky = new THREE.Mesh(new THREE.SphereGeometry(900, 48, 24), this.skyMat);
     this.group.add(sky);
 
     // twin moons (Phobos and Deimos)
@@ -323,6 +440,17 @@ export class Arena {
     m2.position.set(-170, 150, -230);
     this.group.add(m2);
     this.spinners.push(m1, m2);
+
+    /* ----- sun lens flare ----- */
+    this.flare = new Lensflare();
+    const core = flareTex('core'), ring = flareTex('ring'), hex = flareTex('hex');
+    this.flare.addElement(new LensflareElement(core, 420, 0, new THREE.Color(1, 0.85, 0.7)));
+    this.flare.addElement(new LensflareElement(ring, 220, 0.25, new THREE.Color(1, 0.6, 0.4)));
+    this.flare.addElement(new LensflareElement(hex, 60, 0.45, new THREE.Color(0.8, 0.6, 1)));
+    this.flare.addElement(new LensflareElement(hex, 90, 0.62, new THREE.Color(0.5, 0.9, 1)));
+    this.flare.addElement(new LensflareElement(ring, 160, 0.85, new THREE.Color(1, 0.7, 0.5)));
+    this.sunHolder.add(this.flare);
+    this.group.add(this.sunHolder);
 
     /* ----- drifting dust ----- */
     const n = 900;
@@ -340,6 +468,13 @@ export class Arena {
     );
     this.dust.frustumCulled = false;
     this.group.add(this.dust);
+  }
+
+  /** Keep the flare source on the sun direction, far from the camera. */
+  placeSun(cam: THREE.Camera, night: boolean) {
+    const d = night ? new THREE.Vector3(0.4, 0.45, -0.6) : new THREE.Vector3(-0.55, 0.18, 0.35);
+    d.normalize().multiplyScalar(850);
+    this.sunHolder.position.copy(cam.position).add(d);
   }
 
   update(dt: number, time: number, px: number, pz: number, danger: number) {

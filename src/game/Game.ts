@@ -348,7 +348,7 @@ export class Game {
     r.hemi.color.set(night ? 0x3a4a90 : 0x9fb8ff);
     r.hemi.groundColor.set(night ? 0x100a18 : 0x4a2116);
     r.hemi.intensity = night ? 0.7 : 0.55;
-    (r.scene.fog as THREE.Fog).color.set(night ? 0x0a0c18 : 0x2a1418);
+    (r.scene.fog as THREE.Fog).color.set(night ? 0x141a30 : 0x7a4a40);
     (r.scene.background as THREE.Color).set(night ? 0x05060c : 0x1a0d12);
     (this.arena.dust.material as THREE.PointsMaterial).color.set(night ? 0x8ab0ff : 0xffb08a);
     this.player.light.intensity = night ? 9 : 4;
@@ -527,6 +527,7 @@ export class Game {
     }
 
     this.updateCamera(dt);
+    this.arena.placeSun(this.r.camera, this.night);
     this.arena.update(dt, this.time, this.player.x, this.player.z, this.boss.e ? 1 : this.bossWarn > 0 ? 0.6 : 0);
     if (this.state !== 'menu') {
       this.enemies.sync(this.time);
