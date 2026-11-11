@@ -106,7 +106,7 @@ export class BossController {
     const a = rand(0, TAU);
     const p = g.spawnPoint(18, 22, a);
     const e = g.enemies.spawn('boss', p.x, p.z)!;
-    const hp = 1700 * hpScale(g.T) * (final ? 2.2 : 1) * (g.endless ? 1.5 : 1);
+    const hp = (final ? 2600 : 850 + 550 * idx) * hpScale(g.T) * (g.endless ? 1.5 : 1);
     e.hp = e.maxHp = hp;
     e.r = final ? 4.2 : 3.4;
     e.spd = final ? 2.6 : 2.3 + idx * 0.2;
@@ -141,7 +141,7 @@ export class BossController {
       e.vz += (tz - e.vz) * k;
     };
     const shoot = (a: number, spd: number, size = 1) =>
-      g.proj.enemyShot(e.x + Math.sin(a) * 2.5, e.z + Math.cos(a) * 2.5, Math.sin(a) * spd, Math.cos(a) * spd, e.dmg * 0.55, this.color.getHex(), size);
+      g.proj.enemyShot(e.x + Math.sin(a) * 2.5, e.z + Math.cos(a) * 2.5, Math.sin(a) * spd, Math.cos(a) * spd, e.dmg * 0.36, this.color.getHex(), size);
 
     if (e.spawnT > 0) {
       moveTo(0, 0);
@@ -157,9 +157,9 @@ export class BossController {
         moveTo(0, 0);
         if (e.sub <= 0) {
           e.sub = 0.65 / fast;
-          const n = this.final ? 30 : 18 + this.index * 4;
+          const n = this.final ? 30 : 14 + this.index * 5;
           const off = rand(0, TAU);
-          for (let i = 0; i < n; i++) shoot(off + (i / n) * TAU, 9 * fast);
+          for (let i = 0; i < n; i++) shoot(off + (i / n) * TAU, (this.index === 0 && !this.final ? 7.5 : 9) * fast);
           g.audio.sfx('zap');
           g.fx.ring(e.x, e.z, 5, this.color, 0.35, 3);
         }

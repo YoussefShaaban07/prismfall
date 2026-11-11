@@ -81,6 +81,7 @@ export class Game {
   hudT = 0;
   mmT = 0;
   choices: Choice[] = [];
+  dmgLog: Record<string, number> = {};
   settings: Settings;
 
   private camPos = new THREE.Vector3(0, 40, 30);
@@ -181,7 +182,7 @@ export class Game {
     this.player.root.visible = true;
     this.player.magnetRing.visible = true;
     Object.assign(this, {
-      T: 0, kills: 0, score: 0, combo: 0, comboT: 0, maxCombo: 0, damageDealt: 0, pendingLevels: 0,
+      dmgLog: {}, T: 0, kills: 0, score: 0, combo: 0, comboT: 0, maxCombo: 0, damageDealt: 0, pendingLevels: 0,
       bossesKilled: 0, nextBoss: BOSS_TIMES[0], bossWarn: 0, won: false, endless: false, rerolls: 3,
       spawnAcc: 0, nextSurge: 50, nextElite: 95, freezeT: 0, slowT: 0, deathT: 0, victoryT: 0, shake: 0, hurtT: 0,
     });
@@ -423,7 +424,7 @@ export class Game {
     }
 
     // regular spawns
-    const rate = Math.min(13, 0.9 + T / 42 + Math.pow(T / 130, 2)) * (this.boss.e ? 0.4 : 1) * (this.endless ? 1.3 : 1);
+    const rate = Math.min(22, 0.9 + T / 42 + Math.pow(T / 120, 2)) * (this.boss.e ? 0.3 : 1) * (this.endless ? 1.3 : 1);
     this.spawnAcc += rate * dt;
     let guard = 0;
     while (this.spawnAcc >= 1 && guard++ < 20) {
@@ -603,6 +604,8 @@ export class Game {
     const P = this.player;
     if (P.inv > 0 || P.dead || this.victoryT > 0) return;
     const amt = Math.max(1, dmg - P.armor);
+    const key = src ? src.type : 'bullet';
+    this.dmgLog[key] = (this.dmgLog[key] ?? 0) + amt;
     P.hp -= amt;
     P.inv = 0.5;
     this.hurtT = 0.25;
@@ -790,6 +793,7 @@ export class Game {
       enemies: this.enemies.list.length, bosses: this.bossesKilled, won: this.won, score: Math.round(this.score),
       weapons: [...this.player.weapons].map(([k, v]) => k + v + (this.player.evolved.has(k) ? '*' : '')).join(' '),
       passives: [...this.player.passives].map(([k, v]) => k + v).join(' '),
+      dmg: Object.fromEntries(Object.entries(this.dmgLog).map(([k, v]) => [k, Math.round(v)])),
     };
   }
 

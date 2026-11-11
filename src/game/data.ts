@@ -128,5 +128,5 @@ export const FINAL_TIME = 600;
 export const BOSS_TIMES = [150, 300, 450];
 export const BOSS_NAMES = ['VANGUARD CARRIER', 'HIVE DREADNOUGHT', 'OBSIDIAN WARDEN'];
 
-export const xpForLevel = (l: number) => Math.floor(4 + (l - 1) * 3.4 + Math.pow(l - 1, 1.7) * 0.9);
-export const hpScale = (t: number) => 1 + (t / 60) * 0.3 + Math.pow(t / 60, 2) * 0.022;
+export const xpForLevel = (l: number) => Math.floor(4 + (l - 1) * 3 + Math.pow(l - 1, 1.6) * 0.8 + Math.pow(Math.max(0, l - 20), 2) * 0.6);
+export const hpScale = (t: number) => 1 + (t / 60) * 0.3 + Math.pow(t / 60, 2) * 0.065;

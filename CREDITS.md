@@ -9,6 +9,7 @@ All third-party art is open source:
 | Flying enemy drone + colormap (Starter Kit FPS) | Kenney | MIT | https://github.com/KenneyNL/Starter-Kit-FPS |
 | HDR environment maps (sunset, night) | Poly Haven via pmndrs/assets | CC0 1.0 | https://github.com/pmndrs/assets |
 | Ground normal map | pmndrs/assets | CC0 1.0 | https://github.com/pmndrs/assets |
+| Sound effects (blaster, enemy hurt/destroy/attack, coin, break, impact, weapon change) | Kenney Starter Kits (FPS, 3D Platformer, Racing) | MIT | https://github.com/KenneyNL |
 | Orbitron, Rajdhani fonts | Matt McInerney / Indian Type Foundry | SIL OFL 1.1 | via @fontsource |
 | Three.js | three.js authors | MIT | https://threejs.org |
 

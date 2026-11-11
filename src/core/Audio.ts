@@ -23,6 +23,7 @@ export class Audio {
   sfxVol = 0.8;
   musicVol = 0.6;
   intensity = 0;
+  private samples = new Map<string, AudioBuffer>();
   private step = 0;
   private nextTime = 0;
   private timer: number | null = null;
@@ -69,9 +70,43 @@ export class Audio {
       this.reverb.connect(this.comp);
       this.applyMute();
       if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      this.loadSamples();
     } catch {
       this.ctx = null;
     }
+  }
+
+  /** Kenney MIT-licensed one-shots, layered on top of the synth sounds. */
+  private loadSamples() {
+    const base = import.meta.env.BASE_URL + 'sfx/';
+    for (const n of ['blaster', 'enemy_destroy', 'enemy_hurt', 'enemy_attack', 'weapon_change', 'coin', 'break', 'impact']) {
+      fetch(base + n + '.mp3')
+        .then((r) => r.arrayBuffer())
+        .then((b) => this.ctx!.decodeAudioData(b))
+        .then((buf) => this.samples.set(n, buf))
+        .catch(() => {});
+    }
+  }
+
+  private sample(name: string, vol: number, rate = 1, maxDur = 0, t?: number) {
+    const buf = this.samples.get(name);
+    if (!buf || !this.ctx) return false;
+    const ctx = this.ctx;
+    const at = t ?? ctx.currentTime;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = rate;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(vol, at);
+    if (maxDur > 0) {
+      g.gain.setValueAtTime(vol, at + maxDur * 0.6);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + maxDur);
+    }
+    src.connect(g);
+    g.connect(this.sfxBus);
+    src.start(at);
+    src.stop(at + (maxDur > 0 ? maxDur + 0.05 : buf.duration / rate + 0.05));
+    return true;
   }
 
   setVolumes(sfx: number, music: number) {
@@ -138,19 +173,20 @@ export class Audio {
     const B = this.sfxBus;
     switch (name) {
       case 'shoot':
-        this.osc(1500 + Math.random() * 200, now, 0.07, 'square', 0.035, B, 500);
-        this.osc(3000, now, 0.03, 'sine', 0.02, B, 1200);
+        if (!this.sample('blaster', 0.16, 1.15 + Math.random() * 0.2, 0.22)) this.osc(1500 + Math.random() * 200, now, 0.07, 'square', 0.035, B, 500);
+        this.osc(3000, now, 0.03, 'sine', 0.012, B, 1200);
         break;
       case 'hit':
-        this.osc(240 + Math.random() * 60, now, 0.05, 'triangle', 0.05, B, 110);
+        if (!this.sample('enemy_hurt', 0.18, 0.9 + Math.random() * 0.3)) this.osc(240 + Math.random() * 60, now, 0.05, 'triangle', 0.05, B, 110);
         break;
       case 'kill':
-        this.nz(now, 0.16, 0.12, 2200, 'lowpass', B, 300);
+        this.sample('enemy_destroy', 0.22, 0.85 + Math.random() * 0.35, 0.5);
+        this.nz(now, 0.16, 0.08, 2200, 'lowpass', B, 300);
         this.osc(320 + Math.random() * 80, now, 0.12, 'square', 0.04, B, 70);
         break;
       case 'pick': {
         const f = 700 + Math.min(p, 30) * 35;
-        this.osc(f, now, 0.08, 'sine', 0.07, B, f * 1.5);
+        if (!this.sample('coin', 0.12, 1 + Math.min(p, 24) * 0.04)) this.osc(f, now, 0.08, 'sine', 0.07, B, f * 1.5);
         break;
       }
       case 'level':
@@ -167,7 +203,8 @@ export class Audio {
         this.nz(now, 1.2, 0.08, 400, 'bandpass', B, 6000);
         break;
       case 'hurt':
-        this.osc(180, now, 0.28, 'sawtooth', 0.12, B, 45);
+        this.sample('impact', 0.5, 0.8);
+        this.osc(180, now, 0.28, 'sawtooth', 0.1, B, 45);
         this.nz(now, 0.2, 0.15, 900);
         break;
       case 'zap':
@@ -175,7 +212,8 @@ export class Audio {
         this.osc(1800, now, 0.1, 'sawtooth', 0.03, B, 300);
         break;
       case 'boom': {
-        const g = this.nz(now, 0.45, 0.25, 900, 'lowpass', B, 80);
+        this.sample('break', 0.3, 0.6 + Math.random() * 0.2);
+        const g = this.nz(now, 0.45, 0.22, 900, 'lowpass', B, 80);
         g.connect(this.reverbSend);
         this.osc(110, now, 0.35, 'sine', 0.3, B, 32);
         break;
@@ -222,6 +260,7 @@ export class Audio {
         [0, 5, 9, 12].forEach((s, i) => this.osc(mtof(76 + s), now + i * 0.05, 0.18, 'sine', 0.06, B));
         break;
       case 'select':
+        this.sample('weapon_change', 0.35, 1.1);
         this.osc(880, now, 0.08, 'square', 0.05, B, 1320);
         this.osc(1320, now + 0.06, 0.12, 'square', 0.04, B, 1760);
         break;
