@@ -43,6 +43,20 @@ Three-day build. Each session picks up the next unchecked items, playtests with 
 - [x] Accessibility: reduce-flashing mode, high-contrast enemy bullets
 - [x] Unit tests (vitest, 15 tests) for upgrades/meta/progression/spatial grid, run in CI before deploy
 
+### Graphics push (user asked for a heavy focus on graphics)
+- [x] Dissolve deaths + materialize spawns (noise dissolve with glowing edges, shadow-correct)
+- [x] Fireball particles with cooling colour ramp, soft lit smoke puffs, missile smoke trails
+- [x] Screen-space shockwave distortion on explosions, nova, dash, bombs, boss deaths
+- [x] Displaced terrain: dunes, mesas and a ridged mountain range; anti-tiling ground; height tint
+- [x] Sky clouds lit by the sun, procedural lens flare, longer aerial-perspective fog
+- [x] GTAO ambient occlusion (FX excluded), hangar depth of field, split-tone colour grade
+- [x] Ribbon engine trails (player, wingmen), glowing bolt streaks
+- [ ] Boss engine trails + damage smoke as boss HP drops
+- [ ] Animated force-field impact ripples where enemies hit the wall
+- [ ] Ground decals: glowing crystal shards embedded in terrain, tire/landing marks
+- [ ] Weather: periodic Martian dust storm (fog + streaks + reduced visibility)
+- [ ] Better player ship: shield shimmer shader, damage sparks at low hull
+
 ### Day 3 — extra depth
 - [x] Codex: 3D showroom previews of scanned enemies and bosses, lore, tactics, weapon evolutions
 - [x] Music variety: boss theme (D minor, 134 bpm), Night Shift (E minor, 104 bpm), victory sting
@@ -58,6 +72,7 @@ Three-day build. Each session picks up the next unchecked items, playtests with 
 - [ ] Full QA pass (desktop + phone sizes), README with screenshots, GitHub Pages deploy
 
 ## Session log
+- **S3b (Nov 10 night)**: graphics push: dissolve, fire/smoke, distortion, terrain + mountains, clouds, flare, GTAO, DOF, grade, trails.
 - **S3 (Nov 10 night)**: adaptive music themes + victory sting, Codex with 3D previews, share card, first-launch briefing.
 - **S2d (Nov 10 night)**: Night Shift sector, mutators + daily challenge, main menu redesigned as a left column so the 3D showroom stays visible.
 - **S2c (Nov 10 night)**: boss intro cinematic, top-10 leaderboard, accessibility options, vitest suite + CI.

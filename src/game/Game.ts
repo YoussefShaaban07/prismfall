@@ -849,7 +849,7 @@ export class Game {
     const heavy = e.type === 'boss' ? 0.05 : e.type === 'turret' ? 0 : e.type === 'brute' || e.elite ? 0.3 : 1;
     e.kx += kx * heavy;
     e.kz += kz * heavy;
-    if (this.settings.numbers && (crit || amt >= 25 || chance(0.35))) {
+    if (this.settings.numbers && (crit || amt >= 40 || chance(0.12)) && this.fx.floaters.filter((f) => f.active).length < 22) {
       this.fx.text(e.x, 2.2, e.z, String(Math.round(amt)), crit ? 'crit' : '');
     }
     this.audio.sfx('hit');
