@@ -9,10 +9,10 @@ export type PowerKind = 'heal' | 'magnet' | 'bomb';
 interface Power { kind: PowerKind; x: number; z: number; t: number; obj: THREE.Group; beam: THREE.Mesh }
 
 const GEM_COLORS = [
-  new THREE.Color(0.3, 0.95, 1).multiplyScalar(1.3),
-  new THREE.Color(0.45, 1, 0.55).multiplyScalar(1.3),
-  new THREE.Color(0.8, 0.45, 1).multiplyScalar(1.6),
-  new THREE.Color(1, 0.8, 0.25).multiplyScalar(1.8),
+  new THREE.Color(0.05, 0.75, 1),
+  new THREE.Color(0.15, 1, 0.3),
+  new THREE.Color(0.7, 0.2, 1),
+  new THREE.Color(1, 0.65, 0.05),
 ];
 const POWER_DEF: Record<PowerKind, { model: ModelName; color: number; size: number }> = {
   heal: { model: 'barrel', color: 0xff4f6a, size: 1.6 },
@@ -38,14 +38,14 @@ export class Pickups {
     const geo = new THREE.OctahedronGeometry(0.28, 0);
     geo.scale(1, 1.6, 1);
     // faceted crystals: lit, glossy, glowing from inside with a fresnel rim
-    const gemMat = new THREE.MeshStandardMaterial({ color: 0x3a3a3a, roughness: 0.12, metalness: 0.2, flatShading: true, envMapIntensity: 1.2 });
+    const gemMat = new THREE.MeshStandardMaterial({ color: 0x7a7a7a, roughness: 0.12, metalness: 0.15, flatShading: true, envMapIntensity: 0.6 });
     gemMat.onBeforeCompile = (sh) => {
       sh.fragmentShader = sh.fragmentShader.replace(
         '#include <emissivemap_fragment>',
         `#include <emissivemap_fragment>
         float gF = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 2.0);
         #ifdef USE_COLOR
-          totalEmissiveRadiance += vColor.rgb * (0.22 + gF * 0.9);
+          totalEmissiveRadiance += vColor.rgb * (0.45 + gF * 1.1);
         #endif`,
       );
     };
@@ -109,9 +109,33 @@ export class Pickups {
     return v >= 20 ? GEM_COLORS[3] : v >= 5 ? GEM_COLORS[2] : v >= 2 ? GEM_COLORS[1] : GEM_COLORS[0];
   }
 
+  private mergeT = 0;
+  /** When the field gets crowded, fold idle neighbouring crystals into bigger ones. */
+  private mergeGems() {
+    if (this.gems.length < 120) return;
+    const cells = new Map<number, Gem>();
+    const cs = this.gems.length > 300 ? 3 : 2;
+    for (let i = this.gems.length - 1; i >= 0; i--) {
+      const gm = this.gems[i];
+      if (gm.mag) continue;
+      const k = (Math.floor(gm.x / cs) + 4096) * 8192 + Math.floor(gm.z / cs) + 4096;
+      const host = cells.get(k);
+      if (host) {
+        host.v += gm.v;
+        this.gems[i] = this.gems[this.gems.length - 1];
+        this.gems.pop();
+      } else cells.set(k, gm);
+    }
+  }
+
   update(dt: number) {
     const g = this.g;
     const P = g.player;
+    this.mergeT -= dt;
+    if (this.mergeT <= 0) {
+      this.mergeT = 0.5;
+      this.mergeGems();
+    }
     this.pickStreakT -= dt;
     if (this.pickStreakT <= 0) this.pickStreak = 0;
     const mr = P.magnet;

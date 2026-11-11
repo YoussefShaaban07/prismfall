@@ -124,6 +124,8 @@ export class Game {
     true, 'centripetal',
   );
   cineT = 0;
+  private timed: { t: number; fn: () => void }[] = [];
+  after(t: number, fn: () => void) { this.timed.push({ t, fn }); }
   storm = { k: 0, t: 0, dur: 0, next: 200, flashT: 0 };
   night = false;
   mods = new Set<ModId>();
@@ -425,7 +427,7 @@ export class Game {
     Object.assign(this, {
       dmgLog: {}, T: 0, kills: 0, score: 0, combo: 0, comboT: 0, maxCombo: 0, damageDealt: 0, pendingLevels: 0,
       bossesKilled: 0, nextBoss: BOSS_TIMES[0], bossWarn: 0, won: false, endless: false, rerolls: 3 + upLv(this.meta, 'rerolls'), untouchedT: 0, achT: 0, runAch: [], paidShards: 0, tutStep: this.meta.seenTutorial ? 99 : 0,
-      cineT: 0, lastEntry: null, storm: { k: 0, t: 0, dur: 0, next: 170 + Math.random() * 60, flashT: 0 }, spawnAcc: 0, nextSurge: 50, nextElite: 95, freezeT: 0, slowT: 0, deathT: 0, victoryT: 0, shake: 0, hurtT: 0,
+      cineT: 0, timed: [], lastEntry: null, storm: { k: 0, t: 0, dur: 0, next: 170 + Math.random() * 60, flashT: 0 }, spawnAcc: 0, nextSurge: 50, nextElite: 95, freezeT: 0, slowT: 0, deathT: 0, victoryT: 0, shake: 0, hurtT: 0,
     });
     this.input.releaseAll();
     this.input.enabled = true;
@@ -731,6 +733,11 @@ export class Game {
       if (this.deathT <= 0) this.endRun(false);
     }
 
+    for (let i = this.timed.length - 1; i >= 0; i--) {
+      const q = this.timed[i];
+      q.t -= dt;
+      if (q.t <= 0) { this.timed.splice(i, 1); q.fn(); }
+    }
     this.enemies.update(dt);
     this.proj.update(dt);
     this.hazards.update(dt, this.time);
@@ -1034,17 +1041,19 @@ export class Game {
     this.audio.sfx('bossdie');
     for (let i = 0; i < 5; i++) {
       const ox = rand(-3, 3), oz = rand(-3, 3);
-      this.particles.burst(e.x + ox, 2, e.z + oz, col, 60, 22, 1.2, 1.4, 0.9);
-      this.fx.ring(e.x + ox, e.z + oz, 12 + i * 4, this.boss.color, 0.9 + i * 0.15, 4);
+      this.particles.burst(e.x + ox, 2, e.z + oz, col, 26, 22, 1.2, 1.0, 0.9);
     }
-    this.particles.burst(e.x, 2, e.z, this.colors.white, 60, 16, 0.8, 1.2, 0.8);
+    this.fx.ring(e.x, e.z, 16, this.boss.color, 0.9, 1.6);
+    this.fx.ring(e.x, e.z, 26, this.boss.color, 1.2, 1.0);
+    this.particles.burst(e.x, 2, e.z, this.colors.white, 30, 16, 0.8, 0.9, 0.8);
     this.fx.shock(e.x, e.z, 40, 2.2, 1.4);
     this.lighting.flash(e.x, e.z, this.boss.color, 160, 45, 1.6);
     this.fx.shock(e.x, e.z, 22, 1.5, 0.9);
     for (let i = 0; i < 4; i++) this.particles.fireball(e.x + rand(-3, 3), 2, e.z + rand(-3, 3), 3, 22);
-    this.smoke.puff(e.x, 1.5, e.z, 40, 4, 3.5);
+    this.smoke.puff(e.x, 1.5, e.z, 18, 3, 2.8);
     this.debris.spawn(e.x, 2, e.z, this.colors.debris, 40, 14, 2);
     this.fx.scorch(e.x, e.z, 7);
+    this.bossSignatureDeath(e, final);
     this.proj.clearEnemyShots();
     this.hazards.clear();
     this.boss.clear();
@@ -1081,6 +1090,63 @@ export class Game {
     this.audio.sfx('boom');
     this.shake = Math.max(this.shake, 0.45);
     if (!P.dead && Math.hypot(P.x - e.x, P.z - e.z) < r + P.r) this.hurtPlayer(e.dmg, null);
+  }
+
+  /** Each mothership dies in its own way. */
+  private bossSignatureDeath(e: Enemy, final: boolean) {
+    const kind = final ? 3 : this.boss.index % 3;
+    const yaw = e.yaw, ex = e.x, ez = e.z;
+    const col = this.boss.color.clone();
+    if (kind === 0) {
+      // Vanguard Carrier: a chain of secondary explosions rips along its hull
+      for (let i = 0; i < 7; i++) {
+        const t = (i - 3) * 1.6;
+        this.after(0.12 + i * 0.13, () => {
+          const x = ex + Math.sin(yaw) * t, z = ez + Math.cos(yaw) * t;
+          this.particles.fireball(x, 2, z, 1.6, 14);
+          this.smoke.puff(x, 2, z, 6, 1.6, 2.4);
+          this.debris.spawn(x, 2, z, this.colors.debris, 6, 10, 1.6);
+          this.fx.shock(x, z, 8, 0.8, 0.4);
+          this.lighting.flash(x, z, 0xff8a40, 40, 16, 0.4);
+          this.audio.sfx('boom');
+          this.shake = Math.max(this.shake, 0.7);
+        });
+      }
+    } else if (kind === 1) {
+      // Hive Dreadnought: bursts open and its unborn swarm scatters and dissolves
+      for (let i = 0; i < 40; i++) {
+        const a = rand(0, TAU), sp = rand(8, 20);
+        const fake = { type: 'drone', def: ED.drone, x: ex, z: ez, yaw: a, tumble: 0, elite: false, vx: 0, vz: 0 } as unknown as Enemy;
+        this.enemies.addCorpse(fake, Math.cos(a) * sp, Math.sin(a) * sp);
+      }
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * TAU;
+        this.hazards.pool(ex + Math.cos(a) * 6, ez + Math.sin(a) * 6, 2.6, 0.3, 3, 0, 0x5dff3a);
+      }
+      this.particles.burst(ex, 2, ez, new THREE.Color(0.3, 1, 0.4).multiplyScalar(1.4), 40, 18, 1, 0.6, 1);
+    } else if (kind === 2) {
+      // Obsidian Warden: shatters like glass
+      const glass = new THREE.Color(0.9, 0.95, 1);
+      this.debris.spawn(ex, 3, ez, glass, 70, 22, 1.8);
+      for (let i = 0; i < 10; i++) {
+        const a = rand(0, TAU), l = rand(8, 18);
+        this.fx.lightning([new THREE.Vector3(ex, 2, ez), new THREE.Vector3(ex + Math.cos(a) * l * 0.5, 1, ez + Math.sin(a) * l * 0.5), new THREE.Vector3(ex + Math.cos(a) * l, 0.2, ez + Math.sin(a) * l)], col.getHex(), 0.6);
+      }
+      this.particles.burst(ex, 3, ez, new THREE.Color(1, 1, 1).multiplyScalar(1.4), 40, 24, 0.6, 0.35, 1);
+    } else {
+      // Prism Core: implodes, then releases a prismatic supernova
+      this.fx.ring(ex, ez, 30, 0xffffff, 0.5, 2);
+      this.after(0.6, () => {
+        const hues = [0x5ef2ff, 0xff4fd8, 0xffd84f, 0x7dff9b, 0xb48bff];
+        hues.forEach((h, i) => this.fx.ring(ex, ez, 30 + i * 12, h, 1.2 + i * 0.25, 1.2));
+        this.fx.shock(ex, ez, 60, 2.5, 1.6);
+        this.ui.flash('rgba(255,255,255,0.9)');
+        for (const h of hues) this.particles.burst(ex, 6, ez, new THREE.Color(h).multiplyScalar(2.2), 40, 26, 1.4, 0.9, 1);
+        this.lighting.flash(ex, ez, 0xffffff, 250, 80, 2);
+        this.audio.sfx('bomb');
+      });
+    }
+    void col;
   }
 
   hurtPlayer(dmg: number, src: Enemy | null) {

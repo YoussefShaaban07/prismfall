@@ -84,6 +84,7 @@ Three-day build. Each session picks up the next unchecked items, playtests with 
 - [ ] Full QA pass (desktop + phone sizes), README with screenshots, GitHub Pages deploy
 
 ## Session log
+- **S9 (Nov 11 morning)**: saturated crystals + crowd merging; unique boss deaths (carrier chain explosions, hive swarm burst + acid, warden glass shatter + cracks, Core implosion → prismatic supernova); toned-down generic boss death.
 - **S8 (Nov 11 morning)**: rotating colony dishes + sweeping turrets, boss-bar damage trail, blaster muzzle flash, damage numbers tinted per weapon; phone QA clean.
 - **S7 (Nov 11 early)**: level-up light column, evolution cutscene (freeze, flash, prismatic rings), rainbow solar lance, sparking saw halo, nova ground-crack ring; elite affixes Shielded/Regenerating/Volatile with distinct shader auras.
 - **S6 (Nov 11 early)**: lance scorch + heat shimmer, chain-arc side forks, directional hit sparks, off-screen boss/elite arrows, victory orbit with fireworks.
