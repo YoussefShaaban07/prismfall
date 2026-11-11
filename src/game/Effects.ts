@@ -63,7 +63,7 @@ export class Effects {
       this.rings.push(r);
     }
     const m = r.mesh.material as THREE.MeshBasicMaterial;
-    m.color.set(color).multiplyScalar(intensity);
+    m.color.set(color).multiplyScalar(intensity * 0.55);
     r.mesh.position.set(x, y, z);
     r.mesh.visible = true;
     r.t = 0;

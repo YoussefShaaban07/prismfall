@@ -59,7 +59,7 @@ export class Particles {
           float d = length(c);
           float core = smoothstep(0.5, 0.0, d);
           float a = core * core * vA;
-          gl_FragColor = vec4(vC * a * 2.2, 1.0);
+          gl_FragColor = vec4(vC * a * 1.6, 1.0);
         }`,
     });
     this.points = new THREE.Points(this.geo, this.mat);

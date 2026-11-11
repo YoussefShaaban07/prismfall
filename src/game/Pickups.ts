@@ -9,10 +9,10 @@ export type PowerKind = 'heal' | 'magnet' | 'bomb';
 interface Power { kind: PowerKind; x: number; z: number; t: number; obj: THREE.Group; beam: THREE.Mesh }
 
 const GEM_COLORS = [
-  new THREE.Color(0.3, 0.95, 1).multiplyScalar(2.4),
-  new THREE.Color(0.45, 1, 0.55).multiplyScalar(2.4),
-  new THREE.Color(0.8, 0.45, 1).multiplyScalar(3.5),
-  new THREE.Color(1, 0.8, 0.25).multiplyScalar(3.8),
+  new THREE.Color(0.3, 0.95, 1).multiplyScalar(1.3),
+  new THREE.Color(0.45, 1, 0.55).multiplyScalar(1.3),
+  new THREE.Color(0.8, 0.45, 1).multiplyScalar(1.6),
+  new THREE.Color(1, 0.8, 0.25).multiplyScalar(1.8),
 ];
 const POWER_DEF: Record<PowerKind, { model: ModelName; color: number; size: number }> = {
   heal: { model: 'barrel', color: 0xff4f6a, size: 1.6 },
@@ -37,9 +37,22 @@ export class Pickups {
   constructor(private scene: THREE.Scene, private assets: Assets, private g: Game) {
     const geo = new THREE.OctahedronGeometry(0.28, 0);
     geo.scale(1, 1.6, 1);
-    this.gemMesh = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color: 0xffffff }), this.max);
+    // faceted crystals: lit, glossy, glowing from inside with a fresnel rim
+    const gemMat = new THREE.MeshStandardMaterial({ color: 0x3a3a3a, roughness: 0.12, metalness: 0.2, flatShading: true, envMapIntensity: 1.2 });
+    gemMat.onBeforeCompile = (sh) => {
+      sh.fragmentShader = sh.fragmentShader.replace(
+        '#include <emissivemap_fragment>',
+        `#include <emissivemap_fragment>
+        float gF = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 2.0);
+        #ifdef USE_COLOR
+          totalEmissiveRadiance += vColor.rgb * (0.22 + gF * 0.9);
+        #endif`,
+      );
+    };
+    this.gemMesh = new THREE.InstancedMesh(geo, gemMat, this.max);
     this.gemMesh.count = 0;
     this.gemMesh.frustumCulled = false;
+    this.gemMesh.castShadow = true;
     for (let i = 0; i < this.max; i++) this.gemMesh.setColorAt(i, GEM_COLORS[0]);
     scene.add(this.gemMesh);
     this.beamGeo = new THREE.CylinderGeometry(0.35, 0.6, 9, 16, 1, true);

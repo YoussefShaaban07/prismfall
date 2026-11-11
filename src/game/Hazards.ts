@@ -141,7 +141,7 @@ export class Hazards {
             g.particles.burst(q.x, 0.6, q.z, q.color.clone().multiplyScalar(3), 20, q.r * 4, 0.5, 0.8, 0.8);
             g.particles.fireball(q.x, 0.6, q.z, q.r * 0.5, 12);
             g.smoke.puff(q.x, 0.6, q.z, 6, q.r * 0.6, 1.6);
-            g.lighting.flash(q.x, q.z, q.color.getHex(), 35, 14, 0.4);
+            g.lighting.flash(q.x, q.z, q.color, 25, 12, 0.4);
             g.fx.ring(q.x, q.z, q.r * 1.1, q.color, 0.3, 3);
             g.fx.scorch(q.x, q.z, q.r * 0.8);
             g.audio.sfx('boom');

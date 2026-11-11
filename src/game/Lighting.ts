@@ -56,11 +56,20 @@ export class Lighting {
   }
 
   /** Briefly light the scene with a real point light (explosions, boss deaths). */
-  flash(x: number, z: number, color: THREE.ColorRepresentation, peak = 40, radius = 18, dur = 0.35) {
+  private lastFlash = 0;
+  flash(x: number, z: number, color: THREE.ColorRepresentation | THREE.Color, peak = 40, radius = 18, dur = 0.35) {
+    // rate-limit small flashes so volleys don't wash the screen out
+    const now = performance.now();
+    if (peak < 60 && now - this.lastFlash < 90) return;
+    this.lastFlash = now;
     let s = this.lights.find((q) => q.t <= 0);
     if (!s) s = this.lights.reduce((a, b) => (a.t < b.t ? a : b));
     s.l.position.set(x, 2.5, z);
-    s.l.color.set(color);
+    if (color instanceof THREE.Color) s.l.color.copy(color);
+    else s.l.color.set(color);
+    // HDR colours: normalise so the light keeps its hue instead of clipping to white
+    const mx = Math.max(s.l.color.r, s.l.color.g, s.l.color.b, 1e-4);
+    s.l.color.multiplyScalar(1 / mx);
     s.l.distance = radius;
     s.t = dur;
     s.dur = dur;
@@ -84,7 +93,7 @@ export class Lighting {
       }
       s.t -= dt;
       const p = Math.max(0, s.t / s.dur);
-      s.l.intensity = s.peak * p * p;
+      s.l.intensity = s.peak * 0.6 * p * p;
     }
 
     const g = this.g;
@@ -99,7 +108,7 @@ export class Lighting {
       if (e.spawnT > 0.35) continue;
       this.c.setHex(e.def.color);
       const s = e.type === 'boss' ? 16 : e.r * 5.5;
-      const a = (e.type === 'boss' ? 0.22 : 0.16) * k;
+      const a = (e.type === 'boss' ? 0.2 : 0.1) * k;
       this.add(e.x, e.z, s, this.c.r * a, this.c.g * a, this.c.b * a);
     }
     // player bolts and enemy shots

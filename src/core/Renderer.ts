@@ -33,7 +33,7 @@ const GradeShader = {
     void main(){
       vec2 c = vUv - 0.5;
       float d = length(c);
-      vec2 off = c * (0.0015 + uAberr * 0.007) * d * 2.0;
+      vec2 off = c * (0.0005 + uAberr * 0.007) * d * 2.0;
       vec3 col;
       col.r = texture2D(tDiffuse, vUv + off).r;
       col.g = texture2D(tDiffuse, vUv).g;

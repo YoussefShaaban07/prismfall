@@ -70,7 +70,6 @@ let NEXT_ID = 1;
 export class EnemyManager {
   list: Enemy[] = [];
   corpses: Corpse[] = [];
-  private lastSync = 0;
   private depthMat = dissolveDepthMaterial();
   grid = new SpatialGrid<Enemy>(3);
   render = new Map<EType, TypeRender>();
@@ -87,7 +86,7 @@ export class EnemyManager {
     for (const type of INSTANCED) {
       const def = EDEFS[type];
       const model = assets.get(def.model);
-      const glow: Partial<Record<EType, number>> = { drone: 1.6, dart: 1.6, spitter: 1.3, brute: 0.75, wraith: 1.4, turret: 0.6, bomber: 1.2 };
+      const glow: Partial<Record<EType, number>> = { drone: 1.6, dart: 1.6, spitter: 1.3, brute: 0.75, wraith: 1.4, turret: 0.3, bomber: 1.2 };
       const mapper = alienMapper(def.color, glow[type] ?? 1.4, type === 'meteor' || type === 'shard' ? 1.6 : 1.1);
       const cap = def.max + 80; // room for dissolving corpses
       const flash = new THREE.InstancedBufferAttribute(new Float32Array(cap), 1);
@@ -402,6 +401,23 @@ export class EnemyManager {
       }
     }
 
+    // age dissolving corpses
+    for (let i = this.corpses.length - 1; i >= 0; i--) {
+      const c = this.corpses[i];
+      c.t += dt;
+      if (c.t >= 0.55) {
+        this.corpses[i] = this.corpses[this.corpses.length - 1];
+        this.corpses.pop();
+        continue;
+      }
+      c.x += c.vx * dt;
+      c.z += c.vz * dt;
+      c.vx *= Math.exp(-5 * dt);
+      c.vz *= Math.exp(-5 * dt);
+      c.yaw += c.spin * dt;
+      c.tumble += c.spin * 0.5 * dt;
+    }
+
     // compact and rebuild grid
     let w = 0;
     for (let i = 0; i < this.list.length; i++) {
@@ -462,29 +478,15 @@ export class EnemyManager {
         if (recolor) mesh.setColorAt(idx, el ? this.eliteColor : this.white);
       }
     }
-    // dissolving corpses
-    const dt = Math.min(0.05, Math.max(0, time - this.lastSync));
-    this.lastSync = time;
-    for (let i = this.corpses.length - 1; i >= 0; i--) {
+    // dissolving corpses (aged in update())
+    for (let i = 0; i < this.corpses.length; i++) {
       const c = this.corpses[i];
-      c.t += dt;
-      if (c.t >= 0.55) {
-        this.corpses[i] = this.corpses[this.corpses.length - 1];
-        this.corpses.pop();
-        continue;
-      }
       const r = this.render.get(c.type);
       if (!r) continue;
       const idx = counts.get(c.type) ?? 0;
       if (idx >= r.max) continue;
       counts.set(c.type, idx + 1);
-      c.x += c.vx * dt;
-      c.z += c.vz * dt;
-      c.vx *= 0.92;
-      c.vz *= 0.92;
-      c.yaw += c.spin * dt;
-      c.tumble += c.spin * 0.5 * dt;
-      const p = c.t / 0.55;
+      const p = Math.min(1, c.t / 0.55);
       const yawOff = c.type === 'meteor' || c.type === 'shard' || c.type === 'bomber' ? 0 : SHIP_YAW;
       this.e.set(c.type === 'bomber' ? Math.PI / 2 : c.tumble * 0.3 + p * 0.6, c.yaw + yawOff, p * 0.8, 'YXZ');
       this.q.setFromEuler(this.e);
@@ -500,8 +502,6 @@ export class EnemyManager {
       }
       for (const mesh of r.meshes) mesh.setMatrixAt(idx, this.m);
     }
-    void time;
-
     for (const [type, r] of this.render) {
       const n = counts.get(type) ?? 0;
       for (const mesh of r.meshes) {

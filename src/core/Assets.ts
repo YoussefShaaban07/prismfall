@@ -250,7 +250,7 @@ export function addRim(mat: THREE.MeshStandardMaterial, rim: THREE.ColorRepresen
         totalEmissiveRadiance += uRim * rimF * uRimK + vec3(1.0, 0.95, 0.9) * (vFlash + uFlash) * 1.6;
         if (vDissolve > 0.0) {
           float edge = 1.0 - smoothstep(0.0, 0.16, dn - vDissolve);
-          totalEmissiveRadiance += mix(uRim, vec3(1.0, 0.9, 0.6), 0.35) * edge * 8.0;
+          totalEmissiveRadiance += mix(uRim, vec3(1.0, 0.9, 0.6), 0.35) * edge * 4.0;
           diffuseColor.rgb *= 1.0 - vDissolve * 0.6;
         }`,
       );
@@ -267,9 +267,9 @@ export function alienMapper(color: THREE.ColorRepresentation, glow = 2.6, rimK =
     switch (name) {
       case 'metalRed':
       case 'crystal':
-      case '_defaultMat':
         m = new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: glow, roughness: 0.3, metalness: 0.2 });
         break;
+      case '_defaultMat':
       case 'metal':
         m = new THREE.MeshStandardMaterial({ color: 0x343044, roughness: 0.7, metalness: 0.2, envMapIntensity: 0.35 });
         break;

@@ -111,13 +111,12 @@ export class Projectiles {
         g.damage(e, dmg, dx * k, dz * k);
       }
     }
-    g.particles.burst(x, 1, z, color, 18, radius * 4, 0.55, 0.9, 0.6);
-    g.particles.fireball(x, 0.8, z, radius * 0.45, 10);
+    g.particles.burst(x, 1, z, color, 10, radius * 4, 0.5, 0.7, 0.6);
+    g.particles.fireball(x, 0.8, z, radius * 0.38, 6);
     g.smoke.puff(x, 0.8, z, 4, radius * 0.5, 1.4);
-    g.particles.burst(x, 1, z, g.colors.white, 8, radius * 2, 0.3, 1.2, 0.5);
-    g.fx.ring(x, z, radius * 1.15, color, 0.35, 3);
+    g.fx.ring(x, z, radius * 1.15, color, 0.3, 2);
     g.fx.shock(x, z, radius * 2.2, 0.7, 0.4);
-    g.lighting.flash(x, z, color.getHex(), 30, radius * 5, 0.3);
+    g.lighting.flash(x, z, color, 14, radius * 3.2, 0.28);
     if (scorch && Math.random() < 0.5) g.fx.scorch(x, z, radius * 0.8);
     g.debris.spawn(x, 0.6, z, g.colors.debris, 3, 6, 0.8);
     g.shake = Math.max(g.shake, 0.35);
