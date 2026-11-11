@@ -110,6 +110,19 @@ export class Game {
   private camLook = new THREE.Vector3();
   private last = performance.now();
   snapCam = false;
+  private lookSmooth = new THREE.Vector3(0, 4, 0);
+  private menuPath = new THREE.CatmullRomCurve3(
+    [
+      [44, 14, 0], [30, 9, 30], [0, 7, 46], [-34, 12, 32], [-48, 8, 0], [-38, 16, -32], [-6, 22, -46], [28, 11, -34], [44, 10, -10],
+    ].map(([x, y, z]) => new THREE.Vector3(x, y, z)),
+    true, 'centripetal',
+  );
+  private menuLook = new THREE.CatmullRomCurve3(
+    [
+      [0, 3, 0], [0, 3, 0], [-20, 6, 10], [-70, 4, 30], [0, 3, 0], [-120, 30, -140], [0, 3, 0], [80, 10, -60], [0, 3, 0],
+    ].map(([x, y, z]) => new THREE.Vector3(x, y, z)),
+    true, 'centripetal',
+  );
   cineT = 0;
   storm = { k: 0, t: 0, dur: 0, next: 200, flashT: 0 };
   night = false;
@@ -636,11 +649,13 @@ export class Game {
         this.showShip.rotation.y = this.time * 0.5;
         this.showShip.position.y = 2.2 + Math.sin(this.time * 1.5) * 0.2;
       }
-      const a = this.time * 0.06;
-      this.camPos.set(Math.sin(a) * 46, 15 + Math.sin(this.time * 0.2) * 3, Math.cos(a) * 46);
-      cam.position.lerp(this.camPos, 1 - Math.exp(-2 * dt));
-      this.camLook.set(0, 4, 0);
-      cam.lookAt(this.camLook);
+      // title flythrough: a slow loop that dips low over the colony, sweeps the mountains, returns to the pad
+      const T = (this.time * 0.012) % 1;
+      this.menuPath.getPointAt(T, this.camPos);
+      this.menuLook.getPointAt(T, this.camLook);
+      cam.position.lerp(this.camPos, 1 - Math.exp(-1.5 * dt));
+      this.lookSmooth.lerp(this.camLook, 1 - Math.exp(-1.5 * dt));
+      cam.lookAt(this.lookSmooth);
       this.r.sun.target.position.set(0, 0, 0);
       this.r.sun.position.copy(this.sunOff);
       return;

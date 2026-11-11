@@ -517,9 +517,9 @@ export class Arena {
     const core = flareTex('core'), ring = flareTex('ring'), hex = flareTex('hex');
     this.flare.addElement(new LensflareElement(core, 420, 0, new THREE.Color(1, 0.85, 0.7)));
     this.flare.addElement(new LensflareElement(ring, 220, 0.25, new THREE.Color(1, 0.6, 0.4)));
-    this.flare.addElement(new LensflareElement(hex, 60, 0.45, new THREE.Color(0.8, 0.6, 1)));
-    this.flare.addElement(new LensflareElement(hex, 90, 0.62, new THREE.Color(0.5, 0.9, 1)));
-    this.flare.addElement(new LensflareElement(ring, 160, 0.85, new THREE.Color(1, 0.7, 0.5)));
+    this.flare.addElement(new LensflareElement(hex, 40, 0.45, new THREE.Color(0.35, 0.25, 0.45)));
+    this.flare.addElement(new LensflareElement(hex, 60, 0.62, new THREE.Color(0.2, 0.35, 0.45)));
+    this.flare.addElement(new LensflareElement(ring, 120, 0.85, new THREE.Color(0.4, 0.28, 0.2)));
     this.sunHolder.add(this.flare);
     this.group.add(this.sunHolder);
 

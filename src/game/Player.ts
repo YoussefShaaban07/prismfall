@@ -57,6 +57,7 @@ export class Player {
   private ghostMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.3, 0.9, 1).multiplyScalar(1.5), transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false });
   private ghostT = 0;
   trails: Trail[] = [];
+  navLights: THREE.Mesh[] = [];
   private tv = new THREE.Vector3();
 
   constructor(scene: THREE.Scene, assets: Assets) {
@@ -124,6 +125,16 @@ export class Player {
 
     this.buildGhosts();
     for (let i = 0; i < 2; i++) this.trails.push(new Trail(scene, 0x37e8ff, 0.32, 26, 0.016));
+    // blinking navigation lights on the wingtips (red port, green starboard) and a white tail strobe
+    const navGeo = new THREE.SphereGeometry(0.07, 8, 6);
+    const navCols = [new THREE.Color(1, 0.1, 0.1).multiplyScalar(6), new THREE.Color(0.1, 1, 0.2).multiplyScalar(6), new THREE.Color(1, 1, 1).multiplyScalar(8)];
+    const navPos = [[-1.05, 0.5, -0.3], [1.05, 0.5, -0.3], [0, 0.75, -1.0]];
+    navCols.forEach((c, i) => {
+      const m = new THREE.Mesh(navGeo, new THREE.MeshBasicMaterial({ color: c }));
+      m.position.set(navPos[i][0], navPos[i][1], navPos[i][2]);
+      holder.add(m);
+      this.navLights.push(m);
+    });
   }
 
   private buildGhosts() {
@@ -279,6 +290,9 @@ export class Player {
     for (const f of this.flames) {
       f.scale.set(1, 1, thrust * (0.85 + Math.random() * 0.3));
     }
+    const blink = (time * 1.2) % 1;
+    this.navLights[0].visible = this.navLights[1].visible = blink < 0.55;
+    this.navLights[2].visible = blink > 0.6 && blink < 0.66;
     const sm = this.shield.material as THREE.ShaderMaterial;
     sm.uniforms.uOpacity.value = damp(sm.uniforms.uOpacity.value as number, this.inv > 0 ? 0.8 : 0, 14, dt);
     sm.uniforms.uTime.value = time;
