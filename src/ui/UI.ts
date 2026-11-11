@@ -1,6 +1,7 @@
 import type { CardView } from '../game/Upgrades';
 import { fmtNum, fmtTime } from '../core/util';
-import { PASSIVES, WEAPONS, FINAL_TIME, ARENA_RADIUS, type PassiveId, type WeaponId } from '../game/data';
+import { PASSIVES, WEAPONS, FINAL_TIME, ARENA_RADIUS, EDEFS, type EType, type PassiveId, type WeaponId } from '../game/data';
+import { ENEMY_LORE, BOSS_LORE, WEAPON_TIPS } from '../game/codex';
 import type { Quality } from '../core/Renderer';
 import { ACHIEVEMENTS, MODS, SHIPS, UPGRADES, dailySetup, modMult, upLv, type MetaState, type ModId, type ShipId, type UpgradeId } from '../game/meta';
 
@@ -59,6 +60,10 @@ export class UI {
   onHangar: (open: boolean) => void = () => {};
   onMapToggle: () => void = () => {};
   onDaily: () => void = () => {};
+  onCodex: (open: boolean, kind: 'enemy' | 'boss' | 'ship', id: string) => void = () => {};
+  private codexTab: 'enemy' | 'boss' | 'weapon' = 'enemy';
+  private codexSel = 'drone';
+  private codexMeta: MetaState | null = null;
   onModToggle: (id: ModId) => void = () => {};
   onShipPreview: (id: ShipId) => void = () => {};
   onShipAction: (id: ShipId) => void = () => {};
@@ -95,6 +100,19 @@ export class UI {
     $('#hangarBtn').addEventListener('click', () => this.onHangar(true));
     $('#mapBtn').addEventListener('click', () => this.onMapToggle());
     $('#dailyBtn').addEventListener('click', () => this.onDaily());
+    $('#codexBtn').addEventListener('click', () => this.openCodex());
+    $('#codexClose').addEventListener('click', () => {
+      this.hide('#codex');
+      this.show('#menu');
+      this.onCodex(false, 'ship', '');
+    });
+    document.querySelectorAll<HTMLElement>('.ctab').forEach((b) =>
+      b.addEventListener('click', () => {
+        this.codexTab = b.dataset.t as 'enemy' | 'boss' | 'weapon';
+        this.codexSel = this.codexTab === 'enemy' ? 'drone' : this.codexTab === 'boss' ? '0' : 'blaster';
+        this.renderCodex();
+      }),
+    );
     $('#modsBtn').addEventListener('click', () => this.show('#modsScreen'));
     $('#modsClose').addEventListener('click', () => this.hide('#modsScreen'));
     $('#menuSettingsBtn').addEventListener('click', () => this.show('#settingsScreen'));
@@ -146,6 +164,69 @@ export class UI {
     $('#dailyBtn').innerHTML = `DAILY <small>${SHIPS.find((x) => x.id === ds.ship)!.name} · ${ds.mods.map((id) => MODS.find((x) => x.id === id)!.name).join(' + ')}${best ? ` · best ${fmtNum(best)}` : ''}</small>`;
   }
 
+  setCodexMeta(m: MetaState) {
+    this.codexMeta = m;
+  }
+
+  openCodex() {
+    this.hide('#menu');
+    this.show('#codex');
+    this.renderCodex();
+  }
+
+  private renderCodex() {
+    const m = this.codexMeta;
+    if (!m) return;
+    document.querySelectorAll<HTMLElement>('.ctab').forEach((b) => b.classList.toggle('on', b.dataset.t === this.codexTab));
+    const list = $('#cList');
+    const info = $('#cInfo');
+    const hex = (n: number) => '#' + n.toString(16).padStart(6, '0');
+    if (this.codexTab === 'enemy') {
+      const ids = Object.keys(ENEMY_LORE) as Exclude<EType, 'boss'>[];
+      list.innerHTML = ids.map((id) => {
+        const seen = m.seen.includes(id);
+        return `<button class="shipchip ${id === this.codexSel ? 'on' : ''} ${seen ? '' : 'locked'}" data-c="${id}" style="--c:${hex(EDEFS[id].color)}">${seen ? EDEFS[id].name.toUpperCase() : '???'}</button>`;
+      }).join('');
+      const id = this.codexSel as Exclude<EType, 'boss'>;
+      const d = EDEFS[id];
+      const seen = m.seen.includes(id);
+      info.style.setProperty('--c', hex(d.color));
+      info.innerHTML = seen
+        ? `<div class="sname">${d.name.toUpperCase()}</div><div class="sblurb">${ENEMY_LORE[id].lore}</div>
+           <div class="ctip"><b>TACTICS</b> ${ENEMY_LORE[id].tip}</div>
+           <div class="cstats"><span>HULL <b>${d.hp}</b></span><span>SPEED <b>${d.speed || '—'}</b></span><span>IMPACT <b>${d.damage}</b></span><span>XP <b>${d.xp}</b></span></div>`
+        : `<div class="sname">UNKNOWN</div><div class="sblurb">Destroy one to scan it into the Codex.</div>`;
+      this.onCodex(true, seen ? 'enemy' : 'ship', id);
+    } else if (this.codexTab === 'boss') {
+      list.innerHTML = BOSS_LORE.map((b, i) => {
+        const seen = m.seen.includes('boss' + i);
+        return `<button class="shipchip ${String(i) === this.codexSel ? 'on' : ''} ${seen ? '' : 'locked'}" data-c="${i}" style="--c:#c86bff">${seen ? b.name : '???'}</button>`;
+      }).join('');
+      const i = Number(this.codexSel);
+      const b = BOSS_LORE[i];
+      const seen = m.seen.includes('boss' + i);
+      info.style.setProperty('--c', '#c86bff');
+      info.innerHTML = seen
+        ? `<div class="sname">${b.name}</div><div class="sblurb">${b.lore}</div><div class="ctip"><b>TACTICS</b> ${b.tip}</div>`
+        : `<div class="sname">UNKNOWN</div><div class="sblurb">Defeat this mothership to scan it.</div>`;
+      this.onCodex(true, seen ? 'boss' : 'ship', String(i));
+    } else {
+      const ids = Object.keys(WEAPONS) as WeaponId[];
+      list.innerHTML = ids.map((id) => `<button class="shipchip ${id === this.codexSel ? 'on' : ''}" data-c="${id}" style="--c:${WEAPONS[id].color}">${WEAPONS[id].icon} ${WEAPONS[id].name.toUpperCase()}</button>`).join('');
+      const w = WEAPONS[this.codexSel as WeaponId];
+      info.style.setProperty('--c', w.color);
+      info.innerHTML = `<div class="sname">${w.icon} ${w.name.toUpperCase()}</div><div class="sblurb">${w.blurb} ${WEAPON_TIPS[w.id]}</div>
+        <div class="ctip"><b>EVOLUTION</b> Max level + ${PASSIVES[w.evoNeeds].name} → <span style="color:${w.color}">${w.evoName}</span>. ${w.levels[5].replace('EVOLVED: ', '')}</div>`;
+      this.onCodex(true, 'ship', '');
+    }
+    list.querySelectorAll<HTMLElement>('[data-c]').forEach((el) =>
+      el.addEventListener('click', () => {
+        this.codexSel = el.dataset.c!;
+        this.renderCodex();
+      }),
+    );
+  }
+
   setMapLabel(map: 'dusk' | 'night', unlocked: boolean) {
     const b = $('#mapBtn');
     b.innerHTML = map === 'night' ? 'SECTOR · <b>NIGHT SHIFT</b> <small>×1.5 score</small>' : `SECTOR · <b>DUSK OUTPOST</b>${unlocked ? '' : ' <small>🔒 Night Shift</small>'}`;
@@ -153,7 +234,7 @@ export class UI {
   }
 
   hideAll() {
-    for (const s of ['#menu', '#levelup', '#pause', '#over', '#how', '#credits', '#hangar', '#settingsScreen', '#modsScreen']) this.hide(s);
+    for (const s of ['#menu', '#levelup', '#pause', '#over', '#how', '#credits', '#hangar', '#settingsScreen', '#modsScreen', '#codex']) this.hide(s);
   }
 
   startRun(touch: boolean) {
@@ -372,7 +453,7 @@ export class UI {
 
   /* ---------- gamepad / keyboard menu navigation ---------- */
   private topScreen(): HTMLElement | null {
-    const order = ['#modsScreen', '#settingsScreen', '#how', '#credits', '#levelup', '#hangar', '#pause', '#over', '#menu'];
+    const order = ['#codex', '#modsScreen', '#settingsScreen', '#how', '#credits', '#levelup', '#hangar', '#pause', '#over', '#menu'];
     for (const sel of order) {
       const el = $(sel);
       if (el && !el.classList.contains('hidden')) return el;
@@ -433,6 +514,7 @@ export class UI {
       if (!$(sel).classList.contains('hidden')) { this.hide(sel); return true; }
     }
     if (!$('#hangar').classList.contains('hidden')) { this.onHangar(false); return true; }
+    if (!$('#codex').classList.contains('hidden')) { ($('#codexClose') as HTMLElement).click(); return true; }
     return false;
   }
 
@@ -655,7 +737,8 @@ const TEMPLATE = /* html */ `
       <button id="dailyBtn" class="btn dailybtn wide">DAILY</button>
       <div class="pair"><button id="hangarBtn" class="btn">HANGAR <span id="menuShards" class="mshards"></span></button><button id="modsBtn" class="btn">MUTATORS</button></div>
       <div class="pair"><button id="menuSettingsBtn" class="btn ghost">SETTINGS</button><button id="howBtn" class="btn ghost">HOW TO PLAY</button></div>
-      <div class="pair"><button id="creditsBtn" class="btn ghost">CREDITS</button><button id="installBtn" class="btn ghost hidden">INSTALL APP</button></div>
+      <div class="pair"><button id="codexBtn" class="btn ghost">CODEX</button><button id="creditsBtn" class="btn ghost">CREDITS</button></div>
+      <div class="pair"><button id="installBtn" class="btn ghost hidden">INSTALL APP</button></div>
     </div>
     <div id="bestTxt" class="best"></div>
     <div id="ctlHint" class="ctl"></div>
@@ -699,6 +782,15 @@ const TEMPLATE = /* html */ `
     <div class="htabs"><button class="htab on" data-t="ships">SHIPS</button><button class="htab" data-t="upgrades">UPGRADES</button><button class="htab" data-t="records">RECORDS</button></div>
     <div id="hBody" class="hbody"></div>
     <button id="hangarClose" class="btn ghost">BACK</button>
+  </div>
+</div>
+
+<div id="codex" class="screen hidden">
+  <div class="hpanel">
+    <div class="hhead"><h2>CODEX</h2></div>
+    <div class="htabs"><button class="htab ctab on" data-t="enemy">ENEMIES</button><button class="htab ctab" data-t="boss">BOSSES</button><button class="htab ctab" data-t="weapon">WEAPONS</button></div>
+    <div class="hbody"><div id="cList" class="shiplist"></div><div id="cInfo" class="shipinfo"></div></div>
+    <button id="codexClose" class="btn ghost">BACK</button>
   </div>
 </div>
 

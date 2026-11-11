@@ -64,6 +64,7 @@ export interface MetaState {
   seenTutorial: boolean;
   map: 'dusk' | 'night';
   mods: ModId[];
+  seen: string[];
   daily: Record<string, number>;
   top: { score: number; time: number; level: number; kills: number; ship: ShipId; win: boolean; date: string }[];
 }
@@ -81,6 +82,7 @@ export function loadMeta(): MetaState {
     seenTutorial: false,
     map: 'dusk',
     mods: [],
+    seen: [],
     daily: {},
     top: [],
   };

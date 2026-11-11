@@ -415,3 +415,9 @@ body.cine #hud .top, body.cine #minimap, body.cine .combo { opacity: 0; transiti
   .menuwrap { margin: 0 auto 2vh; align-items: center; text-align: center; }
   .mbtns { width: min(420px, 92vw); }
 }
+#codex { justify-content: flex-end; align-items: stretch; background: linear-gradient(90deg, transparent 30%, rgba(8, 4, 14, .75) 55%); }
+.ctip { font-size: 15px; line-height: 1.4; color: rgba(255, 255, 255, .8); padding: 10px 12px; border-radius: 10px; background: rgba(255, 255, 255, .04); }
+.ctip b { font-family: var(--display); font-size: 10px; letter-spacing: .25em; color: var(--c); margin-right: 6px; }
+.cstats { display: flex; flex-wrap: wrap; gap: 14px; font-family: var(--display); font-size: 10px; letter-spacing: .15em; color: rgba(255, 255, 255, .55); }
+.cstats b { color: #fff; font-size: 14px; margin-left: 4px; }
+@media (max-width: 760px) { #codex { align-items: flex-end; background: linear-gradient(180deg, transparent 30%, rgba(8, 4, 14, .8) 50%); } }

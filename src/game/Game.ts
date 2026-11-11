@@ -18,7 +18,9 @@ import { Hazards } from './Hazards';
 import { rollChoices, describe, applyChoice, type Choice } from './Upgrades';
 import { ARENA_RADIUS, BOSS_TIMES, FINAL_TIME, xpForLevel, type EType } from './data';
 import { ACHIEVEMENTS, MODS, SHIPS, UPGRADES, dailySetup, loadMeta, modMult, saveMeta, shardsForRun, upLv, type MetaState, type ModId, type ShipId } from './meta';
-import { heroMapper } from '../core/Assets';
+import { heroMapper, alienMapper, type ModelName } from '../core/Assets';
+import { LOOKS } from './Boss';
+import { EDEFS as ED } from './data';
 
 type State = 'menu' | 'play' | 'levelup' | 'paused' | 'over';
 
@@ -149,6 +151,7 @@ export class Game {
     this.ui.showMenu(this.meta.stats.bestScore, this.meta.stats.bestTime, this.input.touchUsed, this.meta.shards);
     this.ui.setMapLabel(this.meta.map, this.nightUnlocked());
     this.ui.renderMods(this.meta);
+    this.ui.setCodexMeta(this.meta);
     requestAnimationFrame(this.loop);
     document.addEventListener('visibilitychange', () => {
       if (document.hidden && this.state === 'play') this.pause();
@@ -180,6 +183,11 @@ export class Game {
       else ui.closeHangar();
     };
     ui.onDaily = () => this.startRun(true);
+    ui.onCodex = (open, kind, id) => {
+      this.hangarOpen = open;
+      if (open) this.showCodexModel(kind, id);
+      else this.setShowShip(this.meta.ship);
+    };
     ui.onModToggle = (id) => {
       const i = this.meta.mods.indexOf(id);
       if (i >= 0) this.meta.mods.splice(i, 1);
@@ -287,10 +295,26 @@ export class Game {
 
   private setShowShip(id: ShipId) {
     const def = SHIPS.find((x) => x.id === id)!;
+    this.setShowModel(def.model, 4.2, heroMapper(def.accent, 1.2));
+  }
+
+  private setShowModel(model: ModelName, size: number, mapper: ReturnType<typeof heroMapper>) {
     if (this.showShip) this.showroom.remove(this.showShip);
-    this.showShip = this.assets.object(def.model, 4.2, heroMapper(def.accent, 1.2));
+    this.showShip = this.assets.object(model, size, mapper);
     this.showShip.position.y = 2.2;
     this.showroom.add(this.showShip);
+  }
+
+  /** Codex preview: show an enemy or boss model on the showroom pad. */
+  showCodexModel(kind: 'enemy' | 'boss' | 'ship', id: string) {
+    if (kind === 'enemy') {
+      const d = ED[id as EType];
+      this.setShowModel(d.model, Math.min(5, d.size * 2.4), alienMapper(d.color, 1.2, 1));
+    } else if (kind === 'boss') {
+      const i = Number(id);
+      if (i === 3) this.setShowModel('rock_crystalsLargeA', 5, alienMapper(0x7ff6ff, 1.6, 0.7));
+      else this.setShowModel(LOOKS[i].model, 5.2, alienMapper(LOOKS[i].color, 0.6, 0.7));
+    } else this.setShowShip(this.meta.ship);
   }
 
   /** Switch between the dusk outpost and the Night Shift sector. */
@@ -789,6 +813,7 @@ export class Game {
       this.bossDeath(e);
       return;
     }
+    if (!this.meta.seen.includes(e.type)) this.meta.seen.push(e.type);
     this.kills++;
     this.combo++;
     this.comboT = 2.6;
@@ -840,6 +865,8 @@ export class Game {
 
   private bossDeath(e: Enemy) {
     const final = this.boss.final;
+    const bossKey = 'boss' + (final ? 3 : this.boss.index % 3);
+    if (!this.meta.seen.includes(bossKey)) this.meta.seen.push(bossKey);
     this.bossesKilled++;
     this.kills++;
     this.score += final ? 25000 : 4000 * this.bossesKilled;

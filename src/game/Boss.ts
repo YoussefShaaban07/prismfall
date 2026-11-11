@@ -12,7 +12,7 @@ interface BossLook {
   color: number;
   size: number;
 }
-const LOOKS: BossLook[] = [
+export const LOOKS: BossLook[] = [
   { model: 'craft_cargoA', color: 0xc86bff, size: 9 },
   { model: 'craft_miner', color: 0x2fffa8, size: 9.5 },
   { model: 'craft_speederD', color: 0xff3b5c, size: 10 },

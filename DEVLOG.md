@@ -44,8 +44,8 @@ Three-day build. Each session picks up the next unchecked items, playtests with 
 - [x] Unit tests (vitest, 15 tests) for upgrades/meta/progression/spatial grid, run in CI before deploy
 
 ### Day 3 — extra depth
-- [ ] Codex / bestiary: 3D previews of enemies, bosses, weapons with lore
-- [ ] Music variety: boss theme, Night Shift key/tempo, victory sting
+- [x] Codex: 3D showroom previews of scanned enemies and bosses, lore, tactics, weapon evolutions
+- [x] Music variety: boss theme (D minor, 134 bpm), Night Shift (E minor, 104 bpm), victory sting
 - [ ] Arabic language option (RTL-aware UI, Arabic-capable font)
 - [ ] Run summary share card (canvas image download on Pages)
 - [ ] Story intro: short animated briefing on first launch
