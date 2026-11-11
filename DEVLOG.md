@@ -43,6 +43,14 @@ Three-day build. Each session picks up the next unchecked items, playtests with 
 - [x] Accessibility: reduce-flashing mode, high-contrast enemy bullets
 - [x] Unit tests (vitest, 15 tests) for upgrades/meta/progression/spatial grid, run in CI before deploy
 
+### Day 3 — extra depth
+- [ ] Codex / bestiary: 3D previews of enemies, bosses, weapons with lore
+- [ ] Music variety: boss theme, Night Shift key/tempo, victory sting
+- [ ] Arabic language option (RTL-aware UI, Arabic-capable font)
+- [ ] Run summary share card (canvas image download on Pages)
+- [ ] Story intro: short animated briefing on first launch
+- [ ] Perf pass on mid/low devices: instanced debris colors, particle caps, LOD for decor
+
 ### Day 3 — polish & ship
 - [x] Menu/controller navigation (D-pad/arrows + A/Enter, B/Esc back), settings from main menu, control reference
 - [x] PWA: manifest + offline cache + INSTALL APP button for desktop
