@@ -20,10 +20,10 @@ export interface EDef {
 }
 
 export const EDEFS: Record<EType, EDef> = {
-  drone: { name: 'Swarmer', hp: 14, speed: 3.6, radius: 0.55, damage: 8, xp: 1, score: 10, color: 0xff2fa0, model: 'enemy-flying', size: 1.5, hover: 0.9, max: 400 },
-  dart: { name: 'Lancer', hp: 13, speed: 3.2, radius: 0.55, damage: 11, xp: 2, score: 15, color: 0xff7a1a, model: 'craft_racer', size: 1.25, hover: 0.7, max: 160 },
+  drone: { name: 'Swarmer', hp: 14, speed: 3.6, radius: 0.55, damage: 6, xp: 1, score: 10, color: 0xff2fa0, model: 'enemy-flying', size: 1.5, hover: 0.9, max: 400 },
+  dart: { name: 'Lancer', hp: 13, speed: 3.2, radius: 0.55, damage: 9, xp: 2, score: 15, color: 0xff7a1a, model: 'craft_racer', size: 1.25, hover: 0.7, max: 160 },
   spitter: { name: 'Gunship', hp: 28, speed: 2.5, radius: 0.7, damage: 8, xp: 3, score: 22, color: 0x26ffb0, model: 'craft_miner', size: 1.5, hover: 0.8, max: 120 },
-  meteor: { name: 'Rift Meteor', hp: 36, speed: 2.7, radius: 0.85, damage: 11, xp: 2, score: 18, color: 0xffd23a, model: 'meteor_detailed', size: 1.8, hover: 0.35, max: 120 },
+  meteor: { name: 'Rift Meteor', hp: 36, speed: 2.7, radius: 0.85, damage: 9, xp: 2, score: 18, color: 0xffd23a, model: 'meteor_detailed', size: 1.8, hover: 0.35, max: 120 },
   shard: { name: 'Shard', hp: 9, speed: 4.7, radius: 0.42, damage: 6, xp: 1, score: 6, color: 0xffd23a, model: 'meteor_half', size: 0.95, hover: 0.35, max: 200 },
   brute: { name: 'Hauler', hp: 140, speed: 1.8, radius: 1.25, damage: 22, xp: 9, score: 70, color: 0xff3b3b, model: 'craft_cargoB', size: 2.6, hover: 0.9, max: 60 },
   wraith: { name: 'Phantom', hp: 42, speed: 4.4, radius: 0.65, damage: 13, xp: 4, score: 35, color: 0x6a7bff, model: 'craft_speederC', size: 1.45, hover: 1.0, max: 90 },
@@ -131,4 +131,4 @@ export const BOSS_TIMES = [150, 300, 450];
 export const BOSS_NAMES = ['VANGUARD CARRIER', 'HIVE DREADNOUGHT', 'OBSIDIAN WARDEN'];
 
 export const xpForLevel = (l: number) => Math.floor(4 + (l - 1) * 3 + Math.pow(l - 1, 1.6) * 0.8 + Math.pow(Math.max(0, l - 20), 2) * 0.6);
-export const hpScale = (t: number) => 1 + (t / 60) * 0.3 + Math.pow(t / 60, 2) * 0.065;
+export const hpScale = (t: number) => 1 + (t / 60) * 0.3 + Math.pow(t / 60, 2) * 0.065 + Math.pow(t / 60, 3) * 0.006;

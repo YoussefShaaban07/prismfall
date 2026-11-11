@@ -583,7 +583,7 @@ export class Game {
     }
 
     // regular spawns
-    const rate = Math.min(22, 0.9 + T / 42 + Math.pow(T / 120, 2)) * (this.boss.e ? 0.3 : 1) * (this.endless ? 1.3 : 1);
+    const rate = Math.min(22, 0.9 + T / 42 + Math.pow(T / 120, 2)) * (this.boss.e ? 0.22 : 1) * (this.endless ? 1.3 : 1);
     this.spawnAcc += rate * dt;
     let guard = 0;
     while (this.spawnAcc >= 1 && guard++ < 20) {
@@ -703,9 +703,9 @@ export class Game {
       this.pickups.dropPower(kinds[Math.floor(Math.random() * 3)], e.x + 1, e.z);
     } else {
       const r = Math.random();
-      if (r < 0.006) this.pickups.dropPower('heal', e.x, e.z);
-      else if (r < 0.0095) this.pickups.dropPower('magnet', e.x, e.z);
-      else if (r < 0.012) this.pickups.dropPower('bomb', e.x, e.z);
+      if (r < 0.011) this.pickups.dropPower('heal', e.x, e.z);
+      else if (r < 0.0145) this.pickups.dropPower('magnet', e.x, e.z);
+      else if (r < 0.017) this.pickups.dropPower('bomb', e.x, e.z);
     }
 
     if (e.type === 'meteor') {
@@ -925,6 +925,7 @@ export class Game {
     }
     this.pendingLevels--;
     this.player.inv = Math.max(this.player.inv, 0.8);
+    this.player.hp = Math.min(this.player.maxHp, this.player.hp + this.player.maxHp * 0.08);
     this.state = 'play';
     this.last = performance.now();
   }
