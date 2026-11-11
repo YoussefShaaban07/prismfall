@@ -51,11 +51,15 @@ Three-day build. Each session picks up the next unchecked items, playtests with 
 - [x] Sky clouds lit by the sun, procedural lens flare, longer aerial-perspective fog
 - [x] GTAO ambient occlusion (FX excluded), hangar depth of field, split-tone colour grade
 - [x] Ribbon engine trails (player, wingmen), glowing bolt streaks
-- [ ] Boss engine trails + damage smoke as boss HP drops
-- [ ] Animated force-field impact ripples where enemies hit the wall
-- [ ] Ground decals: glowing crystal shards embedded in terrain, tire/landing marks
-- [ ] Weather: periodic Martian dust storm (fog + streaks + reduced visibility)
-- [ ] Better player ship: shield shimmer shader, damage sparks at low hull
+- [x] Boss engine trails + battle-damage smoke/fire as boss HP drops
+- [x] Force-field impact ripples; grazing-angle damping so the wall never blows out
+- [x] Glowing prism crystal clusters embedded in the arena
+- [x] Weather: dust storms (day) and ion storms with lightning (night)
+- [x] Player hull damage sparks + smoke at critical hull
+- [ ] Shield shimmer shader (fresnel hex) instead of wireframe sphere
+- [ ] Volumetric-looking god rays from the sun in menus
+- [ ] Screen-space reflections or wet sheen on landing pads
+- [ ] More detailed explosion: debris that glows hot then cools
 
 ### Day 3 — extra depth
 - [x] Codex: 3D showroom previews of scanned enemies and bosses, lore, tactics, weapon evolutions
