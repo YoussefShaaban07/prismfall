@@ -215,7 +215,9 @@ export class Renderer {
     this.fxaa.enabled = false;
     this.composer.addPass(this.fxaa);
 
-    this.resize();
+    // apply the default tier now: applySettings only calls setQuality when the tier changes, so
+    // without this a default-HIGH boot kept constructor values (SMAA, full-res AO, 12 AO taps)
+    this.setQuality(this.quality);
     addEventListener('resize', () => this.resize());
   }
 
