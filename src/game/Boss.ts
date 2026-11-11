@@ -124,16 +124,19 @@ export class BossController {
     }
     body.add(ship);
     if (!final) {
-      // twin turrets bolted on top
+      // twin turrets bolted on top, tracking the player
+      const turrets: THREE.Object3D[] = [];
       for (const sx of [-1.2, 1.2]) {
         const t = this.assets.object('turret_double', 2.2, (n, s) => {
           const m = mapper(n, s) as THREE.MeshStandardMaterial;
           this.mats.push(m);
           return m;
         });
-        t.position.set(sx, (ship.userData.height as number) * 0.85, 0);
+        t.position.set(sx * (look.size / 6), (ship.userData.height as number) * 0.85, 0);
         body.add(t);
+        turrets.push(t);
       }
+      body.userData.turrets = turrets;
     } else {
       // crystal core glow
       const core = new THREE.Mesh(
@@ -391,6 +394,14 @@ export class BossController {
       e.yaw += angleDiff(e.yaw, target) * Math.min(1, dt * 3);
       this.body.rotation.y = e.yaw;
       this.body.rotation.z = Math.sin(time) * 0.06;
+      const P = this.g.player;
+      const aim = Math.atan2(P.x - e.x, P.z - e.z) - e.yaw;
+      for (const t of (this.body.userData.turrets as THREE.Object3D[] | undefined) ?? []) {
+        const cur = t.rotation.y;
+        let d = (aim + Math.PI - cur) % (Math.PI * 2);
+        if (d < 0) d += Math.PI * 2;
+        t.rotation.y = cur + (d - Math.PI) * Math.min(1, dt * 4);
+      }
     } else {
       this.body.rotation.y += dt * 0.6;
       const core = this.body.userData.core as THREE.Mesh | undefined;

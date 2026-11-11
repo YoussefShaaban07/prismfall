@@ -478,6 +478,28 @@ export class Arena {
     this.group.add(m2);
     this.spinners.push(m1, m2);
 
+    /* ----- ground detail: thousands of instanced pebbles and grit ----- */
+    {
+      const pg = new THREE.DodecahedronGeometry(0.18, 0);
+      const pm = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, flatShading: true });
+      const N = 2600;
+      const im = new THREE.InstancedMesh(pg, pm, N);
+      const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3();
+      const col = new THREE.Color();
+      for (let i = 0; i < N; i++) {
+        const a = rand(0, TAU), r = Math.sqrt(Math.random()) * (R + 24);
+        const k = rand(0.3, 1.1) * (Math.random() < 0.06 ? 2.2 : 1);
+        e.set(rand(0, TAU), rand(0, TAU), rand(0, TAU));
+        q.setFromEuler(e);
+        m4.compose(v.set(Math.cos(a) * r, 0.02, Math.sin(a) * r), q, sc.set(k * rand(0.8, 1.4), k * 0.55, k));
+        im.setMatrixAt(i, m4);
+        im.setColorAt(i, col.setHSL(0.03 + rand(-0.01, 0.02), rand(0.4, 0.55), rand(0.3, 0.48)));
+      }
+      im.receiveShadow = true;
+      im.castShadow = false;
+      this.group.add(im);
+    }
+
     /* ----- colony searchlights (visible on Night Shift) ----- */
     const coneMat = new THREE.ShaderMaterial({
       transparent: true,
