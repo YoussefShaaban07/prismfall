@@ -249,7 +249,7 @@ export class Arena {
             diffuseColor.rgb *= mix(vec3(1.0), vec3(0.62, 0.66, 0.9), uNight);
           }`);
     };
-    const tg = new THREE.PlaneGeometry(800, 800, 300, 300);
+    const tg = new THREE.PlaneGeometry(800, 800, 200, 200);
     tg.rotateX(-Math.PI / 2);
     const tp = tg.getAttribute('position') as THREE.BufferAttribute;
     for (let i = 0; i < tp.count; i++) tp.setY(i, terrainHeight(tp.getX(i), tp.getZ(i)));
