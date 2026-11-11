@@ -2,6 +2,7 @@ import type { CardView } from '../game/Upgrades';
 import { fmtNum, fmtTime } from '../core/util';
 import { PASSIVES, WEAPONS, FINAL_TIME, ARENA_RADIUS, EDEFS, type EType, type PassiveId, type WeaponId } from '../game/data';
 import { ENEMY_LORE, BOSS_LORE, WEAPON_TIPS } from '../game/codex';
+import { renderShareCard, type CardData } from './ShareCard';
 import type { Quality } from '../core/Renderer';
 import { ACHIEVEMENTS, MODS, SHIPS, UPGRADES, dailySetup, modMult, upLv, type MetaState, type ModId, type ShipId, type UpgradeId } from '../game/meta';
 
@@ -60,6 +61,7 @@ export class UI {
   onHangar: (open: boolean) => void = () => {};
   onMapToggle: () => void = () => {};
   onDaily: () => void = () => {};
+  onShareCard: () => CardData | null = () => null;
   onCodex: (open: boolean, kind: 'enemy' | 'boss' | 'ship', id: string) => void = () => {};
   private codexTab: 'enemy' | 'boss' | 'weapon' = 'enemy';
   private codexSel = 'drone';
@@ -100,6 +102,8 @@ export class UI {
     $('#hangarBtn').addEventListener('click', () => this.onHangar(true));
     $('#mapBtn').addEventListener('click', () => this.onMapToggle());
     $('#dailyBtn').addEventListener('click', () => this.onDaily());
+    $('#shareBtn').addEventListener('click', () => this.openShare());
+    $('#shareClose').addEventListener('click', () => this.hide('#shareScreen'));
     $('#codexBtn').addEventListener('click', () => this.openCodex());
     $('#codexClose').addEventListener('click', () => {
       this.hide('#codex');
@@ -162,6 +166,32 @@ export class UI {
     const ds = dailySetup();
     const best = meta.daily[ds.key];
     $('#dailyBtn').innerHTML = `DAILY <small>${SHIPS.find((x) => x.id === ds.ship)!.name} · ${ds.mods.map((id) => MODS.find((x) => x.id === id)!.name).join(' + ')}${best ? ` · best ${fmtNum(best)}` : ''}</small>`;
+  }
+
+  private openShare() {
+    const d = this.onShareCard();
+    if (!d) return;
+    const c = renderShareCard(d);
+    const url = c.toDataURL('image/png');
+    ($('#shareImg') as HTMLImageElement).src = url;
+    const a = $('#shareDl') as HTMLAnchorElement;
+    a.href = url;
+    a.download = `prismfall-${Math.round(d.score)}.png`;
+    const nb = $('#shareNative');
+    const nav = navigator as Navigator & { canShare?: (d: unknown) => boolean };
+    nb.classList.toggle('hidden', !nav.share);
+    nb.onclick = async () => {
+      try {
+        const blob = await new Promise<Blob | null>((r) => c.toBlob(r, 'image/png'));
+        if (!blob) return;
+        const file = new File([blob], 'prismfall.png', { type: 'image/png' });
+        if (nav.canShare && nav.canShare({ files: [file] })) await navigator.share({ files: [file], title: 'PRISMFALL', text: `I scored ${Math.round(d.score).toLocaleString()} in PRISMFALL` });
+        else await navigator.share({ title: 'PRISMFALL', text: `I scored ${Math.round(d.score).toLocaleString()} in PRISMFALL`, url: location.href });
+      } catch {
+        /* user cancelled or unsupported */
+      }
+    };
+    this.show('#shareScreen');
   }
 
   setCodexMeta(m: MetaState) {
@@ -234,7 +264,7 @@ export class UI {
   }
 
   hideAll() {
-    for (const s of ['#menu', '#levelup', '#pause', '#over', '#how', '#credits', '#hangar', '#settingsScreen', '#modsScreen', '#codex']) this.hide(s);
+    for (const s of ['#menu', '#levelup', '#pause', '#over', '#how', '#credits', '#hangar', '#settingsScreen', '#modsScreen', '#codex', '#shareScreen']) this.hide(s);
   }
 
   startRun(touch: boolean) {
@@ -453,7 +483,7 @@ export class UI {
 
   /* ---------- gamepad / keyboard menu navigation ---------- */
   private topScreen(): HTMLElement | null {
-    const order = ['#codex', '#modsScreen', '#settingsScreen', '#how', '#credits', '#levelup', '#hangar', '#pause', '#over', '#menu'];
+    const order = ['#shareScreen', '#codex', '#modsScreen', '#settingsScreen', '#how', '#credits', '#levelup', '#hangar', '#pause', '#over', '#menu'];
     for (const sel of order) {
       const el = $(sel);
       if (el && !el.classList.contains('hidden')) return el;
@@ -510,7 +540,7 @@ export class UI {
   }
 
   back() {
-    for (const sel of ['#modsScreen', '#settingsScreen', '#how', '#credits']) {
+    for (const sel of ['#shareScreen', '#modsScreen', '#settingsScreen', '#how', '#credits']) {
       if (!$(sel).classList.contains('hidden')) { this.hide(sel); return true; }
     }
     if (!$('#hangar').classList.contains('hidden')) { this.onHangar(false); return true; }
@@ -825,6 +855,18 @@ const TEMPLATE = /* html */ `
   </div>
 </div>
 
+<div id="shareScreen" class="screen modal hidden">
+  <div class="panel wide">
+    <h2>RUN CARD</h2>
+    <img id="shareImg" class="shareimg" alt="Run summary card" />
+    <div class="menurow">
+      <a id="shareDl" class="btn primary small">DOWNLOAD</a>
+      <button id="shareNative" class="btn small hidden">SHARE</button>
+      <button id="shareClose" class="btn ghost small">CLOSE</button>
+    </div>
+  </div>
+</div>
+
 <div id="settingsScreen" class="screen modal hidden">
   <div class="panel">
     <h2>SETTINGS</h2>
@@ -853,6 +895,7 @@ const TEMPLATE = /* html */ `
     <div id="stats" class="stats"></div>
     <button id="retryBtn" class="btn primary">FLY AGAIN</button>
     <button id="endlessBtn" class="btn hidden">CONTINUE · ENDLESS</button>
+    <button id="shareBtn" class="btn ghost">SHARE CARD</button>
     <button id="menuBtn" class="btn ghost">MENU</button>
   </div>
 </div>

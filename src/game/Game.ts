@@ -113,6 +113,7 @@ export class Game {
   dailyKey: string | null = null;
   scoreMult = 1;
   private sunOff = new THREE.Vector3(-30, 45, 18);
+  snap: HTMLCanvasElement | null = null;
   private lastEntry: MetaState['top'][number] | null = null;
   private fpsAcc = 0;
   private fpsN = 0;
@@ -183,6 +184,11 @@ export class Game {
       else ui.closeHangar();
     };
     ui.onDaily = () => this.startRun(true);
+    ui.onShareCard = () => ({
+      snap: this.snap, victory: this.won, score: Math.round(this.score), time: this.T, level: this.player.level, kills: this.kills,
+      bosses: this.bossesKilled, ship: this.player.shipDef.name, sector: this.night ? 'NIGHT SHIFT' : 'DUSK OUTPOST',
+      mods: [...this.mods].map((m) => MODS.find((x) => x.id === m)!.name),
+    });
     ui.onCodex = (open, kind, id) => {
       this.hangarOpen = open;
       if (open) this.showCodexModel(kind, id);
@@ -1209,8 +1215,24 @@ export class Game {
 
   /* ======================= end ======================= */
 
+  /** Copy the current frame (must run right after a render, in the same task). */
+  captureSnap() {
+    try {
+      this.r.render(this.time);
+      const src = this.r.renderer.domElement;
+      const c = document.createElement('canvas');
+      c.width = Math.min(1600, src.width);
+      c.height = Math.round((c.width / src.width) * src.height);
+      c.getContext('2d')!.drawImage(src, 0, 0, c.width, c.height);
+      this.snap = c;
+    } catch {
+      this.snap = null;
+    }
+  }
+
   private endRun(victory: boolean) {
     if (this.state === 'over') return;
+    this.captureSnap();
     this.state = 'over';
     this.input.enabled = false;
     this.input.releaseAll();

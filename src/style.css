@@ -421,3 +421,6 @@ body.cine #hud .top, body.cine #minimap, body.cine .combo { opacity: 0; transiti
 .cstats { display: flex; flex-wrap: wrap; gap: 14px; font-family: var(--display); font-size: 10px; letter-spacing: .15em; color: rgba(255, 255, 255, .55); }
 .cstats b { color: #fff; font-size: 14px; margin-left: 4px; }
 @media (max-width: 760px) { #codex { align-items: flex-end; background: linear-gradient(180deg, transparent 30%, rgba(8, 4, 14, .8) 50%); } }
+.shareimg { width: 100%; border-radius: 12px; border: 1px solid var(--line); box-shadow: 0 10px 40px rgba(0, 0, 0, .5); }
+#shareScreen { z-index: 6; }
+#shareScreen a.btn { text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }

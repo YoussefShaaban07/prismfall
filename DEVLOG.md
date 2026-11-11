@@ -47,7 +47,7 @@ Three-day build. Each session picks up the next unchecked items, playtests with 
 - [x] Codex: 3D showroom previews of scanned enemies and bosses, lore, tactics, weapon evolutions
 - [x] Music variety: boss theme (D minor, 134 bpm), Night Shift (E minor, 104 bpm), victory sting
 - [ ] Arabic language option (RTL-aware UI, Arabic-capable font)
-- [ ] Run summary share card (canvas image download on Pages)
+- [x] Run summary share card (frame snapshot + stats, download / native share)
 - [ ] Story intro: short animated briefing on first launch
 - [ ] Perf pass on mid/low devices: instanced debris colors, particle caps, LOD for decor
 
