@@ -138,7 +138,9 @@ export class Hazards {
         rm.opacity = 0.5 + 0.5 * Math.abs(Math.sin(time * (8 + p * 14)));
         if (q.warn <= 0) {
           if (q.kind === 'blast') {
-            g.particles.burst(q.x, 0.6, q.z, q.color.clone().multiplyScalar(3), 26, q.r * 4, 0.5, 0.8, 0.8);
+            g.particles.burst(q.x, 0.6, q.z, q.color.clone().multiplyScalar(3), 20, q.r * 4, 0.5, 0.8, 0.8);
+            g.particles.fireball(q.x, 0.6, q.z, q.r * 0.5, 12);
+            g.smoke.puff(q.x, 0.6, q.z, 6, q.r * 0.6, 1.6);
             g.fx.ring(q.x, q.z, q.r * 1.1, q.color, 0.3, 3);
             g.fx.scorch(q.x, q.z, q.r * 0.8);
             g.audio.sfx('boom');

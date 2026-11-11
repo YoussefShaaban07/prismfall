@@ -43,6 +43,36 @@ const GradeShader = {
     }`,
 };
 
+/** Screen-space heat ripples for explosions and shockwaves (up to 8 at once). */
+const DistortShader = {
+  uniforms: {
+    tDiffuse: { value: null as THREE.Texture | null },
+    uWaves: { value: Array.from({ length: 8 }, () => new THREE.Vector4(0, 0, 0, 0)) },
+    uAspect: { value: 1 },
+  },
+  vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tDiffuse; uniform vec4 uWaves[8]; uniform float uAspect; varying vec2 vUv;
+    void main(){
+      vec2 off = vec2(0.0);
+      float glow = 0.0;
+      for (int i = 0; i < 8; i++) {
+        vec4 w = uWaves[i];
+        if (w.w <= 0.0) continue;
+        vec2 d = vUv - w.xy;
+        d.x *= uAspect;
+        float dist = length(d);
+        float band = w.z * 0.18 + 0.01;
+        float ring = exp(-pow((dist - w.z) / band, 2.0));
+        off += (d / max(dist, 1e-4)) * ring * w.w * 0.03 * vec2(1.0 / uAspect, 1.0);
+        glow += ring * w.w;
+      }
+      vec3 col = texture2D(tDiffuse, vUv - off).rgb;
+      col += vec3(1.0, 0.9, 0.8) * glow * 0.04;
+      gl_FragColor = vec4(col, 1.0);
+    }`,
+};
+
 export class Renderer {
   renderer: THREE.WebGLRenderer;
   scene = new THREE.Scene();
@@ -50,6 +80,7 @@ export class Renderer {
   composer: EffectComposer;
   bloom: UnrealBloomPass;
   grade: ShaderPass;
+  distort: ShaderPass;
   smaa: SMAAPass | null = null;
   quality: Quality = 'high';
   sun: THREE.DirectionalLight;
@@ -85,6 +116,8 @@ export class Renderer {
 
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
+    this.distort = new ShaderPass(DistortShader);
+    this.composer.addPass(this.distort);
     this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.6, 0.45, 1.0);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
@@ -130,6 +163,7 @@ export class Renderer {
     this.renderer.setSize(this.width, this.height, false);
     this.composer.setSize(this.width, this.height);
     this.camera.aspect = this.width / this.height;
+    if (this.distort) this.distort.uniforms.uAspect.value = this.width / this.height;
     this.camera.updateProjectionMatrix();
   }
 

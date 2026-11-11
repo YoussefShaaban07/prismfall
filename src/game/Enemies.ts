@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Assets } from '../core/Assets';
-import { alienMapper } from '../core/Assets';
+import { alienMapper, dissolveDepthMaterial } from '../core/Assets';
 import { rand, TAU, angleDiff } from '../core/util';
 import { ARENA_RADIUS, EDEFS, hpScale, type EDef, type EType } from './data';
 import { SpatialGrid } from './SpatialGrid';
@@ -41,9 +41,25 @@ export interface Enemy {
 
 const INSTANCED: EType[] = ['drone', 'dart', 'spitter', 'meteor', 'shard', 'brute', 'wraith', 'turret', 'bomber'];
 
+interface Corpse {
+  type: EType;
+  x: number;
+  z: number;
+  y: number;
+  yaw: number;
+  tumble: number;
+  size: number;
+  t: number;
+  vx: number;
+  vz: number;
+  spin: number;
+  elite: boolean;
+}
+
 interface TypeRender {
   meshes: THREE.InstancedMesh[];
   flash: THREE.InstancedBufferAttribute;
+  dissolve: THREE.InstancedBufferAttribute;
   max: number;
   eliteAt: Uint8Array;
   colorDirty: boolean;
@@ -53,6 +69,9 @@ let NEXT_ID = 1;
 
 export class EnemyManager {
   list: Enemy[] = [];
+  corpses: Corpse[] = [];
+  private lastSync = 0;
+  private depthMat = dissolveDepthMaterial();
   grid = new SpatialGrid<Enemy>(3);
   render = new Map<EType, TypeRender>();
   private tmp: Enemy[] = [];
@@ -70,22 +89,27 @@ export class EnemyManager {
       const model = assets.get(def.model);
       const glow: Partial<Record<EType, number>> = { drone: 1.6, dart: 1.6, spitter: 1.3, brute: 0.75, wraith: 1.4, turret: 0.6, bomber: 1.2 };
       const mapper = alienMapper(def.color, glow[type] ?? 1.4, type === 'meteor' || type === 'shard' ? 1.6 : 1.1);
-      const flash = new THREE.InstancedBufferAttribute(new Float32Array(def.max), 1);
+      const cap = def.max + 80; // room for dissolving corpses
+      const flash = new THREE.InstancedBufferAttribute(new Float32Array(cap), 1);
       flash.setUsage(THREE.DynamicDrawUsage);
+      const dissolve = new THREE.InstancedBufferAttribute(new Float32Array(cap), 1);
+      dissolve.setUsage(THREE.DynamicDrawUsage);
       const meshes: THREE.InstancedMesh[] = [];
       for (const part of model.parts) {
         const geo = part.geo.clone();
         geo.setAttribute('aFlash', flash);
+        geo.setAttribute('aDissolve', dissolve);
         const mat = mapper(part.matName, part.mat);
-        const im = new THREE.InstancedMesh(geo, mat, def.max);
+        const im = new THREE.InstancedMesh(geo, mat, cap);
         im.count = 0;
         im.castShadow = true;
+        im.customDepthMaterial = this.depthMat;
         im.frustumCulled = false;
-        for (let i = 0; i < def.max; i++) im.setColorAt(i, this.white);
+        for (let i = 0; i < cap; i++) im.setColorAt(i, this.white);
         scene.add(im);
         meshes.push(im);
       }
-      this.render.set(type, { meshes, flash, max: def.max, eliteAt: new Uint8Array(def.max), colorDirty: false });
+      this.render.set(type, { meshes, flash, dissolve, max: cap, eliteAt: new Uint8Array(cap), colorDirty: false });
     }
   }
 
@@ -120,7 +144,17 @@ export class EnemyManager {
     return e;
   }
 
+  /** Keep a dissolving copy of a destroyed enemy for a short moment. */
+  addCorpse(e: Enemy, kx = 0, kz = 0) {
+    if (e.type === 'boss' || this.corpses.length > 160) return;
+    this.corpses.push({
+      type: e.type, x: e.x, z: e.z, y: e.def.hover, yaw: e.yaw, tumble: e.tumble, size: e.def.size * (e.elite ? 1.35 : 1),
+      t: 0, vx: e.vx * 0.3 + kx, vz: e.vz * 0.3 + kz, spin: (Math.random() - 0.5) * 8, elite: e.elite,
+    });
+  }
+
   clear() {
+    this.corpses.length = 0;
     this.list.length = 0;
     this.grid.clear();
     for (const r of this.render.values()) for (const m of r.meshes) m.count = 0;
@@ -415,6 +449,7 @@ export class EnemyManager {
       this.s.set(sc, sc, sc);
       this.m.compose(this.p, this.q, this.s);
       r.flash.array[idx] = e.flash > 0 ? Math.min(1, e.flash * 14) : 0;
+      r.dissolve.array[idx] = e.spawnT > 0 ? Math.max(0, e.spawnT / 0.5 - 0.15) : 0;
       const el = e.elite ? 1 : 0;
       const recolor = r.eliteAt[idx] !== el;
       if (recolor) {
@@ -426,6 +461,46 @@ export class EnemyManager {
         if (recolor) mesh.setColorAt(idx, el ? this.eliteColor : this.white);
       }
     }
+    // dissolving corpses
+    const dt = Math.min(0.05, Math.max(0, time - this.lastSync));
+    this.lastSync = time;
+    for (let i = this.corpses.length - 1; i >= 0; i--) {
+      const c = this.corpses[i];
+      c.t += dt;
+      if (c.t >= 0.55) {
+        this.corpses[i] = this.corpses[this.corpses.length - 1];
+        this.corpses.pop();
+        continue;
+      }
+      const r = this.render.get(c.type);
+      if (!r) continue;
+      const idx = counts.get(c.type) ?? 0;
+      if (idx >= r.max) continue;
+      counts.set(c.type, idx + 1);
+      c.x += c.vx * dt;
+      c.z += c.vz * dt;
+      c.vx *= 0.92;
+      c.vz *= 0.92;
+      c.yaw += c.spin * dt;
+      c.tumble += c.spin * 0.5 * dt;
+      const p = c.t / 0.55;
+      const yawOff = c.type === 'meteor' || c.type === 'shard' || c.type === 'bomber' ? 0 : SHIP_YAW;
+      this.e.set(c.type === 'bomber' ? Math.PI / 2 : c.tumble * 0.3 + p * 0.6, c.yaw + yawOff, p * 0.8, 'YXZ');
+      this.q.setFromEuler(this.e);
+      const sc = c.size * (1 + p * 0.15);
+      this.m.compose(this.p.set(c.x, c.y - p * 0.6, c.z), this.q, this.s.set(sc, sc, sc));
+      r.flash.array[idx] = p < 0.15 ? 1 - p / 0.15 : 0;
+      r.dissolve.array[idx] = 0.08 + p * 0.95;
+      const el = c.elite ? 1 : 0;
+      if (r.eliteAt[idx] !== el) {
+        r.eliteAt[idx] = el;
+        r.colorDirty = true;
+        for (const mesh of r.meshes) mesh.setColorAt(idx, el ? this.eliteColor : this.white);
+      }
+      for (const mesh of r.meshes) mesh.setMatrixAt(idx, this.m);
+    }
+    void time;
+
     for (const [type, r] of this.render) {
       const n = counts.get(type) ?? 0;
       for (const mesh of r.meshes) {
@@ -435,6 +510,7 @@ export class EnemyManager {
       }
       r.colorDirty = false;
       r.flash.needsUpdate = true;
+      r.dissolve.needsUpdate = true;
     }
   }
 }

@@ -222,18 +222,40 @@ export function addRim(mat: THREE.MeshStandardMaterial, rim: THREE.ColorRepresen
   mat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute float aFlash;\nvarying float vFlash;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFlash = aFlash;');
+      .replace('#include <common>', '#include <common>\nattribute float aFlash;\nattribute float aDissolve;\nvarying float vFlash;\nvarying float vDissolve;\nvarying vec3 vLocal;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFlash = aFlash;\nvDissolve = aDissolve;\nvLocal = position;');
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform vec3 uRim; uniform float uRimK; uniform float uFlash; varying float vFlash;')
+      .replace(
+        '#include <common>',
+        `#include <common>
+        uniform vec3 uRim; uniform float uRimK; uniform float uFlash; varying float vFlash; varying float vDissolve; varying vec3 vLocal;
+        float dHash(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+        float dNoise(vec3 x){ vec3 i = floor(x); vec3 f = fract(x); f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(mix(dHash(i), dHash(i + vec3(1,0,0)), f.x), mix(dHash(i + vec3(0,1,0)), dHash(i + vec3(1,1,0)), f.x), f.y),
+                     mix(mix(dHash(i + vec3(0,0,1)), dHash(i + vec3(1,0,1)), f.x), mix(dHash(i + vec3(0,1,1)), dHash(i + vec3(1,1,1)), f.x), f.y), f.z); }`,
+      )
+      .replace(
+        '#include <clipping_planes_fragment>',
+        `#include <clipping_planes_fragment>
+        float dn = 0.0;
+        if (vDissolve > 0.0) {
+          dn = dNoise(vLocal * 7.0) * 0.65 + dNoise(vLocal * 19.0) * 0.35;
+          if (dn < vDissolve) discard;
+        }`,
+      )
       .replace(
         '#include <emissivemap_fragment>',
         `#include <emissivemap_fragment>
         float rimF = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 2.4);
-        totalEmissiveRadiance += uRim * rimF * uRimK + vec3(1.0, 0.95, 0.9) * (vFlash + uFlash) * 1.6;`,
+        totalEmissiveRadiance += uRim * rimF * uRimK + vec3(1.0, 0.95, 0.9) * (vFlash + uFlash) * 1.6;
+        if (vDissolve > 0.0) {
+          float edge = 1.0 - smoothstep(0.0, 0.16, dn - vDissolve);
+          totalEmissiveRadiance += mix(uRim, vec3(1.0, 0.9, 0.6), 0.35) * edge * 8.0;
+          diffuseColor.rgb *= 1.0 - vDissolve * 0.6;
+        }`,
       );
   };
-  mat.customProgramCacheKey = () => 'rim-v1';
+  mat.customProgramCacheKey = () => 'rim-v2';
   return mat;
 }
 
@@ -287,4 +309,31 @@ export function heroMapper(accent: THREE.ColorRepresentation = 0xff9a3c, glow = 
     if (name === 'crystal') { m.emissive = m.color.clone(); m.emissiveIntensity = 1.6; }
     return m;
   };
+}
+
+/** Shadow-depth material that honours the per-instance dissolve so dying enemies stop casting shadows. */
+export function dissolveDepthMaterial(): THREE.MeshDepthMaterial {
+  const m = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+  m.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float aDissolve;\nvarying float vDissolve;\nvarying vec3 vLocal;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvDissolve = aDissolve;\nvLocal = position;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+        varying float vDissolve; varying vec3 vLocal;
+        float dHash(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+        float dNoise(vec3 x){ vec3 i = floor(x); vec3 f = fract(x); f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(mix(dHash(i), dHash(i + vec3(1,0,0)), f.x), mix(dHash(i + vec3(0,1,0)), dHash(i + vec3(1,1,0)), f.x), f.y),
+                     mix(mix(dHash(i + vec3(0,0,1)), dHash(i + vec3(1,0,1)), f.x), mix(dHash(i + vec3(0,1,1)), dHash(i + vec3(1,1,1)), f.x), f.y), f.z); }`,
+      )
+      .replace(
+        '#include <clipping_planes_fragment>',
+        `#include <clipping_planes_fragment>
+        if (vDissolve > 0.0 && dNoise(vLocal * 7.0) * 0.65 + dNoise(vLocal * 19.0) * 0.35 < vDissolve) discard;`,
+      );
+  };
+  m.customProgramCacheKey = () => 'dissolve-depth';
+  return m;
 }

@@ -31,6 +31,7 @@ export class Effects {
   teles: Tele[] = [];
   decals: Decal[] = [];
   floaters: Floater[] = [];
+  shocks: { x: number; z: number; t: number; dur: number; r: number; k: number }[] = [];
   private ringGeo = new THREE.RingGeometry(0.86, 1, 96);
   private beamGeo: THREE.BufferGeometry;
   private teleGeo: THREE.PlaneGeometry;
@@ -182,6 +183,33 @@ export class Effects {
     d.mesh.visible = true;
   }
 
+  /** Screen-space heat ripple expanding from a world point. */
+  shock(x: number, z: number, r: number, strength = 1, dur = 0.5) {
+    if (this.shocks.length >= 8) this.shocks.shift();
+    this.shocks.push({ x, z, t: 0, dur, r, k: strength });
+  }
+
+  /** Project active shockwaves into the distortion pass uniforms. */
+  writeShocks(dt: number, waves: THREE.Vector4[], aspect: number) {
+    const v = this.v;
+    const v2 = new THREE.Vector3();
+    for (let i = this.shocks.length - 1; i >= 0; i--) {
+      this.shocks[i].t += dt;
+      if (this.shocks[i].t >= this.shocks[i].dur) this.shocks.splice(i, 1);
+    }
+    for (let i = 0; i < 8; i++) {
+      const s = this.shocks[i];
+      if (!s) { waves[i].set(0, 0, 0, 0); continue; }
+      const p = s.t / s.dur;
+      const e = 1 - Math.pow(1 - p, 2.5);
+      v.set(s.x, 0.5, s.z).project(this.camera);
+      v2.set(s.x + s.r * e, 0.5, s.z).project(this.camera);
+      const cx = v.x * 0.5 + 0.5, cy = v.y * 0.5 + 0.5;
+      const rx = (v2.x * 0.5 + 0.5 - cx) * aspect, ry = v2.y * 0.5 + 0.5 - cy;
+      waves[i].set(cx, cy, Math.hypot(rx, ry), s.k * (1 - p));
+    }
+  }
+
   text(x: number, y: number, z: number, txt: string, cls = '') {
     let f = this.floaters.find((q) => !q.active);
     if (!f) {
@@ -294,5 +322,6 @@ export class Effects {
     for (const t of this.teles) { t.active = false; t.mesh.visible = false; }
     for (const d of this.decals) { d.active = false; d.mesh.visible = false; }
     for (const f of this.floaters) { f.active = false; f.el.style.display = 'none'; }
+    this.shocks.length = 0;
   }
 }

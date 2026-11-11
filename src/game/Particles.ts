@@ -15,6 +15,7 @@ export class Particles {
   baseSize: Float32Array;
   drag: Float32Array;
   grav: Float32Array;
+  kind: Uint8Array;
   geo = new THREE.BufferGeometry();
   points: THREE.Points;
   mat: THREE.ShaderMaterial;
@@ -31,6 +32,7 @@ export class Particles {
     this.baseSize = new Float32Array(max);
     this.drag = new Float32Array(max);
     this.grav = new Float32Array(max);
+    this.kind = new Uint8Array(max);
     const mk = (a: Float32Array, n: number) => new THREE.BufferAttribute(a, n).setUsage(THREE.DynamicDrawUsage);
     this.geo.setAttribute('position', mk(this.pos, 3));
     this.geo.setAttribute('color', mk(this.col, 3));
@@ -78,7 +80,20 @@ export class Particles {
     this.alpha[i] = 1;
     this.drag[i] = drag;
     this.grav[i] = grav;
+    this.kind[i] = 0;
   }
+
+  /** Billowing fireball: white-hot core cooling to orange and deep red. */
+  fireball(x: number, y: number, z: number, radius: number, n = 14) {
+    for (let k = 0; k < n; k++) {
+      if (this.count >= this.max) return;
+      const a = Math.random() * TAU, el = Math.random() * 0.8;
+      const sp = radius * rand(1.2, 3.2);
+      this.emit(x, y + rand(0, 0.4), z, Math.cos(a) * sp * (1 - el), sp * el * 0.8 + 1, Math.sin(a) * sp * (1 - el), rand(0.3, 0.6), radius * rand(0.6, 1.2), this.tmpC, 4, 1.5);
+      this.kind[this.count - 1] = 1;
+    }
+  }
+  private tmpC = new THREE.Color();
 
   burst(x: number, y: number, z: number, c: THREE.Color, n: number, speed = 8, life = 0.6, size = 0.5, up = 0.4) {
     for (let k = 0; k < n; k++) {
@@ -115,6 +130,7 @@ export class Particles {
           this.baseSize[i] = this.baseSize[last];
           this.drag[i] = this.drag[last];
           this.grav[i] = this.grav[last];
+          this.kind[i] = this.kind[last];
         }
         continue;
       }
@@ -131,8 +147,17 @@ export class Particles {
         this.vel[i3 + 1] *= -0.4;
       }
       const t = this.life[i] / this.maxLife[i];
-      this.alpha[i] = Math.min(1, t * 1.8);
-      this.size[i] = this.baseSize[i] * (0.35 + 0.65 * t);
+      if (this.kind[i] === 1) {
+        // fire: grows then fades, colour cools over life
+        const h = t;
+        const r = 2.4 * (0.55 + 0.45 * h), gg = 2.4 * Math.max(0.1, h * h * 0.75), b = 2.4 * Math.max(0.015, h * h * h * 0.35);
+        this.col[i3] = r; this.col[i3 + 1] = gg; this.col[i3 + 2] = b;
+        this.alpha[i] = Math.min(1, t * 2.5) * 0.7;
+        this.size[i] = this.baseSize[i] * (1.15 - t * 0.55);
+      } else {
+        this.alpha[i] = Math.min(1, t * 1.8);
+        this.size[i] = this.baseSize[i] * (0.35 + 0.65 * t);
+      }
       i++;
     }
     this.geo.setDrawRange(0, this.count);
@@ -221,5 +246,146 @@ export class Debris {
   clear() {
     this.items.length = 0;
     this.mesh.count = 0;
+  }
+}
+
+
+/** Soft, non-additive smoke puffs that billow, rise and fade. */
+export class Smoke {
+  max = 1400;
+  count = 0;
+  pos: Float32Array;
+  vel: Float32Array;
+  life: Float32Array;
+  maxLife: Float32Array;
+  base: Float32Array;
+  size: Float32Array;
+  alpha: Float32Array;
+  seed: Float32Array;
+  shade: Float32Array;
+  geo = new THREE.BufferGeometry();
+  mat: THREE.ShaderMaterial;
+  points: THREE.Points;
+
+  constructor(scene: THREE.Scene) {
+    const m = this.max;
+    this.pos = new Float32Array(m * 3);
+    this.vel = new Float32Array(m * 3);
+    this.life = new Float32Array(m);
+    this.maxLife = new Float32Array(m);
+    this.base = new Float32Array(m);
+    this.size = new Float32Array(m);
+    this.alpha = new Float32Array(m);
+    this.seed = new Float32Array(m);
+    this.shade = new Float32Array(m);
+    const mk = (a: Float32Array, n: number) => new THREE.BufferAttribute(a, n).setUsage(THREE.DynamicDrawUsage);
+    this.geo.setAttribute('position', mk(this.pos, 3));
+    this.geo.setAttribute('size', mk(this.size, 1));
+    this.geo.setAttribute('alpha', mk(this.alpha, 1));
+    this.geo.setAttribute('seed', mk(this.seed, 1));
+    this.geo.setAttribute('shade', mk(this.shade, 1));
+    this.mat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      uniforms: { uScale: { value: 400 }, uTint: { value: new THREE.Color(0.32, 0.24, 0.22) }, uLight: { value: new THREE.Color(1.0, 0.75, 0.55) } },
+      vertexShader: /* glsl */ `
+        attribute float size; attribute float alpha; attribute float seed; attribute float shade;
+        varying float vA; varying float vS; varying float vSh; uniform float uScale;
+        void main(){
+          vA = alpha; vS = seed; vSh = shade;
+          vec4 mv = modelViewMatrix * vec4(position, 1.0);
+          gl_PointSize = max(1.0, size * uScale / -mv.z);
+          gl_Position = projectionMatrix * mv;
+        }`,
+      fragmentShader: /* glsl */ `
+        varying float vA; varying float vS; varying float vSh; uniform vec3 uTint; uniform vec3 uLight;
+        float h(vec2 p){ return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5); }
+        float n2(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
+          return mix(mix(h(i), h(i+vec2(1,0)), f.x), mix(h(i+vec2(0,1)), h(i+vec2(1,1)), f.x), f.y); }
+        void main(){
+          vec2 c = gl_PointCoord - 0.5;
+          float a0 = vS * 6.2831;
+          c = mat2(cos(a0), -sin(a0), sin(a0), cos(a0)) * c;
+          float d = length(c);
+          float n = n2(c * 5.0 + vS * 17.0) * 0.6 + n2(c * 11.0 - vS * 9.0) * 0.4;
+          float a = smoothstep(0.5, 0.1, d + (n - 0.5) * 0.35) * vA;
+          if (a < 0.01) discard;
+          // fake top-lighting: brighter on the upper half of the puff
+          float lit = clamp(0.5 - c.y * 1.2, 0.0, 1.0);
+          vec3 col = mix(uTint * 0.55, uTint + uLight * 0.18, lit) * vSh;
+          gl_FragColor = vec4(col, a * 0.75);
+        }`,
+    });
+    this.points = new THREE.Points(this.geo, this.mat);
+    this.points.frustumCulled = false;
+    this.points.renderOrder = 4;
+    scene.add(this.points);
+  }
+
+  puff(x: number, y: number, z: number, n: number, radius = 1, life = 1.4, shade = 1) {
+    for (let k = 0; k < n; k++) {
+      if (this.count >= this.max) return;
+      const i = this.count++;
+      const i3 = i * 3;
+      const a = Math.random() * TAU, r = Math.random() * radius * 0.6;
+      this.pos[i3] = x + Math.cos(a) * r; this.pos[i3 + 1] = y + Math.random() * 0.5; this.pos[i3 + 2] = z + Math.sin(a) * r;
+      const sp = radius * rand(0.6, 2.2);
+      this.vel[i3] = Math.cos(a) * sp; this.vel[i3 + 1] = rand(0.8, 2.4); this.vel[i3 + 2] = Math.sin(a) * sp;
+      this.life[i] = this.maxLife[i] = life * rand(0.7, 1.3);
+      this.base[i] = radius * rand(1.4, 2.6);
+      this.seed[i] = Math.random();
+      this.shade[i] = shade * rand(0.75, 1.15);
+    }
+  }
+
+  trail(x: number, y: number, z: number, size = 0.6, life = 0.9) {
+    if (this.count >= this.max) return;
+    const i = this.count++;
+    const i3 = i * 3;
+    this.pos[i3] = x; this.pos[i3 + 1] = y; this.pos[i3 + 2] = z;
+    this.vel[i3] = rand(-0.3, 0.3); this.vel[i3 + 1] = rand(0.3, 0.8); this.vel[i3 + 2] = rand(-0.3, 0.3);
+    this.life[i] = this.maxLife[i] = life;
+    this.base[i] = size;
+    this.seed[i] = Math.random();
+    this.shade[i] = rand(0.9, 1.3);
+  }
+
+  update(dt: number) {
+    let i = 0;
+    while (i < this.count) {
+      this.life[i] -= dt;
+      if (this.life[i] <= 0) {
+        const last = --this.count;
+        if (i !== last) {
+          const i3 = i * 3, l3 = last * 3;
+          for (let k = 0; k < 3; k++) { this.pos[i3 + k] = this.pos[l3 + k]; this.vel[i3 + k] = this.vel[l3 + k]; }
+          this.life[i] = this.life[last]; this.maxLife[i] = this.maxLife[last]; this.base[i] = this.base[last];
+          this.seed[i] = this.seed[last]; this.shade[i] = this.shade[last];
+        }
+        continue;
+      }
+      const i3 = i * 3;
+      const dr = Math.exp(-2.2 * dt);
+      this.vel[i3] *= dr; this.vel[i3 + 2] *= dr; this.vel[i3 + 1] *= Math.exp(-0.8 * dt);
+      this.pos[i3] += this.vel[i3] * dt + dt * 0.6; // light wind
+      this.pos[i3 + 1] += this.vel[i3 + 1] * dt;
+      this.pos[i3 + 2] += this.vel[i3 + 2] * dt;
+      const t = 1 - this.life[i] / this.maxLife[i];
+      this.size[i] = this.base[i] * (0.5 + t * 1.6);
+      this.alpha[i] = Math.min(1, t * 6) * (1 - t) * (1 - t);
+      this.seed[i] += dt * 0.05;
+      i++;
+    }
+    this.geo.setDrawRange(0, this.count);
+    for (const n of ['position', 'size', 'alpha', 'seed', 'shade']) {
+      const a = this.geo.getAttribute(n) as THREE.BufferAttribute;
+      a.needsUpdate = true;
+      a.clearUpdateRanges();
+      a.addUpdateRange(0, this.count * a.itemSize);
+    }
+  }
+
+  clear() {
+    this.count = 0;
   }
 }

@@ -90,9 +90,12 @@ export class Projectiles {
         g.damage(e, dmg, dx * k, dz * k);
       }
     }
-    g.particles.burst(x, 1, z, color, 26, radius * 4, 0.55, 0.9, 0.6);
+    g.particles.burst(x, 1, z, color, 18, radius * 4, 0.55, 0.9, 0.6);
+    g.particles.fireball(x, 0.8, z, radius * 0.45, 10);
+    g.smoke.puff(x, 0.8, z, 4, radius * 0.5, 1.4);
     g.particles.burst(x, 1, z, g.colors.white, 8, radius * 2, 0.3, 1.2, 0.5);
     g.fx.ring(x, z, radius * 1.15, color, 0.35, 3);
+    g.fx.shock(x, z, radius * 2.2, 0.7, 0.4);
     if (scorch && Math.random() < 0.5) g.fx.scorch(x, z, radius * 0.8);
     g.debris.spawn(x, 0.6, z, g.colors.debris, 3, 6, 0.8);
     g.shake = Math.max(g.shake, 0.35);
@@ -154,7 +157,7 @@ export class Projectiles {
       m.x += m.vx * dt;
       m.z += m.vz * dt;
       g.particles.emit(m.x - (m.vx / sp) * 0.5, m.y, m.z - (m.vz / sp) * 0.5, rand(-0.5, 0.5), 0.6, rand(-0.5, 0.5), 0.4, 0.55, g.colors.flame, 1.5);
-      if (Math.random() < 0.4) g.particles.emit(m.x, m.y, m.z, 0, 0.8, 0, 0.9, 0.7, g.colors.smoke, 1);
+      if (Math.random() < 0.55) g.smoke.trail(m.x, m.y, m.z, 0.45, 0.8);
       let boom = m.life <= 0 || Math.hypot(m.x, m.z) > lim;
       if (!boom) {
         const near = g.enemies.query(m.x, m.z, 3);

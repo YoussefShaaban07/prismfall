@@ -234,6 +234,7 @@ export class WeaponSystem {
     }
     const col = knock < 0 ? 0xc86bff : 0x7dff9b;
     g.fx.ring(P.x, P.z, r, col, 0.45, 3.5);
+    if (visual) g.fx.shock(P.x, P.z, r * 1.2, 0.9, 0.45);
     g.fx.ring(P.x, P.z, r * 0.7, col, 0.35, 2);
     if (visual) {
       g.particles.ring(P.x, 0.4, P.z, knock < 0 ? g.colors.violet : g.colors.green, 48, r * 3.2, 0.35, 0.6);

@@ -6,7 +6,7 @@ import type { Assets } from '../core/Assets';
 import { clamp, damp, rand, store, TAU, pickWeighted, chance } from '../core/util';
 import { UI, type Settings } from '../ui/UI';
 import { Arena } from './Arena';
-import { Particles, Debris } from './Particles';
+import { Particles, Debris, Smoke } from './Particles';
 import { Effects } from './Effects';
 import { Player } from './Player';
 import { EnemyManager, type Enemy } from './Enemies';
@@ -34,6 +34,7 @@ export class Game {
   arena: Arena;
   particles: Particles;
   debris: Debris;
+  smoke: Smoke;
   fx: Effects;
   player: Player;
   enemies: EnemyManager;
@@ -133,6 +134,7 @@ export class Game {
     this.arena = new Arena(scene, assets);
     this.particles = new Particles(scene);
     this.debris = new Debris(scene);
+    this.smoke = new Smoke(scene);
     this.fx = new Effects(scene, this.r.camera, this.ui.floaters);
     this.player = new Player(scene, assets);
     this.enemies = new EnemyManager(scene, assets, this);
@@ -378,6 +380,7 @@ export class Game {
     this.hazards.clear();
     this.pickups.clear();
     this.particles.clear();
+    this.smoke.clear();
     this.debris.clear();
     this.fx.clear();
     this.weapons.reset();
@@ -469,8 +472,28 @@ export class Game {
 
   /* ======================= main loop ======================= */
 
+  debugHold = false;
+
+  /** Debug: advance visuals by dt without the rAF loop (for deterministic screenshots). */
+  debugFrame(dt: number) {
+    this.time += dt;
+    if (this.state === 'play') this.update(dt);
+    this.updateCamera(dt);
+    this.arena.update(dt, this.time, this.player.x, this.player.z, 0);
+    this.enemies.sync(this.time);
+    this.boss.sync(this.time, dt);
+    this.proj.sync(this.time);
+    this.pickups.sync(this.time);
+    this.fx.writeShocks(dt, this.r.distort.uniforms.uWaves.value as THREE.Vector4[], this.r.width / this.r.height);
+    const ps = this.r.pointScale();
+    this.particles.mat.uniforms.uScale.value = ps;
+    this.smoke.mat.uniforms.uScale.value = ps;
+    this.r.render(this.time);
+  }
+
   private loop = (now: number) => {
     requestAnimationFrame(this.loop);
+    if (this.debugHold) { this.last = now; return; }
     let dt = clamp((now - this.last) / 1000, 0, 0.05);
     this.last = now;
     this.time += dt;
@@ -498,6 +521,7 @@ export class Game {
     } else if (this.state === 'over') {
       // let effects settle behind the results screen
       this.particles.update(dt * 0.5);
+      this.smoke.update(dt * 0.5);
       this.debris.update(dt * 0.5);
       this.fx.update(dt * 0.5, this.r.width, this.r.height);
     }
@@ -510,7 +534,10 @@ export class Game {
       this.proj.sync(this.time);
       this.pickups.sync(this.time);
     }
-    this.particles.mat.uniforms.uScale.value = this.r.pointScale();
+    this.fx.writeShocks(this.state === 'play' ? dt : 0.016, this.r.distort.uniforms.uWaves.value as THREE.Vector4[], this.r.width / this.r.height);
+    const ps = this.r.pointScale();
+    this.particles.mat.uniforms.uScale.value = ps;
+    this.smoke.mat.uniforms.uScale.value = ps;
     const g = this.r.grade.uniforms;
     const calm = !!this.settings.calm;
     g.uHurt.value = damp(g.uHurt.value as number, this.hurtT > 0 ? (calm ? 0.2 : 0.55) : 0, 10, dt || 0.016);
@@ -645,6 +672,7 @@ export class Game {
     this.hazards.update(dt, this.time);
     this.pickups.update(dt);
     this.particles.update(dt);
+    this.smoke.update(dt);
     this.debris.update(dt);
     this.fx.update(dt, this.r.width, this.r.height);
 
@@ -828,6 +856,7 @@ export class Game {
       return;
     }
     if (!this.meta.seen.includes(e.type)) this.meta.seen.push(e.type);
+    this.enemies.addCorpse(e, e.kx * 0.3, e.kz * 0.3);
     this.kills++;
     this.combo++;
     this.comboT = 2.6;
@@ -839,7 +868,10 @@ export class Game {
     this.particles.burst(e.x, e.def.hover + 0.3, e.z, this.colors.white, big ? 10 : 4, 5, 0.25, 0.8, 0.3);
     this.debris.spawn(e.x, e.def.hover, e.z, this.colors.debris, big ? 10 : 3, big ? 9 : 6, big ? 1.4 : 0.8);
     if (e.elite) this.freezeT = Math.max(this.freezeT, 0.06);
+    this.smoke.puff(e.x, e.def.hover, e.z, big ? 7 : 2, big ? 1.4 : 0.6, big ? 1.8 : 1.0);
+    if (big) this.particles.fireball(e.x, e.def.hover, e.z, 1.2, 12);
     if (big) {
+      this.fx.shock(e.x, e.z, 6, 0.8, 0.45);
       this.fx.ring(e.x, e.z, 4, e.def.color, 0.4, 3);
       this.fx.scorch(e.x, e.z, 2.5);
       this.shake = Math.max(this.shake, 0.4);
@@ -896,6 +928,10 @@ export class Game {
       this.fx.ring(e.x + ox, e.z + oz, 12 + i * 4, this.boss.color, 0.9 + i * 0.15, 4);
     }
     this.particles.burst(e.x, 2, e.z, this.colors.white, 60, 16, 0.8, 1.2, 0.8);
+    this.fx.shock(e.x, e.z, 40, 2.2, 1.4);
+    this.fx.shock(e.x, e.z, 22, 1.5, 0.9);
+    for (let i = 0; i < 4; i++) this.particles.fireball(e.x + rand(-3, 3), 2, e.z + rand(-3, 3), 3, 22);
+    this.smoke.puff(e.x, 1.5, e.z, 40, 4, 3.5);
     this.debris.spawn(e.x, 2, e.z, this.colors.debris, 40, 14, 2);
     this.fx.scorch(e.x, e.z, 7);
     this.proj.clearEnemyShots();
@@ -926,6 +962,8 @@ export class Game {
     const r = 3.2;
     const col = new THREE.Color(1, 0.25, 0.2).multiplyScalar(3);
     this.particles.burst(e.x, 1, e.z, col, 30, 12, 0.5, 0.9, 0.5);
+    this.particles.fireball(e.x, 1, e.z, 1.4, 14);
+    this.smoke.puff(e.x, 1, e.z, 8, 1.5, 1.8);
     this.fx.ring(e.x, e.z, r, 0xff3a2a, 0.35, 3);
     this.fx.scorch(e.x, e.z, 2.2);
     this.audio.sfx('boom');
@@ -989,12 +1027,16 @@ export class Game {
     this.particles.burst(P.x, 1, P.z, this.colors.cyan, 90, 18, 1.2, 1.2, 0.8);
     this.particles.burst(P.x, 1, P.z, this.colors.orange, 60, 12, 1, 1, 0.8);
     this.debris.spawn(P.x, 1, P.z, new THREE.Color(0.9, 0.9, 0.95), 24, 12, 1.4);
+    this.particles.fireball(P.x, 1, P.z, 2.2, 26);
+    this.fx.shock(P.x, P.z, 20, 1.8, 1.0);
+    this.smoke.puff(P.x, 1, P.z, 24, 2.5, 3);
     this.fx.ring(P.x, P.z, 14, 0x5ef2ff, 1, 4);
     this.fx.scorch(P.x, P.z, 4);
   }
 
   private onDash() {
     const P = this.player;
+    this.fx.shock(P.x, P.z, 5, 0.6, 0.3);
     this.audio.sfx('dash');
     this.fx.ring(P.x, P.z, 3, 0x5ef2ff, 0.3, 3);
     this.particles.ring(P.x, 0.6, P.z, this.colors.cyan, 24, 7, 0.3, 0.45);
@@ -1027,6 +1069,7 @@ export class Game {
       this.fx.text(x, 2.5, z, 'TRACTOR PULSE', 'big');
     } else {
       this.audio.sfx('bomb');
+      this.fx.shock(x, z, 45, 2.5, 1.3);
       this.ui.flash('rgba(255,200,120,0.75)');
       this.shake = 1.3;
       this.fx.ring(x, z, 34, 0xffaa33, 1.0, 4);
