@@ -14,6 +14,7 @@ import { BossController } from './Boss';
 import { Projectiles } from './Projectiles';
 import { WeaponSystem } from './Weapons';
 import { Pickups, type PowerKind } from './Pickups';
+import { Hazards } from './Hazards';
 import { rollChoices, describe, applyChoice, type Choice } from './Upgrades';
 import { ARENA_RADIUS, BOSS_TIMES, FINAL_TIME, xpForLevel, type EType } from './data';
 import { ACHIEVEMENTS, SHIPS, UPGRADES, loadMeta, saveMeta, shardsForRun, upLv, type MetaState, type ShipId } from './meta';
@@ -38,6 +39,7 @@ export class Game {
   proj: Projectiles;
   weapons: WeaponSystem;
   pickups: Pickups;
+  hazards: Hazards;
 
   colors = {
     cyan: C(0.35, 0.95, 1, 3),
@@ -126,6 +128,7 @@ export class Game {
     this.proj = new Projectiles(scene, this);
     this.weapons = new WeaponSystem(scene, this);
     this.pickups = new Pickups(scene, assets, this);
+    this.hazards = new Hazards(scene, this);
     this.player.root.visible = false;
     this.player.magnetRing.visible = false;
     this.meta = loadMeta();
@@ -258,6 +261,7 @@ export class Game {
     this.enemies.clear();
     this.boss.clear();
     this.proj.clear();
+    this.hazards.clear();
     this.pickups.clear();
     this.particles.clear();
     this.debris.clear();
@@ -294,6 +298,7 @@ export class Game {
     this.enemies.clear();
     this.boss.clear();
     this.proj.clear();
+    this.hazards.clear();
     this.pickups.clear();
     this.fx.clear();
     this.player.root.visible = false;
@@ -491,6 +496,7 @@ export class Game {
 
     this.enemies.update(dt);
     this.proj.update(dt);
+    this.hazards.update(dt, this.time);
     this.pickups.update(dt);
     this.particles.update(dt);
     this.debris.update(dt);
@@ -741,6 +747,7 @@ export class Game {
     this.debris.spawn(e.x, 2, e.z, this.colors.debris, 40, 14, 2);
     this.fx.scorch(e.x, e.z, 7);
     this.proj.clearEnemyShots();
+    this.hazards.clear();
     this.boss.clear();
     // treasure: a fountain of crystals worth ~2 levels
     const total = this.player.xpNext * 2.2 + xpForLevel(this.player.level + 1);

@@ -30,6 +30,8 @@ export class BossController {
   color = new THREE.Color();
   index = 0;
   private spin = 0;
+  private lastPhase = 0;
+  private sigCount = 0;
 
   constructor(scene: THREE.Scene, private assets: Assets, private g: Game) {
     scene.add(this.group);
@@ -54,7 +56,7 @@ export class BossController {
       look = LOOKS[idx % LOOKS.length];
     }
     this.color.set(look.color);
-    const mapper = alienMapper(look.color, final ? 2.2 : 1.1, 0.7);
+    const mapper = alienMapper(look.color, final ? 1.6 : 0.6, 0.7);
     const ship = this.assets.object(look.model, look.size, (n, s) => {
       const m = mapper(n, s) as THREE.MeshStandardMaterial;
       this.mats.push(m);
@@ -214,6 +216,11 @@ export class BossController {
           if (e.sub <= 0) this.toChase(e);
         }
         break;
+      case 6: // signature attack, unique per boss
+        moveTo(ux * e.spd * 0.3, uz * e.spd * 0.3);
+        this.signature(e, ux, uz, aim);
+        if (e.timer <= 0) this.toChase(e);
+        break;
       case 5: // final only: rotating cross of bullet walls + aimed volleys
         moveTo(0, 0);
         if (e.sub <= 0) {
@@ -228,6 +235,46 @@ export class BossController {
     void d;
   }
 
+  /** Each mothership has its own signature move; the Core cycles through all of them. */
+  private signature(e: Enemy, ux: number, uz: number, aim: number) {
+    const g = this.g;
+    const P = g.player;
+    const kind = this.final ? this.sigCount % 3 : this.index % 3;
+    const H = g.hazards;
+    const dmgK = 1 + g.T / 900;
+    if (kind === 0) {
+      // carpet bombing: blast zones walk along the player's path
+      if (e.sub <= 0 && e.st < (this.final ? 14 : 10)) {
+        e.sub = 0.2;
+        e.st++;
+        const lead = 0.45 + e.st * 0.04;
+        const x = P.x + P.vx * lead + rand(-3, 3);
+        const z = P.z + P.vz * lead + rand(-3, 3);
+        H.blast(x, z, 2.6, 1.0, 20 * dmgK, this.color.getHex());
+      }
+    } else if (kind === 1) {
+      // acid rain: lingering pools around the player
+      if (e.sub <= 0 && e.st < (this.final ? 8 : 6)) {
+        e.sub = 0.3;
+        e.st++;
+        const a = rand(0, TAU), d = e.st === 1 ? 0 : rand(3, 9);
+        H.pool(P.x + Math.cos(a) * d, P.z + Math.sin(a) * d, 3.2, 0.9, 4.5, 8 * dmgK, 0x5dff3a);
+      }
+    } else {
+      // laser sweep: rotating beams from the hull
+      if (e.st === 0) {
+        e.st = 1;
+        const n = this.final ? 4 : 3;
+        const dir = Math.random() < 0.5 ? 1 : -1;
+        for (let i = 0; i < n; i++) {
+          H.sweep(() => (this.e && !this.e.dead ? { x: this.e.x, z: this.e.z } : null), aim + (i / n) * TAU + 0.6, 0.85 * dir, 30, 1.1, 1.0, 3.6, 18 * dmgK, this.color.getHex());
+        }
+        g.audio.sfx('lance');
+      }
+    }
+    void ux; void uz;
+  }
+
   private toChase(e: Enemy) {
     e.phase = 0;
     e.timer = this.final ? rand(1.2, 2) : rand(1.8, 3);
@@ -235,14 +282,21 @@ export class BossController {
   }
 
   private nextPhase(e: Enemy) {
-    const opts: [number, number][] = [[1, 3], [2, 3], [3, 1.5], [4, 2.5]];
+    const opts: [number, number][] = [[1, 2.5], [2, 2.5], [3, 1.3], [4, 2.2], [6, 3]];
     if (this.final) opts.push([5, 3]);
     let p = pickWeighted(opts);
-    if (p === e.st) p = pickWeighted(opts);
+    if (p === this.lastPhase) p = pickWeighted(opts);
+    this.lastPhase = p;
+    if (p === 6) {
+      this.sigCount++;
+      const names = ['CARPET BOMBING', 'ACID RAIN', 'LASER SWEEP'];
+      const kind = this.final ? this.sigCount % 3 : this.index % 3;
+      this.g.fx.text(e.x, 5, e.z, names[kind], 'big boss');
+    }
     e.phase = p;
     e.st = 0;
     e.sub = 0.2;
-    e.timer = p === 1 ? 2.2 : p === 2 ? 2.8 : p === 3 ? 1.2 : p === 4 ? 2.6 : 3.5;
+    e.timer = p === 1 ? 2.2 : p === 2 ? 2.8 : p === 3 ? 1.2 : p === 4 ? 2.6 : p === 6 ? 4.2 : 3.5;
     if (p === 4) e.sub = 0.1;
   }
 

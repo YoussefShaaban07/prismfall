@@ -363,3 +363,4 @@ input[type='checkbox'] { width: 20px; height: 20px; accent-color: var(--cyan); }
 }
 .hint.on { opacity: 1; transform: translate(-50%, 0); }
 .hint b { color: var(--cyan); }
+.floater.boss { font-size: 22px; color: #ff8aa0; letter-spacing: .25em; text-shadow: 0 0 16px #ff2050, 0 0 2px #000; }
