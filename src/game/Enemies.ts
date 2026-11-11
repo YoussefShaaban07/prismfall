@@ -62,6 +62,7 @@ interface TypeRender {
   meshes: THREE.InstancedMesh[];
   flash: THREE.InstancedBufferAttribute;
   dissolve: THREE.InstancedBufferAttribute;
+  damage: THREE.InstancedBufferAttribute;
   max: number;
   eliteAt: Uint8Array;
   colorDirty: boolean;
@@ -115,11 +116,14 @@ export class EnemyManager {
       flash.setUsage(THREE.DynamicDrawUsage);
       const dissolve = new THREE.InstancedBufferAttribute(new Float32Array(cap), 1);
       dissolve.setUsage(THREE.DynamicDrawUsage);
+      const damage = new THREE.InstancedBufferAttribute(new Float32Array(cap), 1);
+      damage.setUsage(THREE.DynamicDrawUsage);
       const meshes: THREE.InstancedMesh[] = [];
       for (const part of model.parts) {
         const geo = part.geo.clone();
         geo.setAttribute('aFlash', flash);
         geo.setAttribute('aDissolve', dissolve);
+        geo.setAttribute('aDamage', damage);
         const mat = mapper(part.matName, part.mat);
         const im = new THREE.InstancedMesh(geo, mat, cap);
         im.count = 0;
@@ -130,7 +134,7 @@ export class EnemyManager {
         scene.add(im);
         meshes.push(im);
       }
-      this.render.set(type, { meshes, flash, dissolve, max: cap, eliteAt: new Uint8Array(cap), colorDirty: false });
+      this.render.set(type, { meshes, flash, dissolve, damage, max: cap, eliteAt: new Uint8Array(cap), colorDirty: false });
     }
   }
 
@@ -496,6 +500,7 @@ export class EnemyManager {
       this.m.compose(this.p, this.q, this.s);
       r.flash.array[idx] = e.flash > 0 ? Math.min(1, e.flash * 14) : 0;
       r.dissolve.array[idx] = e.spawnT > 0 ? Math.max(0, e.spawnT / 0.5 - 0.15) : 0;
+      r.damage.array[idx] = e.maxHp > 0 ? Math.max(0, 1 - e.hp / e.maxHp) : 0;
       const el = e.elite ? 1 : 0;
       const recolor = r.eliteAt[idx] !== el;
       if (recolor) {
@@ -523,6 +528,7 @@ export class EnemyManager {
       this.m.compose(this.p.set(c.x, c.y - p * 0.6, c.z), this.q, this.s.set(sc, sc, sc));
       r.flash.array[idx] = p < 0.15 ? 1 - p / 0.15 : 0;
       r.dissolve.array[idx] = 0.08 + p * 0.95;
+      r.damage.array[idx] = 1;
       const el = c.elite ? 1 : 0;
       if (r.eliteAt[idx] !== el) {
         r.eliteAt[idx] = el;
@@ -564,6 +570,7 @@ export class EnemyManager {
       r.colorDirty = false;
       r.flash.needsUpdate = true;
       r.dissolve.needsUpdate = true;
+      r.damage.needsUpdate = true;
     }
   }
 }

@@ -210,6 +210,8 @@ export interface RimUniforms {
   uRim: { value: THREE.Color };
   uRimK: { value: number };
   uFlash: { value: number };
+  /** 0..1 battle damage for non-instanced users (bosses); instances use the aDamage attribute */
+  uDamage: { value: number };
 }
 
 /**
@@ -217,18 +219,18 @@ export interface RimUniforms {
  * Works for both instanced meshes (per-instance aFlash attribute) and regular meshes (uFlash uniform).
  */
 export function addRim(mat: THREE.MeshStandardMaterial, rim: THREE.ColorRepresentation, k = 1.2): THREE.MeshStandardMaterial {
-  const u: RimUniforms = { uRim: { value: new THREE.Color(rim) }, uRimK: { value: k }, uFlash: { value: 0 } };
+  const u: RimUniforms = { uRim: { value: new THREE.Color(rim) }, uRimK: { value: k }, uFlash: { value: 0 }, uDamage: { value: 0 } };
   mat.userData.rim = u;
   mat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute float aFlash;\nattribute float aDissolve;\nvarying float vFlash;\nvarying float vDissolve;\nvarying vec3 vLocal;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFlash = aFlash;\nvDissolve = aDissolve;\nvLocal = position;');
+      .replace('#include <common>', '#include <common>\nattribute float aFlash;\nattribute float aDissolve;\nattribute float aDamage;\nvarying float vFlash;\nvarying float vDissolve;\nvarying float vDamage;\nvarying vec3 vLocal;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFlash = aFlash;\nvDissolve = aDissolve;\nvDamage = aDamage;\nvLocal = position;');
     sh.fragmentShader = sh.fragmentShader
       .replace(
         '#include <common>',
         `#include <common>
-        uniform vec3 uRim; uniform float uRimK; uniform float uFlash; varying float vFlash; varying float vDissolve; varying vec3 vLocal;
+        uniform vec3 uRim; uniform float uRimK; uniform float uFlash; uniform float uDamage; varying float vFlash; varying float vDissolve; varying float vDamage; varying vec3 vLocal;
         float dHash(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
         float dNoise(vec3 x){ vec3 i = floor(x); vec3 f = fract(x); f = f * f * (3.0 - 2.0 * f);
           return mix(mix(mix(dHash(i), dHash(i + vec3(1,0,0)), f.x), mix(dHash(i + vec3(0,1,0)), dHash(i + vec3(1,1,0)), f.x), f.y),
@@ -248,6 +250,22 @@ export function addRim(mat: THREE.MeshStandardMaterial, rim: THREE.ColorRepresen
         `#include <emissivemap_fragment>
         float rimF = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 2.4);
         totalEmissiveRadiance += uRim * rimF * uRimK + vec3(1.0, 0.95, 0.9) * (vFlash + uFlash) * 1.6;
+        // battle damage: molten cracks open across the hull and spread as hit points drop
+        float dmg = max(vDamage, uDamage);
+        if (dmg > 0.12) {
+          vec3 q = vLocal * 3.4;
+          float spread = dNoise(vLocal * 1.3 + 11.0);
+          float mask = smoothstep(spread - 0.08, spread + 0.08, dmg * 1.15 - 0.1);
+          if (mask > 0.0) {
+            float r1 = abs(dNoise(q) - 0.5) * 2.0;
+            float r2 = abs(dNoise(q * 2.6 + 7.0) - 0.5) * 2.0;
+            float w = 0.05 + dmg * 0.05;
+            float crack = max(1.0 - smoothstep(0.0, w, r1), (1.0 - smoothstep(0.0, w * 0.7, r2)) * 0.65) * mask;
+            vec3 hot = mix(vec3(1.0, 0.42, 0.12), vec3(1.0, 0.85, 0.55), crack * crack);
+            diffuseColor.rgb *= 1.0 - mask * 0.35 - crack * 0.4;
+            totalEmissiveRadiance += mix(hot, uRim, 0.25) * crack * (1.2 + dmg * 2.2);
+          }
+        }
         if (vDissolve > 0.0) {
           float edge = 1.0 - smoothstep(0.0, 0.16, dn - vDissolve);
           totalEmissiveRadiance += mix(uRim, vec3(1.0, 0.9, 0.6), 0.35) * edge * 4.0;
@@ -255,7 +273,7 @@ export function addRim(mat: THREE.MeshStandardMaterial, rim: THREE.ColorRepresen
         }`,
       );
   };
-  mat.customProgramCacheKey = () => 'rim-v2';
+  mat.customProgramCacheKey = () => 'rim-v3';
   return mat;
 }
 

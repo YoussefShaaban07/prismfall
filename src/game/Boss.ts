@@ -456,8 +456,11 @@ export class BossController {
     });
     const flash = e.flash > 0 ? Math.min(1, e.flash * 14) : 0;
     for (const m of this.mats) {
-      const u = m.userData.rim as { uFlash: { value: number } } | undefined;
-      if (u) u.uFlash.value = flash * 0.15;
+      const u = m.userData.rim as { uFlash: { value: number }; uDamage: { value: number } } | undefined;
+      if (u) {
+        u.uFlash.value = flash * 0.15;
+        u.uDamage.value = Math.max(0, 1 - e.hp / e.maxHp) * 0.9;
+      }
     }
     this.light.intensity = 10 + flash * 20;
     this.light.position.y = y + 3;
