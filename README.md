@@ -8,6 +8,8 @@ A 3D neon survival shooter set on a Mars colony. A crystal swarm has fallen from
 
 ![Photo mode](docs/photo.jpg)
 
+![Colony](docs/colony.jpg)
+
 **Play:** https://youssefshaaban07.github.io/prismfall/ (works in any modern browser on PC and phone; installable as an offline app)
 
 ## Features

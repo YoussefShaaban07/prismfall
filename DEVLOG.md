@@ -84,6 +84,7 @@ Three-day build. Each session picks up the next unchecked items, playtests with 
 - [ ] Full QA pass (desktop + phone sizes), README with screenshots, GitHub Pages deploy
 
 ## Session log
+- **S14 (Nov 11 afternoon)**: low-angle photo-mode review of terrain, mountains, colony and force field (no seams/floating decor found); dust devils confirmed visible; colony beauty shot added to docs.
 - **S13 (Nov 11 midday)**: Photo Mode (F2 or Pause → Photo Mode): freezes action, hides HUD, orbit camera via drag/arrows, wheel zoom.
 - **S12 (Nov 11 midday)**: game-over screen backed by a blurred shot of your wreck, wandering dust devils in the dunes, per-enemy size variance, achievement toasts moved off the results title.
 - **S11 (Nov 11 morning)**: enemy spawn rifts (ground portal glow + rising sparks), death camera orbit around the wreck, per-ship trail widths.

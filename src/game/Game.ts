@@ -1411,7 +1411,7 @@ export class Game {
 
   /* ======================= dust devils ======================= */
 
-  private devils = [0, 1, 2].map((i) => ({ a: i * 2.1, r: 85 + i * 14, h: 0 }));
+  devils = [0, 1, 2].map((i) => ({ a: i * 2.1, r: 85 + i * 14, h: 0 }));
   private updateDevils(dt: number) {
     if (this.night) return;
     for (const d of this.devils) {
