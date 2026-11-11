@@ -197,7 +197,10 @@ export class Game {
       this.audio.sfx('level');
       ui.renderHangar(this.meta, this.previewShip);
     };
-    this.input.onPause = () => this.togglePause();
+    this.input.onPause = () => {
+      if (this.state !== 'play' && ui.back()) return;
+      this.togglePause();
+    };
     this.input.onKey = (code) => {
       if (this.state === 'levelup') {
         if (code === 'Digit1' || code === 'Numpad1') ui.pick(0);
@@ -205,17 +208,32 @@ export class Game {
         if (code === 'Digit3' || code === 'Numpad3') ui.pick(2);
         if (code === 'KeyR') ui.reroll();
       }
-      if (this.state === 'menu' && (code === 'Enter' || code === 'Space')) this.startRun();
+      if (this.state !== 'play') {
+        if (code === 'ArrowUp') ui.navigate(0, -1);
+        if (code === 'ArrowDown') ui.navigate(0, 1);
+        if (code === 'ArrowLeft') ui.navigate(-1, 0);
+        if (code === 'ArrowRight') ui.navigate(1, 0);
+      }
+      if (this.state === 'menu' && code === 'Enter' && !(document.activeElement instanceof HTMLButtonElement)) this.startRun();
       if (this.state === 'over' && code === 'Enter') this.startRun();
       if (code === 'KeyM') this.audio.toggleMute();
     };
     this.input.onPadButton = (i) => {
+      // D-pad / A / B drive menus whenever a screen is open
+      if (this.state !== 'play') {
+        if (i === 12) ui.navigate(0, -1);
+        if (i === 13) ui.navigate(0, 1);
+        if (i === 14) ui.navigate(-1, 0);
+        if (i === 15) ui.navigate(1, 0);
+        if (i === 0 && ui.activate()) return;
+        if (i === 1 && ui.back()) return;
+      }
       if (this.state === 'levelup') {
         if (i === 2) ui.pick(0);
         if (i === 3) ui.pick(1);
         if (i === 1) ui.pick(2);
         if (i === 4) ui.reroll();
-      } else if ((this.state === 'menu' || this.state === 'over') && i === 0) this.startRun();
+      } else if ((this.state === 'menu' || this.state === 'over') && i === 0 && !(document.activeElement instanceof HTMLButtonElement)) this.startRun();
     };
   }
 

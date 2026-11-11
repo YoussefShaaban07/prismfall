@@ -35,7 +35,7 @@ Three-day build. Each session picks up the next unchecked items, playtests with 
 - [x] First-run tutorial prompts (adapts to keyboard / gamepad / touch)
 
 ### Day 3 — polish & ship
-- [ ] Menu/controller navigation, key hints per device
+- [x] Menu/controller navigation (D-pad/arrows + A/Enter, B/Esc back), settings from main menu, control reference
 - [x] PWA: manifest + offline cache + INSTALL APP button for desktop
 - [x] Auto quality based on measured FPS (respects manual choice)
 - [ ] Full QA pass (desktop + phone sizes), README with screenshots, GitHub Pages deploy

@@ -88,6 +88,9 @@ export class UI {
     $('#howClose').addEventListener('click', () => this.hide('#how'));
     $('#creditsBtn').addEventListener('click', () => this.show('#credits'));
     $('#hangarBtn').addEventListener('click', () => this.onHangar(true));
+    $('#menuSettingsBtn').addEventListener('click', () => this.show('#settingsScreen'));
+    $('#pauseSettingsBtn').addEventListener('click', () => this.show('#settingsScreen'));
+    $('#settingsClose').addEventListener('click', () => this.hide('#settingsScreen'));
     $('#hangarClose').addEventListener('click', () => this.onHangar(false));
     document.querySelectorAll<HTMLElement>('.htab').forEach((b) =>
       b.addEventListener('click', () => {
@@ -123,7 +126,7 @@ export class UI {
   }
 
   hideAll() {
-    for (const s of ['#menu', '#levelup', '#pause', '#over', '#how', '#credits', '#hangar']) this.hide(s);
+    for (const s of ['#menu', '#levelup', '#pause', '#over', '#how', '#credits', '#hangar', '#settingsScreen']) this.hide(s);
   }
 
   startRun(touch: boolean) {
@@ -326,6 +329,73 @@ export class UI {
   }
   hidePause() {
     this.hide('#pause');
+    this.hide('#settingsScreen');
+  }
+
+  /* ---------- gamepad / keyboard menu navigation ---------- */
+  private topScreen(): HTMLElement | null {
+    const order = ['#settingsScreen', '#how', '#credits', '#levelup', '#hangar', '#pause', '#over', '#menu'];
+    for (const sel of order) {
+      const el = $(sel);
+      if (el && !el.classList.contains('hidden')) return el;
+    }
+    return null;
+  }
+
+  private focusables(root: HTMLElement) {
+    return [...root.querySelectorAll<HTMLElement>('button:not([disabled]):not(.hidden), input')].filter((el) => el.offsetParent !== null);
+  }
+
+  navigate(dx: number, dy: number) {
+    const root = this.topScreen();
+    if (!root) return false;
+    const items = this.focusables(root);
+    if (!items.length) return false;
+    const cur = document.activeElement as HTMLElement | null;
+    if (!cur || !items.includes(cur)) {
+      items[0].focus();
+      return true;
+    }
+    if (cur instanceof HTMLInputElement && cur.type === 'range' && dx !== 0) {
+      cur.value = String(Math.min(1, Math.max(0, Number(cur.value) + dx * 0.1)));
+      cur.dispatchEvent(new Event('input'));
+      return true;
+    }
+    const r0 = cur.getBoundingClientRect();
+    const c0 = { x: r0.left + r0.width / 2, y: r0.top + r0.height / 2 };
+    let best: HTMLElement | null = null;
+    let bd = Infinity;
+    for (const el of items) {
+      if (el === cur) continue;
+      const r = el.getBoundingClientRect();
+      const vx = r.left + r.width / 2 - c0.x, vy = r.top + r.height / 2 - c0.y;
+      const along = vx * dx + vy * dy;
+      if (along <= 4) continue;
+      const perp = Math.abs(vx * dy - vy * dx);
+      const score = along + perp * 2.5;
+      if (score < bd) { bd = score; best = el; }
+    }
+    best?.focus();
+    return true;
+  }
+
+  activate() {
+    const cur = document.activeElement as HTMLElement | null;
+    const root = this.topScreen();
+    if (cur && root && root.contains(cur)) {
+      if (cur instanceof HTMLInputElement && cur.type === 'checkbox') { cur.click(); return true; }
+      cur.click();
+      return true;
+    }
+    return false;
+  }
+
+  back() {
+    for (const sel of ['#settingsScreen', '#how', '#credits']) {
+      if (!$(sel).classList.contains('hidden')) { this.hide(sel); return true; }
+    }
+    if (!$('#hangar').classList.contains('hidden')) { this.onHangar(false); return true; }
+    return false;
   }
 
   private bindSettings() {
@@ -532,6 +602,7 @@ const TEMPLATE = /* html */ `
     <div class="menurow">
       <button id="hangarBtn" class="btn">HANGAR <span id="menuShards" class="mshards"></span></button>
       <button id="howBtn" class="btn ghost">HOW TO PLAY</button>
+      <button id="menuSettingsBtn" class="btn ghost">SETTINGS</button>
       <button id="creditsBtn" class="btn ghost">CREDITS</button>
       <button id="installBtn" class="btn ghost hidden">INSTALL APP</button>
     </div>
@@ -595,6 +666,15 @@ const TEMPLATE = /* html */ `
   <div class="panel wide">
     <h2>PAUSED</h2>
     <div id="build" class="build"></div>
+    <button id="pauseSettingsBtn" class="btn ghost">SETTINGS</button>
+    <button id="resumeBtn" class="btn primary">RESUME</button>
+    <button id="quitBtn" class="btn ghost">QUIT TO MENU</button>
+  </div>
+</div>
+
+<div id="settingsScreen" class="screen modal hidden">
+  <div class="panel">
+    <h2>SETTINGS</h2>
     <div class="settings">
       <div class="set"><label>Graphics</label><div class="seg">
         <button class="qbtn" data-q="low">LOW</button><button class="qbtn" data-q="high">HIGH</button><button class="qbtn" data-q="ultra">ULTRA</button></div></div>
@@ -603,8 +683,11 @@ const TEMPLATE = /* html */ `
       <div class="set"><label>Screen shake</label><input id="shakeChk" type="checkbox"></div>
       <div class="set"><label>Damage numbers</label><input id="numChk" type="checkbox"></div>
     </div>
-    <button id="resumeBtn" class="btn primary">RESUME</button>
-    <button id="quitBtn" class="btn ghost">QUIT TO MENU</button>
+    <div class="ctlhelp">
+      <b>Keyboard</b> WASD move · Space dash · 1/2/3 pick · R reroll · Esc pause · M mute<br/>
+      <b>Gamepad</b> Stick move · A dash · X/Y/B pick · LB reroll · Start pause · D-pad navigates menus
+    </div>
+    <button id="settingsClose" class="btn">BACK</button>
   </div>
 </div>
 

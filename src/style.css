@@ -364,3 +364,7 @@ input[type='checkbox'] { width: 20px; height: 20px; accent-color: var(--cyan); }
 .hint.on { opacity: 1; transform: translate(-50%, 0); }
 .hint b { color: var(--cyan); }
 .floater.boss { font-size: 22px; color: #ff8aa0; letter-spacing: .25em; text-shadow: 0 0 16px #ff2050, 0 0 2px #000; }
+#ui button:focus-visible, #ui input:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; box-shadow: 0 0 18px rgba(94, 242, 255, .6); }
+.ctlhelp { font-size: 14px; color: rgba(255, 255, 255, .65); line-height: 1.6; text-align: center; }
+.ctlhelp b { color: var(--cyan); font-family: var(--display); font-size: 10px; letter-spacing: .2em; margin-right: 6px; }
+#settingsScreen { z-index: 6; }
