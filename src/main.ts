@@ -21,7 +21,7 @@ async function boot() {
     if (fill) fill.style.width = `${Math.round(p * 100)}%`;
   });
   const game = new Game(canvas, assets, renderer);
-  (window as unknown as { game: Game }).game = game;
+  (window as unknown as { prismfall: Game }).prismfall = game;
   pre?.classList.add('fade');
   setTimeout(() => pre?.remove(), 700);
   game.ui.loaded();
