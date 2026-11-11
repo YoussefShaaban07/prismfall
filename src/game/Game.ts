@@ -114,6 +114,7 @@ export class Game {
   scoreMult = 1;
   private sunOff = new THREE.Vector3(-30, 45, 18);
   snap: HTMLCanvasElement | null = null;
+  private briefed = false;
   private lastEntry: MetaState['top'][number] | null = null;
   private fpsAcc = 0;
   private fpsN = 0;
@@ -166,7 +167,14 @@ export class Game {
 
   private bindUI() {
     const ui = this.ui;
-    ui.onPlay = () => this.startRun();
+    ui.onPlay = () => {
+      if (!this.meta.seenTutorial && this.meta.stats.runs === 0 && !this.briefed) {
+        this.briefed = true;
+        this.audio.init();
+        ui.hideAll();
+        ui.briefing().then(() => this.startRun());
+      } else this.startRun();
+    };
     ui.onRetry = () => this.startRun(!!this.dailyKey);
     ui.onResume = () => this.togglePause();
     ui.onQuit = () => this.toMenu();

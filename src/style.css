@@ -424,3 +424,10 @@ body.cine #hud .top, body.cine #minimap, body.cine .combo { opacity: 0; transiti
 .shareimg { width: 100%; border-radius: 12px; border: 1px solid var(--line); box-shadow: 0 10px 40px rgba(0, 0, 0, .5); }
 #shareScreen { z-index: 6; }
 #shareScreen a.btn { text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+#briefing { flex-direction: column; gap: 26px; background: radial-gradient(ellipse at center, rgba(10, 4, 18, .7), rgba(5, 2, 10, .95)); z-index: 7; transition: opacity .5s; }
+#briefing.out { opacity: 0; }
+.brief { max-width: 760px; display: flex; flex-direction: column; gap: 14px; padding: 0 20px; }
+.brief .bl { font-size: clamp(18px, 2.6vw, 26px); font-weight: 600; color: rgba(255, 255, 255, .9); min-height: 1.3em; text-shadow: 0 0 12px rgba(94, 242, 255, .25); }
+.brief .bl.head { font-family: var(--display); font-size: 12px; letter-spacing: .45em; color: var(--cyan); }
+.brief .bl:last-child::after { content: '▍'; color: var(--cyan); animation: blink .8s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }

@@ -48,7 +48,7 @@ Three-day build. Each session picks up the next unchecked items, playtests with 
 - [x] Music variety: boss theme (D minor, 134 bpm), Night Shift (E minor, 104 bpm), victory sting
 - [ ] Arabic language option (RTL-aware UI, Arabic-capable font)
 - [x] Run summary share card (frame snapshot + stats, download / native share)
-- [ ] Story intro: short animated briefing on first launch
+- [x] Story intro: typewriter mission briefing on first launch (skippable)
 - [ ] Perf pass on mid/low devices: instanced debris colors, particle caps, LOD for decor
 
 ### Day 3 — polish & ship
@@ -58,6 +58,7 @@ Three-day build. Each session picks up the next unchecked items, playtests with 
 - [ ] Full QA pass (desktop + phone sizes), README with screenshots, GitHub Pages deploy
 
 ## Session log
+- **S3 (Nov 10 night)**: adaptive music themes + victory sting, Codex with 3D previews, share card, first-launch briefing.
 - **S2d (Nov 10 night)**: Night Shift sector, mutators + daily challenge, main menu redesigned as a left column so the 3D showroom stays visible.
 - **S2c (Nov 10 night)**: boss intro cinematic, top-10 leaderboard, accessibility options, vitest suite + CI.
 - **S2b (Nov 10 night)**: 8-weapon pool, lighter scorch decals, bot now sidesteps bullets/hazards. 6-run sample: deaths at 3:53–10:09, 1 win — good roguelite curve before hangar upgrades.

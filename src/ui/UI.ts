@@ -194,6 +194,49 @@ export class UI {
     this.show('#shareScreen');
   }
 
+  /** First-launch mission briefing with typewriter text. Resolves when finished or skipped. */
+  briefing(): Promise<void> {
+    const lines = [
+      'MARS · COLONY OUTPOST 7 · 0417 LOCAL',
+      'A crystal swarm has fallen through the atmosphere. The Prism is waking.',
+      'Colony shields hold for ten minutes. Their motherships will land before then.',
+      'You are the last interceptor in the air. Hold the line, pilot.',
+    ];
+    const el = $('#briefing');
+    const body = $('.brief', el);
+    body.innerHTML = '';
+    this.show('#briefing');
+    return new Promise((resolve) => {
+      let done = false;
+      const timers: number[] = [];
+      const finish = () => {
+        if (done) return;
+        done = true;
+        timers.forEach(clearTimeout);
+        el.classList.add('out');
+        setTimeout(() => {
+          this.hide('#briefing');
+          el.classList.remove('out');
+          resolve();
+        }, 500);
+      };
+      let t = 300;
+      lines.forEach((line, li) => {
+        const p = document.createElement('div');
+        p.className = li === 0 ? 'bl head' : 'bl';
+        body.appendChild(p);
+        for (let i = 0; i <= line.length; i++) {
+          timers.push(window.setTimeout(() => (p.textContent = line.slice(0, i)), t));
+          t += li === 0 ? 18 : 26;
+        }
+        t += 450;
+      });
+      timers.push(window.setTimeout(finish, t + 1200));
+      ($('#briefSkip') as HTMLElement).onclick = finish;
+      el.onclick = finish;
+    });
+  }
+
   setCodexMeta(m: MetaState) {
     this.codexMeta = m;
   }
@@ -822,6 +865,11 @@ const TEMPLATE = /* html */ `
     <div class="hbody"><div id="cList" class="shiplist"></div><div id="cInfo" class="shipinfo"></div></div>
     <button id="codexClose" class="btn ghost">BACK</button>
   </div>
+</div>
+
+<div id="briefing" class="screen hidden">
+  <div class="brief"></div>
+  <button id="briefSkip" class="btn ghost small">SKIP ›</button>
 </div>
 
 <div id="toast" class="toast"><div class="tl">ACHIEVEMENT UNLOCKED</div><div class="tt"></div><div class="td"></div></div>
