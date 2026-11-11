@@ -106,9 +106,9 @@ export class Lighting {
     // enemies: a pool of their accent colour
     for (const e of g.enemies.list) {
       if (e.spawnT > 0.35) continue;
-      this.c.setHex(e.def.color);
-      const s = e.type === 'boss' ? 16 : e.r * 5.5;
-      const a = (e.type === 'boss' ? 0.2 : 0.1) * k;
+      this.c.setHex(e.elite ? 0xffc83a : e.def.color);
+      const s = e.type === 'boss' ? 16 : e.r * (e.elite ? 9 + Math.sin(g.time * 4) * 1.2 : 5.5);
+      const a = (e.type === 'boss' ? 0.2 : e.elite ? 0.3 : 0.1) * k;
       this.add(e.x, e.z, s, this.c.r * a, this.c.g * a, this.c.b * a);
     }
     // player bolts and enemy shots

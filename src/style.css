@@ -434,3 +434,11 @@ body.cine #hud .top, body.cine #minimap, body.cine .combo { opacity: 0; transiti
 @media (orientation: portrait) and (max-width: 760px) {
   .combo { top: calc(var(--st) + 170px); font-size: 13px; }
 }
+/* HUD shimmer */
+#xpFill { position: relative; overflow: hidden; }
+#xpFill::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, .55) 50%, transparent 100%); width: 40%; animation: xpShine 2.4s linear infinite; }
+@keyframes xpShine { from { transform: translateX(-120%); } to { transform: translateX(320%); } }
+#hpFill { position: relative; }
+#hpFill::after { content: ''; position: absolute; inset: 0 0 50% 0; background: linear-gradient(180deg, rgba(255, 255, 255, .35), transparent); }
+.lv { animation: lvGlow 3s ease-in-out infinite; }
+@keyframes lvGlow { 50% { box-shadow: 0 0 16px rgba(94, 242, 255, .45); } }
