@@ -469,7 +469,7 @@ export class EnemyManager {
       const def = e.def;
       const spawnK = e.spawnT > 0 ? 1 - e.spawnT / 0.5 : 1;
       const ease = 1 - Math.pow(1 - Math.max(0, spawnK), 3);
-      let sc = def.size * (e.elite ? 1.35 : 1) * ease;
+      let sc = def.size * (e.elite ? 1.35 : 1) * ease * (0.92 + ((e.id * 0.6180339) % 1) * 0.16);
       let y = def.hover + Math.sin(time * 2.5 + e.id) * 0.15;
       if (e.spawnT > 0) y += (1 - ease) * 6; // drop in from above
       let pitch = 0, roll = 0;

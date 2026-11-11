@@ -463,3 +463,5 @@ body.cine #threats { display: none; }
 @keyframes cardSweep { 0% { left: -60%; } 35%, 100% { left: 130%; } }
 .card .ic span { display: inline-block; animation: icFloat 2.4s ease-in-out infinite; }
 @keyframes icFloat { 50% { transform: translateY(-3px) scale(1.06); } }
+#over::before { content: ''; position: fixed; inset: 0; background: var(--bg) center / cover no-repeat; filter: blur(3px) saturate(1.2); transform: scale(1.04); opacity: .55; z-index: -1; }
+body:has(#over:not(.hidden)) .toast { top: auto; bottom: calc(var(--sb) + 20px); }

@@ -630,6 +630,8 @@ export class Game {
   }
 
   private updateMenu(dt: number) {
+    this.updateDevils(dt);
+    this.smoke.update(dt);
     const showcase = this.hangarOpen;
     this.rimLights.forEach((l, i) => {
       const a = this.time * 0.8 + i * Math.PI;
@@ -788,6 +790,7 @@ export class Game {
 
     this.tutorial();
     this.weather(dt);
+    this.updateDevils(dt);
 
     // achievements
     if (!P.dead) this.untouchedT += dt;
@@ -1359,6 +1362,24 @@ export class Game {
     this.last = performance.now();
   }
 
+  /* ======================= dust devils ======================= */
+
+  private devils = [0, 1, 2].map((i) => ({ a: i * 2.1, r: 85 + i * 14, h: 0 }));
+  private updateDevils(dt: number) {
+    if (this.night) return;
+    for (const d of this.devils) {
+      d.a += dt * 0.035;
+      d.h += dt * 7;
+      const cx = Math.cos(d.a) * d.r, cz = Math.sin(d.a) * d.r;
+      for (let k = 0; k < 2; k++) {
+        const y = Math.random() * 14;
+        const sp = d.h + y * 0.9;
+        const rad = 0.6 + y * 0.35;
+        this.smoke.trail(cx + Math.cos(sp) * rad, y, cz + Math.sin(sp) * rad, 1.2 + y * 0.18, 1.2);
+      }
+    }
+  }
+
   /* ======================= weather ======================= */
 
   /** Periodic dust storm (ion storm with lightning at night): thick fog, wind-blown dust, reduced visibility. */
@@ -1602,6 +1623,13 @@ export class Game {
     m.top.sort((a, b) => b.score - a.score);
     m.top = m.top.slice(0, 10);
     saveMeta(m);
+    if (this.snap) {
+      try {
+        this.ui.setOverBackdrop(this.snap.toDataURL('image/jpeg', 0.7));
+      } catch {
+        /* ignore */
+      }
+    }
     this.ui.showOver({
       shards, achievements: this.runAch,
       victory, time: this.T, level: this.player.level, kills: this.kills, score: this.score, maxCombo: this.maxCombo,

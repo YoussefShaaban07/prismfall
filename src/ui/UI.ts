@@ -770,6 +770,10 @@ export class UI {
   }
 
   /* ---------- game over ---------- */
+  setOverBackdrop(url: string) {
+    ($('#over') as HTMLElement).style.setProperty('--bg', `url(${url})`);
+  }
+
   showOver(st: RunStats) {
     this.hud.classList.add('hidden');
     $('#overTitle').textContent = st.victory ? 'COLONY SAVED' : 'SIGNAL LOST';
