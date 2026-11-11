@@ -529,11 +529,11 @@ export class Arena {
       depthWrite: false,
       blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide,
-      uniforms: { uColor: { value: new THREE.Color(0.75, 0.85, 1.0) } },
+      uniforms: { uColor: { value: new THREE.Color(0.45, 0.62, 1.0) } },
       vertexShader: /* glsl */ `varying float vT; varying vec3 vN; varying vec3 vV;
         void main(){ vT = uv.y; vec4 w = modelMatrix * vec4(position, 1.0); vN = normalize(mat3(modelMatrix) * normal); vV = normalize(cameraPosition - w.xyz); gl_Position = projectionMatrix * viewMatrix * w; }`,
       fragmentShader: /* glsl */ `uniform vec3 uColor; varying float vT; varying vec3 vN; varying vec3 vV;
-        void main(){ float edge = pow(abs(dot(normalize(vN), normalize(vV))), 1.5); float a = pow(vT, 1.6) * edge * 0.09; gl_FragColor = vec4(uColor * a, 1.0); }`,
+        void main(){ float edge = pow(abs(dot(normalize(vN), normalize(vV))), 1.5); float a = pow(vT, 1.6) * edge * edge * 0.12; gl_FragColor = vec4(uColor * a, 1.0); }`,
     });
     const spotTex = (() => {
       const c = document.createElement('canvas');
@@ -556,7 +556,7 @@ export class Arena {
       cone.renderOrder = 6;
       const spotGeo = new THREE.PlaneGeometry(1, 1);
       spotGeo.rotateX(-Math.PI / 2);
-      const spot = new THREE.Mesh(spotGeo, new THREE.MeshBasicMaterial({ map: spotTex, color: new THREE.Color(0.55, 0.65, 0.9), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+      const spot = new THREE.Mesh(spotGeo, new THREE.MeshBasicMaterial({ map: spotTex, color: new THREE.Color(0.32, 0.42, 0.75), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
       spot.renderOrder = 2;
       cone.visible = spot.visible = false;
       this.group.add(cone, spot);
