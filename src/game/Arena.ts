@@ -186,6 +186,7 @@ export class Arena {
   windBoost = 1;
   searchlights: { cone: THREE.Mesh; spot: THREE.Mesh; base: THREE.Vector3; phase: number; speed: number }[] = [];
   night = false;
+  private glowMats: { m: THREE.MeshStandardMaterial; base: number }[] = [];
 
   constructor(scene: THREE.Scene, assets: Assets) {
     scene.add(this.group);
@@ -408,7 +409,12 @@ export class Arena {
       o.rotation.y = rand(0, TAU);
       statics.add(o);
     }
-    this.group.add(bakeStatic(statics, true));
+    const baked = bakeStatic(statics, true);
+    baked.traverse((o) => {
+      const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
+      if (m && m.emissiveIntensity > 0 && m.emissive && m.emissive.getHex() !== 0) this.glowMats.push({ m, base: m.emissiveIntensity });
+    });
+    this.group.add(baked);
 
     /* ----- sky dome ----- */
     this.skyMat = new THREE.ShaderMaterial({
@@ -561,6 +567,8 @@ export class Arena {
 
   setNight(n: boolean) {
     this.night = n;
+    // colony lights burn brighter after dark
+    for (const g of this.glowMats) g.m.emissiveIntensity = g.base * (n ? 2.2 : 1);
     for (const s of this.searchlights) s.cone.visible = s.spot.visible = n;
   }
 
