@@ -37,6 +37,7 @@ export class Player {
   dashX = 0;
   dashZ = 1;
   dead = false;
+  hitWall = false;
   weapons = new Map<WeaponId, number>();
   passives = new Map<PassiveId, number>();
   evolved = new Set<WeaponId>();
@@ -236,7 +237,8 @@ export class Player {
     if (d > R) {
       this.x *= R / d;
       this.z *= R / d;
-    }
+      this.hitWall = true;
+    } else this.hitWall = false;
 
     const sp = Math.hypot(this.vx, this.vz);
     let turn = 0;

@@ -242,7 +242,7 @@ export class Arena {
             vec3 gridCol = mix(cyan, mag, uDanger);
             vec3 em = gridCol * (minor * (0.015 + near * 0.22) + major * (0.06 + near * 0.4)) * inside * (1.0 + uNight * 1.2);
             em += gridCol * ring * (minor + major) * inside * (0.25 + uPulse);
-            em += mix(vec3(1.0, 0.35, 0.8), vec3(0.3, 0.9, 1.0), 0.5 + 0.5 * sin(atan(p.y, p.x) * 6.0 + uTime)) * edge * 1.6;
+            em += mix(vec3(1.0, 0.35, 0.8), vec3(0.3, 0.9, 1.0), 0.5 + 0.5 * sin(atan(p.y, p.x) * 6.0 + uTime)) * edge * 0.6;
             em += cyan * near * 0.05;
             totalEmissiveRadiance += em;
             diffuseColor.rgb *= mix(0.55, 1.0, inside);
@@ -264,12 +264,12 @@ export class Arena {
       depthWrite: false,
       side: THREE.DoubleSide,
       blending: THREE.AdditiveBlending,
-      uniforms: { uTime: { value: 0 }, uPlayer: { value: new THREE.Vector2() }, uDanger: { value: 0 } },
+      uniforms: { uTime: { value: 0 }, uPlayer: { value: new THREE.Vector2() }, uDanger: { value: 0 }, uImp: { value: Array.from({ length: 6 }, () => new THREE.Vector2(0, -99)) } },
       vertexShader: /* glsl */ `
         varying vec2 vUv; varying vec3 vW;
         void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
       fragmentShader: /* glsl */ `
-        varying vec2 vUv; varying vec3 vW; uniform float uTime; uniform vec2 uPlayer; uniform float uDanger;
+        varying vec2 vUv; varying vec3 vW; uniform float uTime; uniform vec2 uPlayer; uniform float uDanger; uniform vec2 uImp[6];
         float hex(vec2 p){ p.x *= 1.1547; p.y += mod(floor(p.x), 2.0) * 0.5; p = abs(fract(p) - 0.5); return abs(max(p.x * 1.5 + p.y, p.y * 2.0) - 1.0); }
         void main(){
           float h = vUv.y;
@@ -278,10 +278,27 @@ export class Arena {
           float lines = 1.0 - hx;
           float scan = smoothstep(0.96, 1.0, sin(vUv.y * 40.0 - uTime * 6.0));
           float d = length(vW.xz - uPlayer);
-          float prox = exp(-d * 0.15) * 0.7;
+          float prox = exp(-d * 0.2) * 0.45;
           vec3 col = mix(vec3(0.15, 0.75, 1.0), vec3(1.0, 0.3, 0.75), 0.5 + 0.5 * sin(vUv.x * 6.2831 * 3.0 + uTime * 0.7));
           col = mix(col, vec3(1.0, 0.2, 0.3), uDanger * 0.6);
-          float a = fade * (0.12 + lines * (0.35 + prox) + scan * 0.25) + exp(-h * 18.0) * 1.2;
+          float a = fade * (0.12 + lines * (0.35 + prox) + scan * 0.25) + exp(-h * 18.0) * 0.55;
+          // impact ripples: hex cells light up in an expanding ring around each hit
+          float ang = atan(vW.z, vW.x);
+          float imp = 0.0;
+          for (int i = 0; i < 6; i++) {
+            float dt = uTime - uImp[i].y;
+            if (dt < 0.0 || dt > 1.2) continue;
+            float da = abs(mod(ang - uImp[i].x + 3.14159, 6.28318) - 3.14159) * 62.0;
+            float dy = (vUv.y * 7.0) - 1.0;
+            float d = length(vec2(da, dy));
+            imp += exp(-pow((d - dt * 9.0) * 0.9, 2.0)) * (1.0 - dt / 1.2) * (0.4 + lines) + exp(-d * 0.8) * max(0.0, 0.3 - dt) * 1.2;
+          }
+          col = mix(col, vec3(1.0, 0.95, 1.0), clamp(imp * 0.25, 0.0, 0.35));
+          a += imp * 0.35 * fade;
+          // grazing angles stack many additive layers into a hot line; damp them
+          vec3 nrm = normalize(vec3(vW.x, 0.0, vW.z));
+          float facing = abs(dot(nrm, normalize(cameraPosition - vW)));
+          a *= mix(0.22, 1.0, smoothstep(0.04, 0.45, facing));
           gl_FragColor = vec4(col * a, 1.0);
         }`,
     });
@@ -469,6 +486,17 @@ export class Arena {
     );
     this.dust.frustumCulled = false;
     this.group.add(this.dust);
+  }
+
+  private impIdx = 0;
+  private impLast = 0;
+  /** Flash the force field where something hit it. */
+  wallImpact(x: number, z: number, time: number) {
+    if (time - this.impLast < 0.12) return;
+    this.impLast = time;
+    const arr = this.wallMat.uniforms.uImp.value as THREE.Vector2[];
+    arr[this.impIdx].set(Math.atan2(z, x), time);
+    this.impIdx = (this.impIdx + 1) % arr.length;
   }
 
   /** Keep the flare source on the sun direction, far from the camera. */

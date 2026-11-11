@@ -377,6 +377,7 @@ export class EnemyManager {
       if (rd > lim) {
         e.x *= lim / rd;
         e.z *= lim / rd;
+        if (Math.random() < 0.02) g.arena.wallImpact(e.x, e.z, g.time);
       }
 
       // facing

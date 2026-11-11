@@ -107,7 +107,7 @@ export class Game {
   private camPos = new THREE.Vector3(0, 40, 30);
   private camLook = new THREE.Vector3();
   private last = performance.now();
-  private snapCam = false;
+  snapCam = false;
   cineT = 0;
   storm = { k: 0, t: 0, dur: 0, next: 200, flashT: 0 };
   night = false;
@@ -664,6 +664,7 @@ export class Game {
 
     if (!P.dead) {
       if (P.update(dt, this.input, this.time)) this.onDash();
+      if (P.hitWall) this.arena.wallImpact(P.x, P.z, this.time);
       if (P.dashing) this.particles.emit(P.x, 0.8, P.z, rand(-1, 1), 0.5, rand(-1, 1), 0.35, 0.9, this.colors.cyan, 3);
       // engine trail
       const sp = Math.hypot(P.vx, P.vz);

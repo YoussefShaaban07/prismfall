@@ -6,6 +6,7 @@ import { BOSS_NAMES, EDEFS, hpScale } from './data';
 import type { Enemy } from './Enemies';
 import type { Game } from './Game';
 import { SHIP_YAW } from './Player';
+import { Trail } from './Trails';
 
 interface BossLook {
   model: ModelName;
@@ -31,6 +32,9 @@ export class BossController {
   index = 0;
   private spin = 0;
   private lastPhase = 0;
+  private trails: Trail[] = [];
+  private tv = new THREE.Vector3();
+  private smokeT = 0;
   private sigCount = 0;
 
   constructor(scene: THREE.Scene, private assets: Assets, private g: Game) {
@@ -39,6 +43,11 @@ export class BossController {
     this.light = new THREE.PointLight(0xc86bff, 10, 24, 1.5);
     this.light.position.y = 4;
     this.group.add(this.light);
+    for (let i = 0; i < 2; i++) {
+      const t = new Trail(scene, 0xc86bff, 1.4, 30, 0.025);
+      t.visible = false;
+      this.trails.push(t);
+    }
   }
 
   private build(final: boolean, idx: number) {
@@ -128,6 +137,7 @@ export class BossController {
   clear() {
     this.e = null;
     this.group.visible = false;
+    for (const t of this.trails) t.visible = false;
   }
 
   /** Called from EnemyManager.update for the boss entity. Writes e.vx/e.vz directly. */
@@ -337,5 +347,34 @@ export class BossController {
     }
     this.light.intensity = 10 + flash * 20;
     this.light.position.y = y + 3;
+
+    // twin engine ribbons from the stern
+    const back = this.final ? 0 : 1;
+    const yaw = e.yaw;
+    for (let i = 0; i < this.trails.length; i++) {
+      const t = this.trails[i];
+      if (this.final) { t.visible = false; continue; }
+      t.setColor(this.color);
+      t.visible = true;
+      const side = i === 0 ? -1 : 1;
+      const bx = -Math.sin(yaw) * 3.8 * back + Math.cos(yaw) * 1.6 * side;
+      const bz = -Math.cos(yaw) * 3.8 * back - Math.sin(yaw) * 1.6 * side;
+      t.intensity = 0.5 + Math.min(1, Math.hypot(e.vx, e.vz) / 6) * 0.8;
+      t.update(dt, this.tv.set(e.x + bx, y + 1.2, e.z + bz));
+    }
+
+    // battle damage: smoke and sparks pour out as hull drops
+    const dmg = 1 - e.hp / e.maxHp;
+    if (dmg > 0.35) {
+      this.smokeT -= dt;
+      if (this.smokeT <= 0) {
+        this.smokeT = 0.12 / dmg;
+        const a = Math.random() * Math.PI * 2;
+        const px = e.x + Math.cos(a) * 2, pz = e.z + Math.sin(a) * 2;
+        this.g.smoke.trail(px, y + 2.5, pz, 1.4 + dmg * 1.5, 1.8);
+        if (dmg > 0.6 && Math.random() < 0.5) this.g.particles.fireball(px, y + 2, pz, 0.5, 3);
+        if (Math.random() < 0.3) this.g.particles.burst(px, y + 2, pz, this.g.colors.orange, 6, 6, 0.4, 0.3, 0.8);
+      }
+    }
   }
 }
