@@ -35,7 +35,7 @@ Three-day build. Each session picks up the next unchecked items, playtests with 
 - [x] First-run tutorial prompts (adapts to keyboard / gamepad / touch)
 
 ### Day 2.5 — more content
-- [ ] Two new weapons: Wingman Drones (escort ships that shoot) and Gravity Mines
+- [x] Two new weapons: Wingman Drones (escort ships in V formation) and Gravity Mines (pull then detonate), with evolutions
 - [ ] Night Shift map variant (night HDRI, cold palette) unlocked after first win, with its own enemy mix
 - [ ] Mutators / daily challenge with seeded modifiers
 - [ ] Boss intro cinematic (camera push + name card)
@@ -50,6 +50,7 @@ Three-day build. Each session picks up the next unchecked items, playtests with 
 - [ ] Full QA pass (desktop + phone sizes), README with screenshots, GitHub Pages deploy
 
 ## Session log
+- **S2b (Nov 10 night)**: 8-weapon pool, lighter scorch decals, bot now sidesteps bullets/hazards. 6-run sample: deaths at 3:53–10:09, 1 win — good roguelite curve before hangar upgrades.
 - **S2 (Nov 10 night)**: boss signatures + hazards; fixed negative frame-delta bug that blew up post-processing after picking upgrades; balance (more repairs, cubic late HP); bloom/bullet readability; README + screenshots.
 - **S1c (Nov 10 eve)**: new enemies, material/tone-mapping fixes (ACES was whitening accents), tutorial, PWA, auto quality.
 - **S1b (Nov 10 eve)**: sound samples, balance rounds via bot sims, juice pass, hangar/ships/upgrades/achievements/records.

@@ -34,7 +34,7 @@ export const EDEFS: Record<EType, EDef> = {
 
 /* ======================= WEAPONS ======================= */
 
-export type WeaponId = 'blaster' | 'blades' | 'arc' | 'missiles' | 'nova' | 'lance';
+export type WeaponId = 'blaster' | 'blades' | 'arc' | 'missiles' | 'nova' | 'lance' | 'wingmen' | 'mines';
 export type PassiveId = 'vitality' | 'thrust' | 'magnet' | 'power' | 'clock' | 'regen' | 'area' | 'armor';
 
 export interface WeaponDef {
@@ -90,6 +90,18 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     levels: ['Fires a piercing ion beam.', '+Damage, wider beam.', '+1 beam.', '+Damage, faster.', '+1 beam.', 'EVOLVED: a rotating fan of solar beams.'],
     evoNeeds: 'vitality',
   },
+  wingmen: {
+    id: 'wingmen', name: 'Wingman Drones', evoName: 'Squadron', icon: '✈', color: '#ff8ad8',
+    blurb: 'Escort fighters that fly in formation and shoot.',
+    levels: ['A wingman joins your formation.', '+1 wingman.', '+Damage, faster fire.', '+1 wingman.', '+Damage, faster fire.', 'EVOLVED: four wingmen firing twin bolts.'],
+    evoNeeds: 'thrust',
+  },
+  mines: {
+    id: 'mines', name: 'Gravity Mines', evoName: 'Event Horizon', icon: '◍', color: '#9a7bff',
+    blurb: 'Drops mines that pull enemies in, then detonate.',
+    levels: ['Drops a gravity mine behind you.', '+Damage, bigger pull.', '+1 mine per drop.', '+Damage, faster.', '+1 mine per drop.', 'EVOLVED: singularity mines that crush whole swarms.'],
+    evoNeeds: 'regen',
+  },
 };
 
 /** numeric stats per level (index 0..5, 5 = evolved) */
@@ -99,6 +111,8 @@ export const WSTATS = {
   arc: { cd: [1.5, 1.4, 1.15, 1.05, 0.85, 0.75], jumps: [3, 4, 4, 6, 6, 10], dmg: [16, 18, 24, 26, 34, 40], chains: [1, 1, 1, 1, 1, 2] },
   missiles: { cd: [2.1, 2.0, 1.8, 1.7, 1.45, 1.2], count: [1, 2, 2, 3, 4, 7], dmg: [26, 28, 36, 40, 44, 55], blast: [2.3, 2.4, 2.9, 3.0, 3.1, 4.0] },
   nova: { cd: [3.4, 3.2, 2.7, 2.6, 2.1, 2.2], radius: [5, 6, 6.2, 7.3, 7.6, 9.5], dmg: [14, 16, 22, 24, 32, 48], knock: [11, 11, 12, 12, 13, 16] },
+  wingmen: { cd: [0.75, 0.7, 0.6, 0.58, 0.48, 0.3], count: [1, 2, 2, 3, 3, 4], dmg: [9, 10, 13, 14, 18, 20], shots: [1, 1, 1, 1, 1, 2] },
+  mines: { cd: [2.6, 2.4, 2.3, 2.0, 1.9, 1.5], count: [1, 1, 2, 2, 3, 4], dmg: [32, 40, 42, 52, 56, 75], radius: [3.0, 3.5, 3.6, 4.0, 4.2, 5.5], pull: [10, 13, 13, 15, 16, 24] },
   lance: { cd: [2.4, 2.3, 2.1, 1.85, 1.7, 1.0], dmg: [30, 38, 40, 50, 54, 70], width: [0.6, 0.8, 0.8, 0.9, 0.95, 1.3], beams: [1, 1, 2, 2, 3, 5], length: 26 },
 };
 

@@ -109,7 +109,7 @@ export class Game {
   private fpsN = 0;
   private autoQDone = false;
 
-  constructor(canvas: HTMLCanvasElement, private assets: Assets, renderer: Renderer) {
+  constructor(canvas: HTMLCanvasElement, public assets: Assets, renderer: Renderer) {
     this.r = renderer;
     this.settings = store.get<Settings>('prismfall.settings', { quality: this.defaultQuality(), sfx: 0.8, music: 0.6, shake: true, numbers: true });
     this.ui = new UI(this.settings);
@@ -1019,10 +1019,24 @@ export class Game {
       fx += dx * w; fz += dz * w;
       if (d2 < 6) danger++;
     }
+    let incoming = false;
     for (const s of this.proj.shots) {
       const dx = P.x - s.x, dz = P.z - s.z;
       const d2 = dx * dx + dz * dz;
-      if (d2 < 30) { fx += dx / Math.max(0.5, d2) * 2; fz += dz / Math.max(0.5, d2) * 2; }
+      if (d2 < 30) {
+        // sidestep perpendicular to the bullet's travel direction
+        const sp = Math.hypot(s.vx, s.vz) || 1;
+        const side = (dx * s.vz - dz * s.vx) > 0 ? 1 : -1;
+        fx += (s.vz / sp) * side * 3 / Math.max(0.5, d2);
+        fz += (-s.vx / sp) * side * 3 / Math.max(0.5, d2);
+        if (d2 < 2.5 && (dx * s.vx + dz * s.vz) > 0) incoming = true;
+      }
+    }
+    for (const q of this.hazards.zones) {
+      if (!q.active) continue;
+      const dx = P.x - q.x, dz = P.z - q.z;
+      const d = Math.hypot(dx, dz) || 1;
+      if (d < q.r + 2) { fx += dx / d * 0.6; fz += dz / d * 0.6; }
     }
     let best = null as null | { x: number; z: number }, bd = 400;
     for (const gm of this.pickups.gems) {
@@ -1038,7 +1052,7 @@ export class Game {
     const l = Math.hypot(fx, fz) || 1;
     this.input.moveX = fx / l;
     this.input.moveY = fz / l;
-    if (danger >= 2) this.input.queueDash();
+    if (danger >= 2 || incoming) this.input.queueDash();
   }
 
   /** Run the simulation headlessly for N seconds (bot-controlled). Returns a summary. */

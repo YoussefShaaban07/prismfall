@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { addRim } from '../core/Assets';
+import { addRim, heroMapper } from '../core/Assets';
 import { rand, TAU } from '../core/util';
 import { WSTATS, type WeaponId } from './data';
 import type { Enemy } from './Enemies';
@@ -14,6 +14,10 @@ export class WeaponSystem {
   private lanceSweep = 0;
   private hue = 0;
   private boltColor = new THREE.Color(0.35, 0.95, 1).multiplyScalar(4);
+  private wingColor = new THREE.Color(1, 0.5, 0.85).multiplyScalar(3.5);
+  wingmen: { obj: THREE.Group; x: number; z: number; ang: number; t: number }[] = [];
+  mines: { x: number; z: number; t: number; arm: number; life: number; r: number; dmg: number; pull: number; obj: THREE.Group }[] = [];
+  private minePool: THREE.Group[] = [];
 
   constructor(scene: THREE.Scene, private g: Game) {
     const geo = new THREE.OctahedronGeometry(0.5, 0);
@@ -30,9 +34,38 @@ export class WeaponSystem {
       scene.add(m);
       this.blades.push(m);
     }
+    for (let i = 0; i < 4; i++) {
+      const obj = g.assets.object('craft_speederB', 1.2, heroMapper(0xff8ad8, 0.9));
+      const inner = new THREE.Group();
+      obj.rotation.y = Math.PI;
+      inner.add(obj);
+      inner.visible = false;
+      scene.add(inner);
+      this.wingmen.push({ obj: inner, x: 0, z: 0, ang: 0, t: rand(0, 0.5) });
+    }
+  }
+
+  private makeMine(): THREE.Group {
+    const gr = new THREE.Group();
+    const core = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(0.45, 1),
+      addRim(new THREE.MeshStandardMaterial({ color: 0x150c2a, emissive: 0x9a7bff, emissiveIntensity: 0.6, roughness: 0.3, metalness: 0.6, flatShading: true }), 0xb8a0ff, 1.6),
+    );
+    core.position.y = 0.6;
+    gr.add(core);
+    const ringMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.6, 0.45, 1).multiplyScalar(1.6), transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false });
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.05, 6, 40), ringMat);
+    ring.position.y = 0.6;
+    gr.add(ring);
+    gr.userData = { core, ring };
+    this.g.r.scene.add(gr);
+    return gr;
   }
 
   reset() {
+    for (const w of this.wingmen) w.obj.visible = false;
+    for (const m of this.mines) { m.obj.visible = false; this.minePool.push(m.obj); }
+    this.mines.length = 0;
     this.timers.clear();
     this.novaPending = null;
     for (const b of this.blades) b.visible = false;
@@ -50,7 +83,7 @@ export class WeaponSystem {
     const P = g.player;
     if (P.dead) return;
     for (const [id] of P.weapons) {
-      if (id === 'blades') continue;
+      if (id === 'blades' || id === 'wingmen') continue;
       const t = (this.timers.get(id) ?? 0.2) - dt;
       if (t <= 0) {
         const fired = this.fire(id);
@@ -60,6 +93,8 @@ export class WeaponSystem {
       } else this.timers.set(id, t);
     }
     this.updateBlades(dt);
+    this.updateWingmen(dt);
+    this.updateMines(dt);
     if (this.novaPending) {
       this.novaPending.t -= dt;
       if (this.novaPending.t <= 0) {
@@ -153,6 +188,20 @@ export class WeaponSystem {
         }
         return true;
       }
+      case 'mines': {
+        const S = WSTATS.mines;
+        const n = S.count[i];
+        for (let k = 0; k < n; k++) {
+          const a = P.ang + Math.PI + (k - (n - 1) / 2) * 0.9;
+          const d = 1.6 + k * 0.4;
+          const obj = this.minePool.pop() ?? this.makeMine();
+          obj.visible = true;
+          const x = P.x + Math.sin(a) * d, z = P.z + Math.cos(a) * d;
+          obj.position.set(x, 0, z);
+          this.mines.push({ x, z, t: 0, arm: 0.45, life: 1.7, r: S.radius[i] * P.area, dmg: S.dmg[i] * P.dmg, pull: S.pull[i], obj });
+        }
+        return true;
+      }
       case 'lance': {
         const S = WSTATS.lance;
         const t = g.enemies.nearest(P.x, P.z, 26);
@@ -210,6 +259,93 @@ export class WeaponSystem {
     for (let k = 0; k < 14; k++) {
       const t = rand(0, len);
       g.particles.emit(P.x + dx * t, 1, P.z + dz * t, rand(-2, 2), rand(0, 2), rand(-2, 2), 0.4, 0.5, g.colors.yellow, 3);
+    }
+  }
+
+  private updateWingmen(dt: number) {
+    const g = this.g;
+    const P = g.player;
+    const lv = P.weapons.get('wingmen');
+    const i = this.idx('wingmen');
+    const S = WSTATS.wingmen;
+    const n = lv ? S.count[i] : 0;
+    for (let k = 0; k < this.wingmen.length; k++) {
+      const w = this.wingmen[k];
+      if (k >= n) {
+        w.obj.visible = false;
+        continue;
+      }
+      if (!w.obj.visible) {
+        w.obj.visible = true;
+        w.x = P.x;
+        w.z = P.z;
+        g.particles.burst(P.x, 1, P.z, g.colors.pink, 14, 5, 0.4, 0.5);
+      }
+      // V formation behind the player
+      const side = k % 2 ? 1 : -1;
+      const row = Math.floor(k / 2) + 1;
+      const back = -1.8 * row, lat = 2.2 * row * side;
+      const ca = Math.cos(P.ang), sa = Math.sin(P.ang);
+      const tx = P.x + sa * back + ca * lat;
+      const tz = P.z + ca * back - sa * lat;
+      const k1 = 1 - Math.exp(-6 * dt);
+      w.x += (tx - w.x) * k1;
+      w.z += (tz - w.z) * k1;
+      w.t -= dt;
+      const target = g.enemies.nearest(w.x, w.z, 20);
+      let face = P.ang;
+      if (target) {
+        face = Math.atan2(target.x - w.x, target.z - w.z);
+        if (w.t <= 0) {
+          w.t = S.cd[i] * P.cd;
+          for (let s = 0; s < S.shots[i]; s++) {
+            const a = face + (s - (S.shots[i] - 1) / 2) * 0.1;
+            g.proj.bolt(w.x + Math.sin(a) * 0.6, w.z + Math.cos(a) * 0.6, a, 28, S.dmg[i] * P.dmg, i >= 4 ? 1 : 0, this.wingColor);
+          }
+        }
+      }
+      w.ang += Math.atan2(Math.sin(face - w.ang), Math.cos(face - w.ang)) * Math.min(1, dt * 10);
+      w.obj.position.set(w.x, 1.3 + Math.sin(g.time * 3 + k) * 0.15, w.z);
+      w.obj.rotation.set(0, w.ang, Math.sin(g.time * 2 + k) * 0.15);
+      if (Math.random() < 0.4) g.particles.emit(w.x - Math.sin(w.ang) * 0.6, 1.3, w.z - Math.cos(w.ang) * 0.6, 0, 0, 0, 0.25, 0.35, g.colors.pink, 0);
+    }
+  }
+
+  private updateMines(dt: number) {
+    const g = this.g;
+    for (let k = this.mines.length - 1; k >= 0; k--) {
+      const m = this.mines[k];
+      m.t += dt;
+      const { core, ring } = m.obj.userData as { core: THREE.Mesh; ring: THREE.Mesh };
+      core.rotation.y += dt * 4;
+      core.rotation.x += dt * 3;
+      ring.rotation.x = Math.PI / 2;
+      const armed = m.t > m.arm;
+      ring.scale.setScalar(armed ? m.r * (1 - ((m.t * 2) % 1)) : 0.6);
+      if (armed) {
+        // gravity pull toward the mine
+        for (const e of g.enemies.query(m.x, m.z, m.r * 1.8)) {
+          if (e.dead || e.type === 'boss') continue;
+          const dx = m.x - e.x, dz = m.z - e.z;
+          const d = Math.hypot(dx, dz) || 1;
+          if (d < m.r * 1.8) {
+            const f = m.pull * (e.type === 'brute' || e.elite ? 0.4 : 1) * dt * 8;
+            e.kx += (dx / d) * f;
+            e.kz += (dz / d) * f;
+          }
+        }
+        if (Math.random() < 0.7) {
+          const a = rand(0, TAU), r = m.r * rand(0.8, 1.6);
+          g.particles.emit(m.x + Math.cos(a) * r, 0.5, m.z + Math.sin(a) * r, -Math.cos(a) * r * 2.5, 0.3, -Math.sin(a) * r * 2.5, 0.35, 0.4, g.colors.violet, 0);
+        }
+      }
+      if (m.t >= m.life) {
+        g.proj.explode(m.x, m.z, m.r, m.dmg, g.colors.violet, 4, false);
+        m.obj.visible = false;
+        this.minePool.push(m.obj);
+        this.mines[k] = this.mines[this.mines.length - 1];
+        this.mines.pop();
+      }
     }
   }
 

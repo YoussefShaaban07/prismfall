@@ -76,7 +76,7 @@ export class Projectiles {
     this.shots.length = 0;
   }
 
-  explode(x: number, z: number, radius: number, dmg: number, color: THREE.Color, knock = 6) {
+  explode(x: number, z: number, radius: number, dmg: number, color: THREE.Color, knock = 6, scorch = true) {
     const g = this.g;
     const hits = g.enemies.query(x, z, radius + 3);
     for (const e of hits) {
@@ -91,7 +91,7 @@ export class Projectiles {
     g.particles.burst(x, 1, z, color, 26, radius * 4, 0.55, 0.9, 0.6);
     g.particles.burst(x, 1, z, g.colors.white, 8, radius * 2, 0.3, 1.2, 0.5);
     g.fx.ring(x, z, radius * 1.15, color, 0.35, 3);
-    g.fx.scorch(x, z, radius * 0.9);
+    if (scorch && Math.random() < 0.5) g.fx.scorch(x, z, radius * 0.8);
     g.debris.spawn(x, 0.6, z, g.colors.debris, 3, 6, 0.8);
     g.shake = Math.max(g.shake, 0.35);
     g.audio.sfx('boom');

@@ -35,7 +35,7 @@ export class Effects {
   private beamGeo: THREE.BufferGeometry;
   private teleGeo: THREE.PlaneGeometry;
   private decalGeo = new THREE.CircleGeometry(1, 32);
-  private decalTex = radialTexture('rgba(10,4,2,0.85)', 'rgba(10,4,2,0)');
+  private decalTex = radialTexture('rgba(20,8,4,0.5)', 'rgba(20,8,4,0)');
   private v = new THREE.Vector3();
 
   constructor(private scene: THREE.Scene, private camera: THREE.Camera, private floatRoot: HTMLElement) {
@@ -160,7 +160,7 @@ export class Effects {
   scorch(x: number, z: number, r: number) {
     let d = this.decals.find((q) => !q.active);
     if (!d) {
-      if (this.decals.length > 50) {
+      if (this.decals.length > 30) {
         d = this.decals.reduce((a, b) => (a.t > b.t ? a : b));
       } else {
         const mesh = new THREE.Mesh(
