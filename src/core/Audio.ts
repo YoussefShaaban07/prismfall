@@ -6,7 +6,7 @@ const mtof = (m: number) => 440 * Math.pow(2, (m - 69) / 12);
 
 type Sfx =
   | 'shoot' | 'hit' | 'kill' | 'pick' | 'level' | 'hurt' | 'zap' | 'boom' | 'nova' | 'warn'
-  | 'bossdie' | 'heal' | 'select' | 'dash' | 'lance' | 'missile' | 'click' | 'bomb' | 'evolve' | 'spawn' | 'heart';
+  | 'bossdie' | 'heal' | 'select' | 'dash' | 'lance' | 'missile' | 'click' | 'bomb' | 'evolve' | 'spawn' | 'heart' | 'victory';
 
 export class Audio {
   ctx: AudioContext | null = null;
@@ -267,6 +267,16 @@ export class Audio {
       case 'click':
         this.osc(1200, now, 0.04, 'square', 0.03, B, 900);
         break;
+      case 'victory': {
+        const seq = [0, 4, 7, 12, 7, 12, 16, 19, 24];
+        seq.forEach((n, i) => {
+          const g = this.osc(mtof(60 + n), now + i * 0.11, i === seq.length - 1 ? 1.6 : 0.3, 'sawtooth', 0.05, B);
+          g.connect(this.reverbSend);
+          this.osc(mtof(48 + n), now + i * 0.11, 0.3, 'square', 0.03, B);
+        });
+        this.nz(now + 0.9, 1.5, 0.06, 6000, 'highpass');
+        break;
+      }
       case 'heart':
         this.osc(62, now, 0.16, 'sine', 0.35, B, 40);
         this.osc(58, now + 0.2, 0.18, 'sine', 0.28, B, 38);
@@ -295,7 +305,7 @@ export class Audio {
 
   private schedule() {
     if (!this.ctx || !this.playing) return;
-    const spb = 60 / 118 / 4; // 16th notes at 118 bpm
+    const spb = 60 / this.bpm() / 4; // 16th notes
     while (this.nextTime < this.ctx.currentTime + 0.12) {
       if (!this.muted && this.musicOn) this.playStep(this.step, this.nextTime);
       this.nextTime += spb;
@@ -304,18 +314,27 @@ export class Audio {
   }
 
   // A minor progression: Am – F – C – G (with E for tension at high intensity)
-  private chords: [number, number[]][] = [
-    [45, [0, 3, 7]],
-    [41, [0, 4, 7]],
-    [48, [0, 4, 7]],
-    [43, [0, 4, 7]],
-  ];
+  /** 'dusk' = A minor synthwave, 'night' = slower E minor, boss = driving D minor */
+  theme: 'dusk' | 'night' = 'dusk';
+  private progs: Record<string, [number, number[]][]> = {
+    dusk: [[45, [0, 3, 7]], [41, [0, 4, 7]], [48, [0, 4, 7]], [43, [0, 4, 7]]],
+    night: [[40, [0, 3, 7]], [36, [0, 4, 7]], [43, [0, 4, 7]], [38, [0, 4, 7]]],
+    boss: [[38, [0, 3, 7]], [46, [0, 4, 7]], [48, [0, 4, 7]], [45, [0, 4, 7, 10]]],
+  };
+  private curProg = 'dusk';
+  private get chords() {
+    return this.progs[this.curProg];
+  }
+  private bpm() {
+    return this.curProg === 'boss' ? 134 : this.curProg === 'night' ? 104 : 118;
+  }
 
   private playStep(s: number, t: number) {
     const ctx = this.ctx!;
     const M = this.musicBus;
-    const bar = Math.floor(s / 16) % 4;
     const st = s % 16;
+    if (st === 0) this.curProg = this.intensity >= 3 ? 'boss' : this.theme;
+    const bar = Math.floor(s / 16) % 4;
     const [root, triad] = this.chords[bar];
     const I = this.intensity;
     // kick

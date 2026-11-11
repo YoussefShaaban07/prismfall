@@ -312,6 +312,7 @@ export class Game {
     (r.scene.background as THREE.Color).set(night ? 0x05060c : 0x1a0d12);
     (this.arena.dust.material as THREE.PointsMaterial).color.set(night ? 0x8ab0ff : 0xffb08a);
     this.player.light.intensity = night ? 9 : 4;
+    this.audio.theme = night ? 'night' : 'dusk';
   }
 
   nightUnlocked() {
@@ -868,6 +869,7 @@ export class Game {
       this.won = true;
       this.victoryT = 3;
       this.ui.banner('CORE DESTROYED', 'The colony is saved', '#7ff6ff', 3200);
+      setTimeout(() => this.audio.sfx('victory'), 900);
       // shatter every remaining enemy
       for (const o of this.enemies.list) if (!o.dead) this.kill(o);
     } else {
