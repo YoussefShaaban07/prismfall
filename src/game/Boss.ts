@@ -36,6 +36,7 @@ export class BossController {
   private tv = new THREE.Vector3();
   private smokeT = 0;
   private tendrilT = 0;
+  private charge: THREE.Mesh | null = null;
   private sigCount = 0;
 
   constructor(scene: THREE.Scene, private assets: Assets, private g: Game) {
@@ -163,6 +164,14 @@ export class BossController {
       this.rings.push(r);
     }
     this.light.color.copy(this.color);
+    if (!this.charge) {
+      this.charge = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(1, 3),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }),
+      );
+      this.charge.renderOrder = 6;
+      this.group.add(this.charge);
+    }
     this.group.add(body);
     this.body = body;
   }
@@ -424,6 +433,27 @@ export class BossController {
     }
     this.light.intensity = 10 + flash * 20;
     this.light.position.y = y + 3;
+
+    // charge-up glow: the bow lights up before dashes and radial volleys
+    if (this.charge) {
+      let k = 0;
+      if (e.phase === 4 && e.st === 1) k = 1 - Math.max(0, e.sub) / 0.9;
+      else if (e.phase === 4 && e.st === 0) k = 0.2;
+      else if (e.phase === 1) k = 1 - Math.min(1, Math.max(0, e.sub) / 0.65);
+      else if (e.phase === 2) k = 0.5 + Math.sin(time * 30) * 0.2;
+      const cm = this.charge.material as THREE.MeshBasicMaterial;
+      cm.color.copy(this.color).multiplyScalar(0.6 + k * 1.4);
+      cm.opacity = k * 0.8;
+      this.charge.visible = k > 0.02;
+      const fx = this.final ? 0 : Math.sin(e.yaw) * 3.6, fz = this.final ? 0 : Math.cos(e.yaw) * 3.6;
+      this.charge.position.set(fx, y + (this.final ? 10.5 : 2.2), fz);
+      this.charge.scale.setScalar(0.4 + k * (this.final ? 3 : 1.6) + Math.sin(time * 40) * 0.05 * k);
+      if (k > 0.5 && Math.random() < k * 0.6) {
+        const a = Math.random() * Math.PI * 2, r = 4;
+        const px = e.x + fx + Math.cos(a) * r, pz = e.z + fz + Math.sin(a) * r;
+        this.g.particles.emit(px, y + 2, pz, -Math.cos(a) * r * 3, 0, -Math.sin(a) * r * 3, 0.3, 0.4, this.color.clone().multiplyScalar(2), 0);
+      }
+    }
 
     // twin engine ribbons from the stern
     const back = this.final ? 0 : 1;
