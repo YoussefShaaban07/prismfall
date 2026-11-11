@@ -109,6 +109,7 @@ export class Game {
   private last = performance.now();
   private snapCam = false;
   cineT = 0;
+  storm = { k: 0, t: 0, dur: 0, next: 200, flashT: 0 };
   night = false;
   mods = new Set<ModId>();
   dailyKey: string | null = null;
@@ -405,12 +406,13 @@ export class Game {
     Object.assign(this, {
       dmgLog: {}, T: 0, kills: 0, score: 0, combo: 0, comboT: 0, maxCombo: 0, damageDealt: 0, pendingLevels: 0,
       bossesKilled: 0, nextBoss: BOSS_TIMES[0], bossWarn: 0, won: false, endless: false, rerolls: 3 + upLv(this.meta, 'rerolls'), untouchedT: 0, achT: 0, runAch: [], paidShards: 0, tutStep: this.meta.seenTutorial ? 99 : 0,
-      cineT: 0, lastEntry: null, spawnAcc: 0, nextSurge: 50, nextElite: 95, freezeT: 0, slowT: 0, deathT: 0, victoryT: 0, shake: 0, hurtT: 0,
+      cineT: 0, lastEntry: null, storm: { k: 0, t: 0, dur: 0, next: 170 + Math.random() * 60, flashT: 0 }, spawnAcc: 0, nextSurge: 50, nextElite: 95, freezeT: 0, slowT: 0, deathT: 0, victoryT: 0, shake: 0, hurtT: 0,
     });
     this.input.releaseAll();
     this.input.enabled = true;
     this.state = 'play';
     document.body.classList.remove('cine');
+    this.applyStorm(0);
     this.ui.startRun(this.input.touchUsed);
     const modNames = [...this.mods].map((m) => MODS.find((x) => x.id === m)!.name).join(' · ');
     if (ds) this.ui.banner('DAILY CHALLENGE', `${ship.name} · ${modNames}`, '#ffd84f', 3000);
@@ -440,6 +442,8 @@ export class Game {
     this.audio.intensity = 0;
     document.body.classList.remove('lowhp', 'cine');
     this.cineT = 0;
+    this.storm.k = 0;
+    this.applyStorm(0);
     this.ui.showMenu(this.meta.stats.bestScore, this.meta.stats.bestTime, this.input.touchUsed, this.meta.shards);
     this.ui.setMapLabel(this.meta.map, this.nightUnlocked());
     this.ui.renderMods(this.meta);
@@ -690,6 +694,7 @@ export class Game {
     }
 
     this.tutorial();
+    this.weather(dt);
 
     // achievements
     if (!P.dead) this.untouchedT += dt;
@@ -1132,6 +1137,62 @@ export class Game {
     if (!this.mods.has('norepair')) this.player.hp = Math.min(this.player.maxHp, this.player.hp + this.player.maxHp * 0.08);
     this.state = 'play';
     this.last = performance.now();
+  }
+
+  /* ======================= weather ======================= */
+
+  /** Periodic dust storm (ion storm with lightning at night): thick fog, wind-blown dust, reduced visibility. */
+  private weather(dt: number) {
+    const S = this.storm;
+    if (S.dur <= 0 && this.T >= S.next && !this.boss.e && this.bossWarn <= 0) {
+      S.dur = 32;
+      S.t = 0;
+      this.ui.banner(this.night ? 'ION STORM' : 'DUST STORM', 'Visibility dropping', this.night ? '#8ab0ff' : '#ffb27a', 2200);
+      this.audio.sfx('nova');
+    }
+    let target = 0;
+    if (S.dur > 0) {
+      S.t += dt;
+      target = S.t < S.dur - 4 ? 1 : 0;
+      if (S.t >= S.dur) {
+        S.dur = 0;
+        S.next = this.T + 150 + Math.random() * 60;
+      }
+    }
+    S.k += (target - S.k) * Math.min(1, dt * 0.6);
+    this.applyStorm(S.k);
+    if (S.k > 0.3) {
+      const P = this.player;
+      // wind-blown dust sheets drifting across the view
+      if (Math.random() < S.k * 0.9) {
+        const ox = rand(-28, 10), oz = rand(-22, 22);
+        this.smoke.trail(P.x + ox, rand(0.5, 6), P.z + oz, rand(2.5, 5), rand(1.4, 2.4));
+        if (Math.random() < 0.5) this.smoke.trail(P.x + ox + rand(-6, 6), rand(0.5, 6), P.z + oz + rand(-6, 6), rand(2.5, 5), rand(1.4, 2.4));
+      }
+      if (this.night) {
+        S.flashT -= dt;
+        if (S.flashT <= 0) {
+          S.flashT = rand(2.5, 6);
+          if (!this.settings.calm) this.ui.flash('rgba(160,190,255,0.35)');
+          this.arena.groundUniforms.uPulse.value = 1.2;
+          this.audio.sfx('boom');
+        }
+      }
+    }
+  }
+
+  private applyStorm(k: number) {
+    const fog = this.r.scene.fog as THREE.Fog;
+    fog.near = 90 - k * 86;
+    fog.far = 520 - k * 460;
+    const st = this.smoke.mat.uniforms.uTint.value as THREE.Color;
+    if (this.night) st.setRGB(0.32 - k * 0.1, 0.24 - k * 0.02, 0.22 + k * 0.15);
+    else st.setRGB(0.32 + k * 0.25, 0.24 + k * 0.12, 0.22 + k * 0.04);
+    this.smoke.wind = 0.6 + k * 14;
+    const dm = this.arena.dust.material as THREE.PointsMaterial;
+    dm.size = 0.12 + k * 0.18;
+    dm.opacity = 0.55 + k * 0.35;
+    this.arena.windBoost = 1 + k * 9;
   }
 
   /* ======================= first-run tutorial ======================= */

@@ -266,6 +266,7 @@ export class Smoke {
   geo = new THREE.BufferGeometry();
   mat: THREE.ShaderMaterial;
   points: THREE.Points;
+  wind = 0.6;
 
   constructor(scene: THREE.Scene) {
     const m = this.max;
@@ -367,7 +368,7 @@ export class Smoke {
       const i3 = i * 3;
       const dr = Math.exp(-2.2 * dt);
       this.vel[i3] *= dr; this.vel[i3 + 2] *= dr; this.vel[i3 + 1] *= Math.exp(-0.8 * dt);
-      this.pos[i3] += this.vel[i3] * dt + dt * 0.6; // light wind
+      this.pos[i3] += this.vel[i3] * dt + dt * this.wind; // wind
       this.pos[i3 + 1] += this.vel[i3 + 1] * dt;
       this.pos[i3 + 2] += this.vel[i3 + 2] * dt;
       const t = 1 - this.life[i] / this.maxLife[i];

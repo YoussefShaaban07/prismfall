@@ -72,7 +72,7 @@ export class Player {
     const fGeo = new THREE.ConeGeometry(0.16, 1, 10, 1, true);
     fGeo.rotateX(-Math.PI / 2);
     fGeo.translate(0, 0, -0.5);
-    const fMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.4, 0.9, 1).multiplyScalar(6), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+    const fMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.4, 0.9, 1).multiplyScalar(3), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
     for (const sx of [-0.42, 0.42]) {
       const f = new THREE.Mesh(fGeo, fMat);
       f.position.set(sx, 0.38, -1.0);
@@ -142,7 +142,7 @@ export class Player {
     holder.add(this.ship);
     this.light.color.set(def.accent);
     for (const t of this.trails) t.setColor(def.accent);
-    for (const f of this.flames) (f.material as THREE.MeshBasicMaterial).color.set(def.accent).multiplyScalar(6);
+    for (const f of this.flames) (f.material as THREE.MeshBasicMaterial).color.set(def.accent).multiplyScalar(3);
     this.buildGhosts();
     for (const gh of this.ghosts) gh.g.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) (m.material as THREE.MeshBasicMaterial).color.set(def.accent).multiplyScalar(1.5); });
   }

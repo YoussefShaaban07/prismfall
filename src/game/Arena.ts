@@ -183,6 +183,7 @@ export class Arena {
   spinners: THREE.Object3D[] = [];
   flare: Lensflare;
   sunHolder = new THREE.Object3D();
+  windBoost = 1;
 
   constructor(scene: THREE.Scene, assets: Assets) {
     scene.add(this.group);
@@ -497,8 +498,8 @@ export class Arena {
     const p = this.dust.geometry.getAttribute('position') as THREE.BufferAttribute;
     const a = p.array as Float32Array;
     for (let i = 0; i < a.length; i += 3) {
-      a[i] += dt * 1.6;
-      a[i + 2] += dt * 0.4;
+      a[i] += dt * 1.6 * this.windBoost;
+      a[i + 2] += dt * 0.4 * this.windBoost;
       a[i + 1] += Math.sin(time + i) * dt * 0.1;
       if (a[i] - px > 90) a[i] -= 180;
       if (a[i] - px < -90) a[i] += 180;
