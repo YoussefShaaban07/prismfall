@@ -914,7 +914,7 @@ export class Game {
     }
     this.mmT -= dt;
     if (this.mmT <= 0) {
-      this.mmT = 0.1;
+      this.mmT = 1 / 30;
       this.ui.minimap({
         px: P.x, pz: P.z, ang: P.ang,
         enemies: this.enemies.list.map((e) => ({ x: e.x, z: e.z, boss: e.type === 'boss', elite: e.elite })),

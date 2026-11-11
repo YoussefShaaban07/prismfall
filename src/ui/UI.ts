@@ -386,6 +386,20 @@ export class UI {
     c.beginPath();
     c.arc(0, 0, R * 0.5, 0, Math.PI * 2);
     c.stroke();
+    // radar sweep
+    const t = performance.now() / 1000;
+    const sa = (t * 1.6) % (Math.PI * 2);
+    const sweep = c.createConicGradient ? c.createConicGradient(sa - 0.9, 0, 0) : null;
+    if (sweep) {
+      sweep.addColorStop(0, 'rgba(94,242,255,0)');
+      sweep.addColorStop(0.14, 'rgba(94,242,255,0.22)');
+      sweep.addColorStop(0.145, 'rgba(94,242,255,0)');
+      sweep.addColorStop(1, 'rgba(94,242,255,0)');
+      c.fillStyle = sweep;
+      c.beginPath();
+      c.arc(0, 0, R, 0, Math.PI * 2);
+      c.fill();
+    }
     for (const e of d.enemies) {
       if (e.boss) continue;
       c.fillStyle = e.elite ? '#ffd84f' : '#ff3f8f';
@@ -406,6 +420,13 @@ export class UI {
       c.arc(e.x * k, e.z * k, 5, 0, Math.PI * 2);
       c.fill();
       c.shadowBlur = 0;
+      // pulsing ping around the boss
+      const pr = 5 + ((t * 18) % 14);
+      c.strokeStyle = `rgba(200,107,255,${1 - (pr - 5) / 14})`;
+      c.lineWidth = 1.5;
+      c.beginPath();
+      c.arc(e.x * k, e.z * k, pr, 0, Math.PI * 2);
+      c.stroke();
     }
     c.translate(d.px * k, d.pz * k);
     c.rotate(-d.ang + Math.PI);
