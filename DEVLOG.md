@@ -60,6 +60,10 @@ Three-day build. Each session picks up the next unchecked items, playtests with 
 - [x] Screen-space god rays from the sun in menus
 - [x] Ground light pools under glowing objects + pooled explosion point lights
 - [x] Faceted, lit crystal pickups
+- [x] Night Shift searchlights sweeping the arena
+- [x] Prism Core rebuilt: glass/iridescent prism cluster, obsidian base, orbiting shards, energy tendrils
+- [x] Boss charge-up glows with energy suction before attacks
+- [x] Title-screen flythrough camera; ship nav lights; fading supply beacons
 - [ ] Screen-space reflections or wet sheen on landing pads
 - [x] Debris shrapnel that glows hot then cools
 
@@ -78,6 +82,7 @@ Three-day build. Each session picks up the next unchecked items, playtests with 
 - [ ] Full QA pass (desktop + phone sizes), README with screenshots, GitHub Pages deploy
 
 ## Session log
+- **S4b (Nov 11 early)**: searchlights, Core overhaul, charge glows, flythrough, nav lights, beacon beams, portrait HUD fix, LOW-quality phone check.
 - **S4 (Nov 10 late)**: ground glow pools, explosion lights, crystal material, god rays, big brightness rebalance for heavy fights, terrain perf, README screenshots refreshed.
 - **S3b (Nov 10 night)**: graphics push: dissolve, fire/smoke, distortion, terrain + mountains, clouds, flare, GTAO, DOF, grade, trails.
 - **S3 (Nov 10 night)**: adaptive music themes + victory sting, Codex with 3D previews, share card, first-launch briefing.

@@ -431,3 +431,6 @@ body.cine #hud .top, body.cine #minimap, body.cine .combo { opacity: 0; transiti
 .brief .bl.head { font-family: var(--display); font-size: 12px; letter-spacing: .45em; color: var(--cyan); }
 .brief .bl:last-child::after { content: '▍'; color: var(--cyan); animation: blink .8s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
+@media (orientation: portrait) and (max-width: 760px) {
+  .combo { top: calc(var(--st) + 170px); font-size: 13px; }
+}
