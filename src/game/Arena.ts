@@ -213,6 +213,15 @@ export class Arena {
       sh.fragmentShader = sh.fragmentShader
         .replace('#include <common>', `#include <common>
           varying vec3 vWPos; uniform vec2 uPlayer; uniform float uTime; uniform float uRadius; uniform float uPulse; uniform float uDanger; uniform float uNight;
+          vec2 vhash2(vec2 p){ p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3))); return fract(sin(p) * 43758.5453); }
+          // distance to the nearest Voronoi edge: glowing prism fissures in the ground
+          float fissure(vec2 x){
+            vec2 n = floor(x), f = fract(x); vec2 mg, mr; float md = 8.0;
+            for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) { vec2 g = vec2(float(i), float(j)); vec2 o = vhash2(n + g); vec2 r = g + o - f; float d = dot(r, r); if (d < md) { md = d; mr = r; mg = g; } }
+            md = 8.0;
+            for (int j = -2; j <= 2; j++) for (int i = -2; i <= 2; i++) { vec2 g = mg + vec2(float(i), float(j)); vec2 o = vhash2(n + g); vec2 r = g + o - f; if (dot(mr - r, mr - r) > 0.00001) md = min(md, dot(0.5 * (mr + r), normalize(r - mr))); }
+            return md;
+          }
           float gridLine(vec2 p, float s){ vec2 q = p / s; vec2 g = abs(fract(q - 0.5) - 0.5) / fwidth(q); return 1.0 - min(min(g.x, g.y), 1.0); }`)
         .replace('#include <map_fragment>', `
           #ifdef USE_MAP
@@ -247,6 +256,15 @@ export class Arena {
             em += gridCol * ring * (minor + major) * inside * (0.25 + uPulse);
             em += mix(vec3(1.0, 0.35, 0.8), vec3(0.3, 0.9, 1.0), 0.5 + 0.5 * sin(atan(p.y, p.x) * 6.0 + uTime)) * edge * 0.6;
             em += cyan * near * 0.05;
+            // prism fissures: thin crystal-energy cracks that pulse outward from the arena centre
+            vec2 fp = p * 0.075;
+            float fd = fissure(fp);
+            float fw = fwidth(fp.x) * 1.2;
+            float crack = (1.0 - smoothstep(0.0, fw, fd)) * inside;
+            float wave = 0.08 + 0.92 * pow(0.5 + 0.5 * sin(r * 0.22 - uTime * 1.4), 12.0);
+            vec3 crackCol = mix(vec3(0.3, 0.9, 1.0), vec3(0.75, 0.4, 1.0), 0.5 + 0.5 * sin(p.x * 0.05 + p.y * 0.04));
+            em += crackCol * crack * wave * (0.5 + uNight * 0.6 + uPulse * 1.2);
+            diffuseColor.rgb *= 1.0 - (1.0 - smoothstep(0.0, fw * 3.0, fd)) * inside * 0.3;
             totalEmissiveRadiance += em;
             diffuseColor.rgb *= mix(0.55, 1.0, inside);
             diffuseColor.rgb *= mix(vec3(1.0), vec3(0.62, 0.66, 0.9), uNight);
