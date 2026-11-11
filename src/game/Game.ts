@@ -665,6 +665,12 @@ export class Game {
     if (!P.dead) {
       if (P.update(dt, this.input, this.time)) this.onDash();
       if (P.hitWall) this.arena.wallImpact(P.x, P.z, this.time);
+      // hull damage: sparks and smoke when critical
+      const hpK = P.hp / P.maxHp;
+      if (hpK < 0.35 && Math.random() < (0.35 - hpK) * 2.2) {
+        this.particles.emit(P.x + rand(-0.6, 0.6), 1.1, P.z + rand(-0.6, 0.6), rand(-3, 3), rand(2, 5), rand(-3, 3), 0.35, 0.25, this.colors.orange, 2, -14);
+        if (Math.random() < 0.4) this.smoke.trail(P.x, 1.2, P.z, 0.7, 0.9);
+      }
       if (P.dashing) this.particles.emit(P.x, 0.8, P.z, rand(-1, 1), 0.5, rand(-1, 1), 0.35, 0.9, this.colors.cyan, 3);
       // engine trail
       const sp = Math.hypot(P.vx, P.vz);

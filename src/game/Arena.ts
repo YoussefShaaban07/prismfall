@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Assets, ModelName } from '../core/Assets';
-import { heroMapper } from '../core/Assets';
+import { heroMapper, alienMapper } from '../core/Assets';
 import { ARENA_RADIUS } from './data';
 import { rand, TAU } from '../core/util';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -392,6 +392,17 @@ export class Arena {
       const names: ModelName[] = ['rocks_smallA', 'rocks_smallB', 'rock_crystals'];
       const o = assets.object(names[Math.floor(Math.random() * 3)], rand(0.8, 2), base);
       o.position.set(Math.cos(a) * r, 0, Math.sin(a) * r);
+      o.rotation.y = rand(0, TAU);
+      statics.add(o);
+    }
+    // fallen prism shards: glowing crystal clusters embedded around the arena
+    const crystalCols = [0x5ef2ff, 0xff4fd8, 0xb48bff];
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * TAU + rand(-0.15, 0.15);
+      const r = rand(14, ARENA_RADIUS - 6);
+      const c = crystalCols[i % 3];
+      const o = assets.object(Math.random() < 0.5 ? 'rock_crystalsLargeA' : 'rock_crystalsLargeB', rand(3, 5), alienMapper(c, 2.2, 1.2));
+      o.position.set(Math.cos(a) * r, -0.4, Math.sin(a) * r);
       o.rotation.y = rand(0, TAU);
       statics.add(o);
     }
