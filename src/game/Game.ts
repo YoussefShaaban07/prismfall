@@ -139,8 +139,6 @@ export class Game {
   snap: HTMLCanvasElement | null = null;
   private briefed = false;
   private lastEntry: MetaState['top'][number] | null = null;
-  private fpsAcc = 0;
-  private fpsN = 0;
   private autoQDone = false;
 
   constructor(canvas: HTMLCanvasElement, public assets: Assets, renderer: Renderer) {
@@ -180,6 +178,7 @@ export class Game {
     this.setTheme(this.meta.map === 'night' && this.nightUnlocked());
 
     this.applySettings(this.settings);
+    addEventListener('resize', () => (this.frozenDirty = true));
     this.bindUI();
     canvas.addEventListener('pointerdown', (e) => { if (this.state === 'photo') this.photo.drag = { x: e.clientX, y: e.clientY }; });
     addEventListener('pointerup', () => (this.photo.drag = null));
@@ -317,6 +316,7 @@ export class Game {
       if (this.state === 'over' && code === 'Enter') this.startRun();
       if (code === 'KeyM') this.audio.toggleMute();
       if (code === 'F2') this.togglePhoto();
+      if (code === 'F3') this.togglePerf();
     };
     this.input.onPadButton = (i) => {
       // D-pad / A / B drive menus whenever a screen is open
@@ -425,6 +425,7 @@ export class Game {
   }
 
   applySettings(s: Settings) {
+    this.frozenDirty = true;
     this.settings = s;
     store.set('prismfall.settings', s);
     if (this.lighting) this.lighting.setLightsEnabled(s.quality !== 'low');
@@ -581,11 +582,13 @@ export class Game {
   private loop = (now: number) => {
     requestAnimationFrame(this.loop);
     if (this.debugHold) { this.last = now; return; }
-    let dt = clamp((now - this.last) / 1000, 0, 0.05);
+    const rawMs = now - this.last;
+    let dt = clamp(rawMs / 1000, 0, 0.05);
     this.last = now;
     this.time += dt;
     this.input.update();
-    this.autoQuality(dt);
+    this.autoQuality(dt, rawMs);
+    this.updatePerf(rawMs);
 
     if (this.state === 'play') {
       if (this.freezeT > 0) {
@@ -633,24 +636,99 @@ export class Game {
     g.uHurt.value = damp(g.uHurt.value as number, this.hurtT > 0 ? (calm ? 0.2 : 0.55) : 0, 10, dt || 0.016);
     g.uAberr.value = damp(g.uAberr.value as number, calm ? 0 : this.hurtT > 0 ? 1 : this.player.dashing ? 0.6 : 0, 12, dt || 0.016);
     this.hurtT = Math.max(0, this.hurtT - dt);
-    this.r.render(this.time);
+    // Level-up and pause freeze the world behind a blurred overlay. Re-rendering an identical
+    // frame every tick also forces the browser to re-blur it, which is what drags integrated GPUs
+    // down to single digits; draw a few settle frames and then hold the image.
+    const frozen = this.state === 'levelup' || this.state === 'paused';
+    this.frozenT = frozen ? this.frozenT + rawMs / 1000 : 0;
+    if (!frozen || this.frozenT < 0.3 || this.frozenDirty) {
+      this.frozenDirty = false;
+      this.r.render(this.time);
+    }
   };
+  private frozenT = 0;
+  /** Set to force one redraw while frozen (resize, settings change). */
+  frozenDirty = false;
 
-  /** Measure real frame times during play and step quality down once if the device struggles. */
-  private autoQuality(dt: number) {
-    if (this.autoQDone || this.state !== 'play' || this.T < 3) return;
-    this.fpsAcc += dt;
-    this.fpsN++;
-    if (this.fpsN < 240) return;
-    const avg = this.fpsAcc / this.fpsN;
-    this.autoQDone = true;
-    if (store.get('prismfall.qualityLocked', false)) return;
+  /**
+   * Frame-budget controller. Every second it compares GPU time (timer queries when the browser
+   * exposes them, raw frame time otherwise) against a 60 fps budget and scales the render
+   * resolution between 50% and 100%. If the floor is reached and the device still can't keep up,
+   * it steps the quality tier down; a fast machine on HIGH gets bumped to ULTRA once.
+   */
+  /* F3 performance overlay: fps, GPU ms, render scale, draw calls */
+  private perfEl: HTMLDivElement | null = null;
+  private perfAcc = 0;
+  private perfN = 0;
+  togglePerf() {
+    if (this.perfEl) {
+      this.perfEl.remove();
+      this.perfEl = null;
+      return;
+    }
+    const el = document.createElement('div');
+    el.className = 'perf-hud';
+    document.body.appendChild(el);
+    this.perfEl = el;
+  }
+  private updatePerf(rawMs: number) {
+    if (!this.perfEl) return;
+    this.perfAcc += rawMs;
+    this.perfN++;
+    if (this.perfAcc < 500) return;
+    const fps = (1000 * this.perfN) / this.perfAcc;
+    this.perfAcc = this.perfN = 0;
+    const R = this.r;
+    const i = R.renderer.info.render;
+    const px = R.renderer.getDrawingBufferSize(new THREE.Vector2());
+    this.perfEl.textContent = `${fps.toFixed(0)} FPS · GPU ${R.gpuMs > 0 ? R.gpuMs.toFixed(1) + ' ms' : 'n/a'} · ${this.settings.quality.toUpperCase()} ${Math.round(R.renderScale * 100)}% (${px.x}×${px.y}) · ${i.calls} draws`;
+  }
+
+  private qWinT = 0;
+  private qWinN = 0;
+  private qWinRaw = 0;
+  private qUpVotes = 0;
+  private qFloorT = 0;
+  private autoQuality(_dt: number, rawMs: number) {
+    if (this.state !== 'play' && this.state !== 'menu') return;
+    if (rawMs <= 0 || rawMs > 1000) return; // tab was hidden
+    this.qWinRaw += rawMs;
+    this.qWinN++;
+    this.qWinT += rawMs / 1000;
+    if (this.qWinT < 1) return;
+    const frame = this.qWinRaw / this.qWinN;
+    this.qWinT = this.qWinRaw = this.qWinN = 0;
+    const gpu = this.r.gpuMs;
+    const cost = gpu > 0 ? gpu : frame;
+    const budget = 14.5;
+    const R = this.r;
+    let scale = R.renderScale;
+    if (cost > budget * 1.12 && frame > 17.5) {
+      // fragment cost scales with pixel count, i.e. with scale squared
+      scale *= clamp(Math.sqrt(budget / cost), 0.7, 0.95);
+      this.qUpVotes = 0;
+    } else if (cost < budget * 0.62 && scale < 1) {
+      if (++this.qUpVotes >= 2) {
+        scale = Math.min(1, scale * 1.08);
+        this.qUpVotes = 0;
+      }
+    } else this.qUpVotes = 0;
+    R.setRenderScale(scale);
+
+    if (this.state !== 'play' || this.T < 4) return;
+    const locked = store.get('prismfall.qualityLocked', false);
     const q = this.settings.quality;
-    if (avg > 1 / 40 && q !== 'low') {
+    // stuck at the resolution floor and still slow: drop a tier
+    if (R.renderScale <= 0.51 && frame > 22) this.qFloorT += 1;
+    else this.qFloorT = 0;
+    if (!locked && q !== 'low' && this.qFloorT >= 3) {
+      this.qFloorT = 0;
       this.settings.quality = q === 'ultra' ? 'high' : 'low';
       this.applySettings(this.settings);
+      R.setRenderScale(0.8);
       this.ui.toast('GRAPHICS ADJUSTED', `Switched to ${this.settings.quality.toUpperCase()} for smoother play (Pause → Graphics)`);
-    } else if (avg < 1 / 75 && q === 'high' && !('ontouchstart' in window)) {
+    } else if (!locked && !this.autoQDone && q === 'high' && R.renderScale >= 1 && gpu > 0 && gpu < 6 && frame < 18 && !('ontouchstart' in window)) {
+      this.autoQDone = true;
       this.settings.quality = 'ultra';
       this.applySettings(this.settings);
     }

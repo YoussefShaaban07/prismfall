@@ -259,8 +259,9 @@ export class Arena {
             em += cyan * near * 0.05;
             // prism fissures: thin crystal-energy cracks that pulse outward from the arena centre
             vec2 fp = p * 0.075;
-            float fd = fissure(fp);
             float fw = fwidth(fp.x) * 1.2;
+            // the Voronoi is the priciest thing in the ground shader: skip it outside the arena
+            float fd = inside > 0.001 ? fissure(fp) : 1.0;
             float crack = (1.0 - smoothstep(0.0, fw, fd)) * inside;
             float wave = 0.08 + 0.92 * pow(0.5 + 0.5 * sin(r * 0.22 - uTime * 1.4), 12.0);
             vec3 crackCol = mix(vec3(0.3, 0.9, 1.0), vec3(0.75, 0.4, 1.0), 0.5 + 0.5 * sin(p.x * 0.05 + p.y * 0.04));

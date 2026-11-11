@@ -7,6 +7,7 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { BokehPass } from 'three/examples/jsm/postprocessing/BokehPass.js';
+import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
 
 export type Quality = 'ultra' | 'high' | 'low';
 
@@ -121,6 +122,12 @@ export class Renderer {
   bokeh: BokehPass;
   shafts: ShaderPass;
   smaa: SMAAPass | null = null;
+  fxaa: ShaderPass;
+  /** Dynamic resolution: multiplier on the quality's pixel ratio, driven by measured GPU time. */
+  renderScale = 1;
+  private basePR = 1;
+  /** GTAO buffers relative to the main target (half on HIGH: AO is low-frequency anyway). */
+  private aoScale = 0.5;
   quality: Quality = 'high';
   sun: THREE.DirectionalLight;
   hemi: THREE.HemisphereLight;
@@ -134,6 +141,7 @@ export class Renderer {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    this.renderer.info.autoReset = false; // count draws across the whole post chain per frame
 
     this.camera = new THREE.PerspectiveCamera(48, 1, 0.5, 1200);
     this.scene.background = new THREE.Color(0x1a0d12);
@@ -160,6 +168,8 @@ export class Renderer {
       this.gtao.updateGtaoMaterial({ radius: 2.2, distanceExponent: 1.2, thickness: 4, scale: 1.3, samples: 12, distanceFallOff: 1 });
       this.gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 12 });
       this.gtao.blendIntensity = 0.9;
+      const gtaoSetSize = this.gtao.setSize.bind(this.gtao);
+      this.gtao.setSize = (w: number, h: number) => gtaoSetSize(Math.max(1, Math.round(w * this.aoScale)), Math.max(1, Math.round(h * this.aoScale)));
       // AO should only see solid, lit geometry: hide FX (particles, additive/transparent meshes, sky) while it renders
       const gtao = this.gtao;
       const baseRender = gtao.render.bind(gtao);
@@ -200,6 +210,10 @@ export class Renderer {
     } catch {
       this.smaa = null;
     }
+    // FXAA: one cheap tap pattern for HIGH; SMAA's three passes cost ~6x more on integrated GPUs
+    this.fxaa = new ShaderPass(FXAAShader);
+    this.fxaa.enabled = false;
+    this.composer.addPass(this.fxaa);
 
     this.resize();
     addEventListener('resize', () => this.resize());
@@ -208,9 +222,14 @@ export class Renderer {
   setQuality(q: Quality) {
     this.quality = q;
     const dpr = window.devicePixelRatio || 1;
-    const pr = q === 'ultra' ? Math.min(dpr, 2) : q === 'high' ? Math.min(dpr, 1.5) : Math.min(dpr, 1);
-    this.renderer.setPixelRatio(pr);
-    this.composer.setPixelRatio(pr);
+    // HIGH caps at 1.25 so a 1080p laptop panel at 150% scaling doesn't push 2.25x the pixels
+    this.basePR = q === 'ultra' ? Math.min(dpr, 2) : q === 'high' ? Math.min(dpr, 1.25) : Math.min(dpr, 1);
+    this.aoScale = q === 'ultra' ? 1 : 0.5;
+    if (this.gtao) {
+      this.gtao.updateGtaoMaterial({ samples: q === 'ultra' ? 16 : 8 });
+      this.gtao.updatePdMaterial({ samples: q === 'ultra' ? 16 : 6, rings: 2 });
+    }
+    this.applyPR();
     this.renderer.shadowMap.enabled = q !== 'low';
     this.sun.castShadow = q !== 'low';
     const ms = q === 'ultra' ? 4096 : 2048;
@@ -220,13 +239,35 @@ export class Renderer {
       this.sun.shadow.map = null;
     }
     this.renderer.shadowMap.needsUpdate = true;
-    if (this.smaa) this.smaa.enabled = q !== 'low';
+    if (this.smaa) this.smaa.enabled = q === 'ultra';
+    this.fxaa.enabled = q === 'high' || (q === 'ultra' && !this.smaa);
     if (this.gtao) this.gtao.enabled = q !== 'low';
     this.scene.traverse((o) => {
       const m = (o as THREE.Mesh).material as THREE.Material | undefined;
       if (m) m.needsUpdate = true;
     });
     this.resize();
+  }
+
+  /** Change the dynamic-resolution multiplier (clamped); reallocates targets only when it really moves. */
+  setRenderScale(s: number) {
+    const v = Math.max(0.5, Math.min(1, s));
+    if (Math.abs(v - this.renderScale) < 0.01) return;
+    this.renderScale = v;
+    this.applyPR();
+  }
+
+  private applyPR() {
+    const pr = this.basePR * this.renderScale;
+    this.renderer.setPixelRatio(pr);
+    this.composer.setPixelRatio(pr);
+    this.resize();
+  }
+
+  /** Real pixels of the drawing buffer (for FXAA and anything that needs texel size). */
+  private syncFxaa() {
+    const pr = this.renderer.getPixelRatio();
+    (this.fxaa.material.uniforms.resolution.value as THREE.Vector2).set(1 / Math.max(1, this.width * pr), 1 / Math.max(1, this.height * pr));
   }
 
   resize() {
@@ -237,6 +278,7 @@ export class Renderer {
     this.camera.aspect = this.width / this.height;
     if (this.distort) this.distort.uniforms.uAspect.value = this.width / this.height;
     this.camera.updateProjectionMatrix();
+    if (this.fxaa) this.syncFxaa();
   }
 
   /** world-units-per-pixel helper for point sprites */
@@ -245,8 +287,44 @@ export class Renderer {
     return h / (2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2));
   }
 
+  /* ---------- GPU timing (EXT_disjoint_timer_query_webgl2) ---------- */
+  private tq: { ext: any; gl: WebGL2RenderingContext; pending: WebGLQuery[] } | null = null;
+  private tqTried = false;
+  /** Smoothed GPU milliseconds per frame, or -1 when the browser can't measure it. */
+  gpuMs = -1;
+
+  private beginTimer() {
+    if (!this.tqTried) {
+      this.tqTried = true;
+      const gl = this.renderer.getContext() as WebGL2RenderingContext;
+      const ext = (gl as any).getExtension?.('EXT_disjoint_timer_query_webgl2');
+      if (ext && 'createQuery' in gl) this.tq = { ext, gl, pending: [] };
+    }
+    const t = this.tq;
+    if (!t) return null;
+    // harvest finished queries (results arrive a few frames late)
+    while (t.pending.length) {
+      const q = t.pending[0];
+      if (!t.gl.getQueryParameter(q, t.gl.QUERY_RESULT_AVAILABLE)) break;
+      const disjoint = t.gl.getParameter(t.ext.GPU_DISJOINT_EXT);
+      const ms = (t.gl.getQueryParameter(q, t.gl.QUERY_RESULT) as number) / 1e6;
+      t.gl.deleteQuery(q);
+      t.pending.shift();
+      if (!disjoint && ms > 0 && ms < 500) this.gpuMs = this.gpuMs < 0 ? ms : this.gpuMs + (ms - this.gpuMs) * 0.08;
+    }
+    if (t.pending.length > 6) return null; // driver is far behind; don't pile up queries
+    const q = t.gl.createQuery();
+    if (!q) return null;
+    t.gl.beginQuery(t.ext.TIME_ELAPSED_EXT, q);
+    t.pending.push(q);
+    return t;
+  }
+
   render(time: number) {
     this.grade.uniforms.uTime.value = time % 100;
+    const t = this.beginTimer();
+    this.renderer.info.reset();
     this.composer.render();
+    if (t) t.gl.endQuery(t.ext.TIME_ELAPSED_EXT);
   }
 }

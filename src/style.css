@@ -469,3 +469,11 @@ body.photo #hud > *:not(#hint):not(.top), body.photo #hud .top .left, body.photo
 .card .ic img { width: 120%; height: 120%; object-fit: contain; filter: drop-shadow(0 0 10px var(--c)); animation: icFloat 2.4s ease-in-out infinite; }
 .slot span img { width: 26px; height: 26px; object-fit: contain; display: block; filter: drop-shadow(0 0 4px var(--c)); }
 .slot.pas span img { width: 20px; height: 20px; }
+
+/* F3 performance overlay */
+.perf-hud {
+  position: fixed; left: 8px; bottom: 8px; z-index: 60; pointer-events: none;
+  font: 600 12px/1.2 ui-monospace, Menlo, Consolas, monospace; color: #9ff3ff;
+  background: rgba(6, 10, 20, 0.72); border: 1px solid rgba(95, 230, 255, 0.35);
+  padding: 5px 8px; border-radius: 6px; letter-spacing: 0.02em;
+}
