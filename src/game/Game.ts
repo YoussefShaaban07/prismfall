@@ -106,6 +106,8 @@ export class Game {
   private last = performance.now();
   private snapCam = false;
   cineT = 0;
+  night = false;
+  private sunOff = new THREE.Vector3(-30, 45, 18);
   private lastEntry: MetaState['top'][number] | null = null;
   private fpsAcc = 0;
   private fpsN = 0;
@@ -137,10 +139,12 @@ export class Game {
     this.meta = loadMeta();
     this.previewShip = this.meta.ship;
     this.buildShowroom();
+    this.setTheme(this.meta.map === 'night' && this.nightUnlocked());
 
     this.applySettings(this.settings);
     this.bindUI();
     this.ui.showMenu(this.meta.stats.bestScore, this.meta.stats.bestTime, this.input.touchUsed, this.meta.shards);
+    this.ui.setMapLabel(this.meta.map, this.nightUnlocked());
     requestAnimationFrame(this.loop);
     document.addEventListener('visibilitychange', () => {
       if (document.hidden && this.state === 'play') this.pause();
@@ -170,6 +174,17 @@ export class Game {
       this.setShowShip(this.previewShip);
       if (open) ui.openHangar(this.meta, this.previewShip);
       else ui.closeHangar();
+    };
+    ui.onMapToggle = () => {
+      if (!this.nightUnlocked()) {
+        this.ui.toast('NIGHT SHIFT LOCKED', 'Destroy the Prism Core once to unlock');
+        return;
+      }
+      this.meta.map = this.meta.map === 'night' ? 'dusk' : 'night';
+      saveMeta(this.meta);
+      this.setTheme(this.meta.map === 'night');
+      this.ui.setMapLabel(this.meta.map, true);
+      this.audio.sfx('select');
     };
     ui.onShipPreview = (id) => {
       this.previewShip = id;
@@ -265,6 +280,31 @@ export class Game {
     this.showroom.add(this.showShip);
   }
 
+  /** Switch between the dusk outpost and the Night Shift sector. */
+  setTheme(night: boolean) {
+    this.night = night;
+    const r = this.r;
+    this.arena.groundUniforms.uNight.value = night ? 1 : 0;
+    this.arena.skyMat.uniforms.uNight.value = night ? 1 : 0;
+    const env = night ? this.assets.envNight : this.assets.env;
+    if (env) r.scene.environment = env;
+    r.scene.environmentIntensity = night ? 0.25 : 0.4;
+    r.sun.color.set(night ? 0x9fb8ff : 0xffc29a);
+    r.sun.intensity = night ? 1.4 : 2.0;
+    this.sunOff.set(night ? 25 : -30, night ? 50 : 45, night ? -20 : 18);
+    r.hemi.color.set(night ? 0x3a4a90 : 0x9fb8ff);
+    r.hemi.groundColor.set(night ? 0x100a18 : 0x4a2116);
+    r.hemi.intensity = night ? 0.7 : 0.55;
+    (r.scene.fog as THREE.Fog).color.set(night ? 0x0a0c18 : 0x2a1418);
+    (r.scene.background as THREE.Color).set(night ? 0x05060c : 0x1a0d12);
+    (this.arena.dust.material as THREE.PointsMaterial).color.set(night ? 0x8ab0ff : 0xffb08a);
+    this.player.light.intensity = night ? 9 : 4;
+  }
+
+  nightUnlocked() {
+    return this.meta.stats.wins > 0 || this.meta.achievements.includes('win');
+  }
+
   applySettings(s: Settings) {
     this.settings = s;
     store.set('prismfall.settings', s);
@@ -331,6 +371,7 @@ export class Game {
     document.body.classList.remove('lowhp', 'cine');
     this.cineT = 0;
     this.ui.showMenu(this.meta.stats.bestScore, this.meta.stats.bestTime, this.input.touchUsed, this.meta.shards);
+    this.ui.setMapLabel(this.meta.map, this.nightUnlocked());
     this.showroom.visible = true;
   }
 
@@ -474,7 +515,7 @@ export class Game {
       this.camLook.set(0, 4, 0);
       cam.lookAt(this.camLook);
       this.r.sun.target.position.set(0, 0, 0);
-      this.r.sun.position.set(-30, 45, 18);
+      this.r.sun.position.copy(this.sunOff);
       return;
     }
     const P = this.player;
@@ -506,7 +547,7 @@ export class Game {
     this.camLook.set(cam.position.x + sx, 0, cam.position.z - h * 0.62 + sy);
     cam.lookAt(this.camLook);
     // keep the shadow frustum centred on the action
-    this.r.sun.position.set(P.x - 30, 45, P.z + 18);
+    this.r.sun.position.set(P.x + this.sunOff.x, this.sunOff.y, P.z + this.sunOff.z);
     this.r.sun.target.position.set(P.x, 0, P.z);
   }
 
@@ -623,7 +664,7 @@ export class Game {
     }
 
     // regular spawns
-    const rate = Math.min(22, 0.9 + T / 42 + Math.pow(T / 120, 2)) * (this.boss.e ? 0.22 : 1) * (this.endless ? 1.3 : 1);
+    const rate = Math.min(22, 0.9 + T / 42 + Math.pow(T / 120, 2)) * (this.boss.e ? 0.22 : 1) * (this.endless ? 1.3 : 1) * (this.night ? 1.15 : 1);
     this.spawnAcc += rate * dt;
     let guard = 0;
     while (this.spawnAcc >= 1 && guard++ < 20) {
@@ -672,8 +713,9 @@ export class Game {
     if (T > 65) w.push(['meteor', 2 + T / 90]);
     if (T > 95) w.push(['spitter', 1.5 + T / 110]);
     if (T > 130) w.push(['brute', 0.8 + T / 160]);
-    if (T > 200) w.push(['wraith', 1 + T / 120]);
-    if (T > 170) w.push(['bomber', 1.2 + T / 160]);
+    const n = this.night;
+    if (T > (n ? 110 : 200)) w.push(['wraith', 1 + T / 120]);
+    if (T > (n ? 100 : 170)) w.push(['bomber', 1.2 + T / 160]);
     if (T > 240 && this.enemies.count('turret') < 3 + Math.floor(T / 120)) w.push(['turret', 0.35]);
     return pickWeighted(w);
   }
@@ -722,7 +764,7 @@ export class Game {
     this.combo++;
     this.comboT = 2.6;
     this.maxCombo = Math.max(this.maxCombo, this.combo);
-    this.score += Math.round(e.def.score * (1 + Math.floor(this.combo / 10) * 0.2) * (e.elite ? 10 : 1));
+    this.score += Math.round(e.def.score * (1 + Math.floor(this.combo / 10) * 0.2) * (e.elite ? 10 : 1) * (this.night ? 1.5 : 1));
     const col = new THREE.Color(e.def.color).multiplyScalar(3);
     const big = e.type === 'brute' || e.elite;
     this.particles.burst(e.x, e.def.hover + 0.3, e.z, col, big ? 40 : 14, big ? 12 : 8, 0.6, big ? 1 : 0.6, 0.6);
@@ -1120,7 +1162,7 @@ export class Game {
     const m = this.meta;
     const best = m.stats.bestScore;
     const newBest = this.score > best;
-    const total = shardsForRun({ kills: this.kills, bosses: this.bossesKilled, time: this.T, victory: this.won, level: this.player.level });
+    const total = Math.round(shardsForRun({ kills: this.kills, bosses: this.bossesKilled, time: this.T, victory: this.won, level: this.player.level }) * (this.night ? 1.3 : 1));
     const shards = Math.max(0, total - this.paidShards);
     const firstEnd = this.paidShards === 0 && !this.endless;
     this.paidShards = total;

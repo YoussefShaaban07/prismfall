@@ -385,3 +385,8 @@ body.cine #hud .top, body.cine #minimap, body.cine .combo { opacity: 0; transiti
 .toplist .tr b { font-family: var(--display); font-size: 14px; color: var(--gold); }
 .toplist .tr span { color: rgba(255, 255, 255, .7); }
 .toplist .tr.win b { color: #7ff6ff; }
+.mapbtn { font-size: 11px; letter-spacing: .18em; padding: 10px 18px; }
+.mapbtn b { color: var(--gold); font-weight: 700; }
+.mapbtn small { color: rgba(255, 255, 255, .5); letter-spacing: .1em; margin-left: 6px; }
+.mapbtn.night { border-color: rgba(120, 160, 255, .6); box-shadow: 0 0 20px rgba(100, 140, 255, .3); }
+.mapbtn.night b { color: #9fc4ff; }

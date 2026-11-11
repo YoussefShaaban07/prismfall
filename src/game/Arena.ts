@@ -94,6 +94,7 @@ export class Arena {
     uRadius: { value: ARENA_RADIUS },
     uPulse: { value: 0 },
     uDanger: { value: 0 },
+    uNight: { value: 0 },
   };
   wallMat: THREE.ShaderMaterial;
   skyMat: THREE.ShaderMaterial;
@@ -125,7 +126,7 @@ export class Arena {
         .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
       sh.fragmentShader = sh.fragmentShader
         .replace('#include <common>', `#include <common>
-          varying vec3 vWPos; uniform vec2 uPlayer; uniform float uTime; uniform float uRadius; uniform float uPulse; uniform float uDanger;
+          varying vec3 vWPos; uniform vec2 uPlayer; uniform float uTime; uniform float uRadius; uniform float uPulse; uniform float uDanger; uniform float uNight;
           float gridLine(vec2 p, float s){ vec2 q = p / s; vec2 g = abs(fract(q - 0.5) - 0.5) / fwidth(q); return 1.0 - min(min(g.x, g.y), 1.0); }`)
         .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
           {
@@ -141,12 +142,13 @@ export class Arena {
             vec3 cyan = vec3(0.25, 0.85, 1.0);
             vec3 mag = vec3(1.0, 0.25, 0.75);
             vec3 gridCol = mix(cyan, mag, uDanger);
-            vec3 em = gridCol * (minor * (0.015 + near * 0.22) + major * (0.06 + near * 0.4)) * inside;
+            vec3 em = gridCol * (minor * (0.015 + near * 0.22) + major * (0.06 + near * 0.4)) * inside * (1.0 + uNight * 1.2);
             em += gridCol * ring * (minor + major) * inside * (0.25 + uPulse);
             em += mix(vec3(1.0, 0.35, 0.8), vec3(0.3, 0.9, 1.0), 0.5 + 0.5 * sin(atan(p.y, p.x) * 6.0 + uTime)) * edge * 1.6;
             em += cyan * near * 0.05;
             totalEmissiveRadiance += em;
             diffuseColor.rgb *= mix(0.55, 1.0, inside);
+            diffuseColor.rgb *= mix(vec3(1.0), vec3(0.62, 0.66, 0.9), uNight);
           }`);
     };
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(520, 520, 1, 1), groundMat);
@@ -279,25 +281,31 @@ export class Arena {
       side: THREE.BackSide,
       depthWrite: false,
       fog: false,
-      uniforms: { uTime: { value: 0 } },
+      uniforms: { uTime: { value: 0 }, uNight: { value: 0 } },
       vertexShader: /* glsl */ `varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
       fragmentShader: /* glsl */ `
-        varying vec3 vDir; uniform float uTime;
+        varying vec3 vDir; uniform float uTime; uniform float uNight;
         float h(vec3 p){ return fract(sin(dot(p, vec3(127.1,311.7,74.7))) * 43758.5453); }
         void main(){
           float y = vDir.y;
-          vec3 horizon = vec3(0.42, 0.17, 0.12);
-          vec3 mid = vec3(0.14, 0.05, 0.12);
-          vec3 zenith = vec3(0.015, 0.01, 0.04);
+          vec3 horizon = mix(vec3(0.42, 0.17, 0.12), vec3(0.06, 0.08, 0.16), uNight);
+          vec3 mid = mix(vec3(0.14, 0.05, 0.12), vec3(0.03, 0.03, 0.08), uNight);
+          vec3 zenith = mix(vec3(0.015, 0.01, 0.04), vec3(0.004, 0.004, 0.015), uNight);
           vec3 col = mix(horizon, mid, smoothstep(-0.02, 0.18, y));
           col = mix(col, zenith, smoothstep(0.15, 0.7, y));
           // sun glow
           vec3 sd = normalize(vec3(-0.55, 0.18, 0.35));
           float s = max(dot(vDir, sd), 0.0);
-          col += vec3(1.0, 0.55, 0.3) * pow(s, 64.0) * 2.5 + vec3(0.6, 0.25, 0.15) * pow(s, 6.0) * 0.5;
+          col += (vec3(1.0, 0.55, 0.3) * pow(s, 64.0) * 2.5 + vec3(0.6, 0.25, 0.15) * pow(s, 6.0) * 0.5) * (1.0 - uNight);
+          vec3 md = normalize(vec3(0.4, 0.45, -0.6));
+          float mo = max(dot(vDir, md), 0.0);
+          col += (vec3(0.8, 0.9, 1.0) * smoothstep(0.9993, 0.9996, mo) * 2.0 + vec3(0.2, 0.3, 0.6) * pow(mo, 30.0) * 0.4) * uNight;
+          // aurora ribbons on night maps
+          float au = sin(vDir.x * 9.0 + uTime * 0.25 + sin(vDir.z * 7.0 + uTime * 0.1) * 1.5) * 0.5 + 0.5;
+          col += vec3(0.1, 0.9, 0.6) * pow(au, 6.0) * smoothstep(0.15, 0.4, y) * smoothstep(0.85, 0.45, y) * 0.25 * uNight;
           // stars
           vec3 q = floor(vDir * 420.0);
-          float st = step(0.9965, h(q)) * smoothstep(0.08, 0.5, y);
+          float st = step(0.9965 - uNight * 0.002, h(q)) * smoothstep(0.08, 0.5, y);
           col += vec3(st) * (0.6 + 0.4 * sin(uTime * 3.0 + h(q) * 50.0));
           gl_FragColor = vec4(col, 1.0);
         }`,

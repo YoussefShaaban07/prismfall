@@ -36,7 +36,7 @@ Three-day build. Each session picks up the next unchecked items, playtests with 
 
 ### Day 2.5 — more content
 - [x] Two new weapons: Wingman Drones (escort ships in V formation) and Gravity Mines (pull then detonate), with evolutions
-- [ ] Night Shift map variant (night HDRI, cold palette) unlocked after first win, with its own enemy mix
+- [x] Night Shift sector: night HDRI, moonlight, aurora sky, neon-forward grid; unlocked by first win; earlier phantoms/mines, +15% spawns, ×1.5 score, ×1.3 shards
 - [ ] Mutators / daily challenge with seeded modifiers
 - [x] Boss intro cinematic (camera push, letterbox, slow-mo, name card)
 - [x] Local top-10 leaderboard with run details (Hangar → Records)

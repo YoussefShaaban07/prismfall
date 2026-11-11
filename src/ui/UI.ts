@@ -57,6 +57,7 @@ export class UI {
   onSettings: (s: Settings) => void = () => {};
   onClick: () => void = () => {};
   onHangar: (open: boolean) => void = () => {};
+  onMapToggle: () => void = () => {};
   onShipPreview: (id: ShipId) => void = () => {};
   onShipAction: (id: ShipId) => void = () => {};
   onBuy: (id: UpgradeId) => void = () => {};
@@ -90,6 +91,7 @@ export class UI {
     $('#howClose').addEventListener('click', () => this.hide('#how'));
     $('#creditsBtn').addEventListener('click', () => this.show('#credits'));
     $('#hangarBtn').addEventListener('click', () => this.onHangar(true));
+    $('#mapBtn').addEventListener('click', () => this.onMapToggle());
     $('#menuSettingsBtn').addEventListener('click', () => this.show('#settingsScreen'));
     $('#pauseSettingsBtn').addEventListener('click', () => this.show('#settingsScreen'));
     $('#settingsClose').addEventListener('click', () => this.hide('#settingsScreen'));
@@ -125,6 +127,12 @@ export class UI {
     $('#menuShards').innerHTML = `<span class="shard">◆</span> ${fmtNum(shards)}`;
     $('#bestTxt').innerHTML = best > 0 ? `BEST <b>${fmtNum(best)}</b> &nbsp;·&nbsp; LONGEST <b>${fmtTime(bestTime)}</b>` : 'No runs yet. The colony is counting on you.';
     $('#ctlHint').textContent = touch ? 'Drag anywhere to fly · Tap DASH to dodge' : 'WASD / Arrows to fly · SPACE to dash · ESC to pause · Gamepad supported';
+  }
+
+  setMapLabel(map: 'dusk' | 'night', unlocked: boolean) {
+    const b = $('#mapBtn');
+    b.innerHTML = map === 'night' ? 'SECTOR · <b>NIGHT SHIFT</b> <small>×1.5 score</small>' : `SECTOR · <b>DUSK OUTPOST</b>${unlocked ? '' : ' <small>🔒 Night Shift</small>'}`;
+    b.classList.toggle('night', map === 'night');
   }
 
   hideAll() {
@@ -625,6 +633,7 @@ const TEMPLATE = /* html */ `
     <div class="logo">PRISM<span>FALL</span></div>
     <div class="tagline">A crystal swarm has fallen from the sky. Hold the line for ten minutes, then shatter the Prism Core.</div>
     <button id="playBtn" class="btn primary">LAUNCH</button>
+    <button id="mapBtn" class="btn mapbtn"></button>
     <div class="menurow">
       <button id="hangarBtn" class="btn">HANGAR <span id="menuShards" class="mshards"></span></button>
       <button id="howBtn" class="btn ghost">HOW TO PLAY</button>
