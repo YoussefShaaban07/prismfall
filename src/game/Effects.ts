@@ -6,8 +6,45 @@ interface Ring { mesh: THREE.Mesh; t: number; dur: number; max: number; active: 
 interface Bolt { line: THREE.Line; t: number; dur: number; active: boolean; pts: THREE.Vector3[] }
 interface Beam { mesh: THREE.Mesh; t: number; dur: number; active: boolean; width: number }
 interface Tele { mesh: THREE.Mesh; t: number; dur: number; active: boolean }
-interface Decal { mesh: THREE.Mesh; t: number; dur: number; active: boolean }
+interface Decal { mesh: THREE.Mesh; t: number; dur: number; active: boolean; heat: number }
 interface Floater { el: HTMLDivElement; x: number; y: number; z: number; t: number; dur: number; active: boolean; vy: number }
+
+/** Procedural blast scar: ragged burnt edge, radial soot streaks, embers that cool over ~1.5 s. */
+function scorchMaterial() {
+  return new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    uniforms: { uSeed: { value: 0 }, uRays: { value: 7 }, uOpacity: { value: 1 }, uHeat: { value: 1 } },
+    vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: /* glsl */ `
+      uniform float uSeed; uniform float uRays; uniform float uOpacity; uniform float uHeat; varying vec2 vUv;
+      float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float n2(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(h2(i), h2(i + vec2(1, 0)), f.x), mix(h2(i + vec2(0, 1)), h2(i + vec2(1, 1)), f.x), f.y); }
+      void main(){
+        vec2 p = (vUv - 0.5) * 2.0;
+        float r = length(p);
+        float a = atan(p.y, p.x);
+        float n = n2(p * 3.0 + uSeed) * 0.65 + n2(p * 7.0 - uSeed) * 0.35;
+        float edge = 0.62 + (n - 0.5) * 0.32 + 0.06 * sin(a * 5.0 + uSeed * 4.0);
+        float body = 1.0 - smoothstep(edge * 0.45, edge, r);
+        float rays = pow(0.5 + 0.5 * sin(a * uRays + uSeed * 3.0 + n * 3.5), 5.0) * (1.0 - smoothstep(0.35, 1.0, r));
+        float soot = clamp(body * 1.05 + rays * 0.6 * (1.0 - body), 0.0, 1.0) * (0.72 + 0.28 * n);
+        // embers: a glowing crust near the scar edge plus speckles in the middle, cooling with uHeat
+        float crust = exp(-pow((r - edge * 0.72) * 16.0, 2.0)) * smoothstep(0.55, 0.85, n);
+        float speck = smoothstep(0.86, 0.95, n2(p * 30.0 + uSeed * 7.0)) * body;
+        float ember = (crust * 0.75 + speck * 0.6) * uHeat * uHeat;
+        vec3 sootCol = vec3(0.02, 0.01, 0.008);
+        vec3 emberCol = mix(vec3(1.3, 0.22, 0.03), vec3(1.9, 0.75, 0.22), uHeat * uHeat);
+        vec3 col = mix(sootCol, emberCol, clamp(ember * 1.5, 0.0, 1.0));
+        float alpha = max(soot * 0.93, clamp(ember, 0.0, 1.0)) * uOpacity;
+        if (alpha < 0.004) discard;
+        gl_FragColor = vec4(col, alpha);
+      }`,
+  });
+}
 
 function radialTexture(inner: string, outer: string) {
   const c = document.createElement('canvas');
@@ -37,7 +74,6 @@ export class Effects {
   private beamGeo: THREE.BufferGeometry;
   private teleGeo: THREE.PlaneGeometry;
   private decalGeo = new THREE.CircleGeometry(1, 32);
-  private decalTex = radialTexture('rgba(20,8,4,0.5)', 'rgba(20,8,4,0)');
   private v = new THREE.Vector3();
 
   constructor(private scene: THREE.Scene, private camera: THREE.Camera, private floatRoot: HTMLElement) {
@@ -165,19 +201,23 @@ export class Effects {
       if (this.decals.length > 30) {
         d = this.decals.reduce((a, b) => (a.t > b.t ? a : b));
       } else {
-        const mesh = new THREE.Mesh(
-          this.decalGeo,
-          new THREE.MeshBasicMaterial({ map: this.decalTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }),
-        );
+        const mesh = new THREE.Mesh(this.decalGeo, scorchMaterial());
         mesh.renderOrder = 1;
         this.scene.add(mesh);
-        d = { mesh, t: 0, dur: 8, active: false };
+        d = { mesh, t: 0, dur: 8, active: false, heat: 1 };
         this.decals.push(d);
       }
     }
     d.mesh.position.set(x, 0.03, z);
     d.mesh.rotation.y = rand(0, TAU);
-    d.mesh.scale.setScalar(r);
+    d.mesh.scale.setScalar(r * 1.25);
+    const u = (d.mesh.material as THREE.ShaderMaterial).uniforms;
+    u.uSeed.value = rand(0, 100);
+    u.uRays.value = Math.floor(rand(5, 12));
+    u.uHeat.value = 1;
+    u.uOpacity.value = 1;
+    // small scars cool fast; big blasts glow a little longer
+    d.heat = 0.8 + Math.min(1, r / 5) * 1.2;
     d.t = 0;
     d.dur = 8;
     d.active = true;
@@ -290,7 +330,9 @@ export class Effects {
         d.mesh.visible = false;
         continue;
       }
-      (d.mesh.material as THREE.MeshBasicMaterial).opacity = Math.min(1, (d.dur - d.t) / 2);
+      const u = (d.mesh.material as THREE.ShaderMaterial).uniforms;
+      u.uOpacity.value = Math.min(1, (d.dur - d.t) / 2);
+      u.uHeat.value = Math.max(0, 1 - d.t / d.heat);
     }
     for (const f of this.floaters) {
       if (!f.active) continue;
