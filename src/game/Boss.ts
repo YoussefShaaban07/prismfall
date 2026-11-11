@@ -35,6 +35,7 @@ export class BossController {
   private trails: Trail[] = [];
   private tv = new THREE.Vector3();
   private smokeT = 0;
+  private tendrilT = 0;
   private sigCount = 0;
 
   constructor(scene: THREE.Scene, private assets: Assets, private g: Game) {
@@ -67,11 +68,59 @@ export class BossController {
     this.color.set(look.color);
     const mapper = alienMapper(look.color, final ? 1.6 : 0.6, 0.7);
     const ship = this.assets.object(look.model, look.size, (n, s) => {
+      if (final && n === 'crystal') {
+        // the Core's crystals: glassy, iridescent, lit from within
+        const pm = new THREE.MeshPhysicalMaterial({
+          color: 0x9ffcff, emissive: 0x2ad8ff, emissiveIntensity: 0.9, roughness: 0.08, metalness: 0,
+          transmission: this.g.r.quality === 'low' ? 0 : 0.85, thickness: 2.5, ior: 1.6,
+          iridescence: 1, iridescenceIOR: 1.4, clearcoat: 1, clearcoatRoughness: 0.05, flatShading: true,
+        });
+        return pm;
+      }
       const m = mapper(n, s) as THREE.MeshStandardMaterial;
       this.mats.push(m);
       return m;
     });
     if (!final) ship.rotation.y = SHIP_YAW;
+    if (final) {
+      // replace the rock with a custom prism cluster on an obsidian base
+      ship.visible = false;
+      const glass = (col: number, em: number, k: number) =>
+        new THREE.MeshPhysicalMaterial({
+          color: col, emissive: em, emissiveIntensity: k, roughness: 0.06, metalness: 0,
+          transmission: this.g.r.quality === 'low' ? 0 : 0.75, thickness: 3, ior: 1.6,
+          iridescence: 1, iridescenceIOR: 1.35, clearcoat: 1, clearcoatRoughness: 0.04, flatShading: true,
+        });
+      const prism = (h: number, w: number) => {
+        const gm = new THREE.CylinderGeometry(0, w, h * 0.25, 6, 1).translate(0, h * 0.875, 0);
+        const body2 = new THREE.CylinderGeometry(w, w * 0.8, h * 0.75, 6, 1).translate(0, h * 0.375, 0);
+        return [gm, body2];
+      };
+      const cl = new THREE.Group();
+      const parts: [number, number, number, number, number][] = [
+        // height, width, tiltX, tiltZ, yaw
+        [9, 1.6, 0, 0, 0], [6, 1.1, 0.42, 0, 0.3], [6.5, 1.1, -0.38, 0.1, 1.2], [5.5, 1, 0.1, 0.45, 2.1],
+        [5, 0.9, -0.1, -0.48, 3.0], [4.2, 0.8, 0.55, 0.3, 4.0], [4.5, 0.8, -0.5, -0.35, 5.1],
+      ];
+      const mA = glass(0x9ffcff, 0x2ad8ff, 0.7), mB = glass(0xd6b8ff, 0x8a5bff, 0.8);
+      parts.forEach(([h, w, tx, tz, yw], i) => {
+        const pg = new THREE.Group();
+        for (const geo of prism(h, w)) {
+          const m = new THREE.Mesh(geo, i % 2 ? mB : mA);
+          m.castShadow = true;
+          pg.add(m);
+        }
+        pg.rotation.set(tx, yw, tz);
+        cl.add(pg);
+      });
+      cl.position.y = 0.6;
+      body.add(cl);
+      body.userData.cluster = cl;
+      const base = this.assets.object('rock_largeA', 8, () => new THREE.MeshStandardMaterial({ color: 0x15111c, roughness: 0.35, metalness: 0.6, flatShading: true }));
+      base.scale.y = 0.4;
+      base.position.y = -0.4;
+      body.add(base);
+    }
     body.add(ship);
     if (!final) {
       // twin turrets bolted on top
@@ -90,9 +139,19 @@ export class BossController {
         new THREE.OctahedronGeometry(2.2, 0),
         new THREE.MeshBasicMaterial({ color: new THREE.Color(0.6, 1, 1).multiplyScalar(1.8) }),
       );
-      core.position.y = 7;
+      core.position.y = 10.5;
       body.add(core);
       body.userData.core = core;
+      const shards: THREE.Mesh[] = [];
+      const shardMat = new THREE.MeshPhysicalMaterial({ color: 0xb48bff, emissive: 0x7a4dff, emissiveIntensity: 1.2, roughness: 0.1, transmission: 0.6, thickness: 1, iridescence: 1, flatShading: true });
+      for (let i = 0; i < 9; i++) {
+        const sh = new THREE.Mesh(new THREE.OctahedronGeometry(0.7, 0), shardMat);
+        sh.scale.set(0.6, 1.6, 0.6);
+        sh.castShadow = true;
+        body.add(sh);
+        shards.push(sh);
+      }
+      body.userData.shards = shards;
     }
     // energy rings
     const ringMat = new THREE.MeshBasicMaterial({ color: this.color.clone().multiplyScalar(1.6), transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false });
@@ -331,6 +390,24 @@ export class BossController {
         core.rotation.y += dt * 2;
         const pulse = 1 + Math.sin(time * 6) * 0.08;
         core.scale.setScalar(pulse);
+      }
+      const shards = this.body.userData.shards as THREE.Mesh[] | undefined;
+      shards?.forEach((sh, i) => {
+        const a = time * (0.9 + (i % 3) * 0.25) + (i / shards.length) * Math.PI * 2;
+        const r = 6.5 + (i % 3) * 1.4;
+        sh.position.set(Math.cos(a) * r, 5 + Math.sin(time * 2 + i) * 1.5, Math.sin(a) * r);
+        sh.rotation.set(time * 2 + i, time * 1.3, 0);
+      });
+      // energy tendrils lashing from the core to the ground
+      this.tendrilT -= dt;
+      if (this.tendrilT <= 0 && e.spawnT <= 0) {
+        this.tendrilT = 0.25 + Math.random() * 0.3;
+        const a = Math.random() * Math.PI * 2, r = 4 + Math.random() * 7;
+        const top = new THREE.Vector3(e.x, y + 10, e.z);
+        const mid = new THREE.Vector3(e.x + Math.cos(a) * r * 0.5, y + 4, e.z + Math.sin(a) * r * 0.5);
+        const end = new THREE.Vector3(e.x + Math.cos(a) * r, 0.2, e.z + Math.sin(a) * r);
+        this.g.fx.lightning([top, mid, end], 0x9ffcff, 0.18);
+        this.g.particles.burst(end.x, 0.3, end.z, this.g.colors.cyan, 6, 5, 0.3, 0.4);
       }
     }
     this.rings.forEach((r, i) => {
