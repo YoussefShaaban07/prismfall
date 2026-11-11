@@ -5,6 +5,8 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
+import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
+import { BokehPass } from 'three/examples/jsm/postprocessing/BokehPass.js';
 
 export type Quality = 'ultra' | 'high' | 'low';
 
@@ -17,12 +19,15 @@ const GradeShader = {
     uAberr: { value: 0 },
     uVignette: { value: 1 },
     uSat: { value: 1.12 },
+    uShadowTint: { value: new THREE.Vector3(-0.02, 0.03, 0.06) },
+    uHighTint: { value: new THREE.Vector3(0.05, 0.02, -0.03) },
+    uContrast: { value: 1.08 },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
     void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
   fragmentShader: /* glsl */ `
-    uniform sampler2D tDiffuse; uniform float uTime; uniform float uHurt; uniform float uAberr; uniform float uVignette; uniform float uSat;
+    uniform sampler2D tDiffuse; uniform float uTime; uniform float uHurt; uniform float uAberr; uniform float uVignette; uniform float uSat; uniform vec3 uShadowTint; uniform vec3 uHighTint; uniform float uContrast;
     varying vec2 vUv;
     float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453); }
     void main(){
@@ -35,6 +40,9 @@ const GradeShader = {
       col.b = texture2D(tDiffuse, vUv - off).b;
       float l = dot(col, vec3(0.299,0.587,0.114));
       col = mix(vec3(l), col, uSat);
+      // cinematic split-toning: cool shadows, warm highlights, gentle S-curve
+      col += uShadowTint * pow(1.0 - clamp(l, 0.0, 1.0), 2.0) + uHighTint * pow(clamp(l, 0.0, 1.0), 2.0);
+      col = clamp((col - 0.5) * uContrast + 0.5, 0.0, 10.0);
       float vig = smoothstep(0.95, 0.25, d * uVignette);
       col *= mix(0.55, 1.0, vig);
       col = mix(col, col * vec3(1.4,0.5,0.5) + vec3(0.1,0.0,0.0), uHurt * (1.0 - vig*0.85));
@@ -81,6 +89,8 @@ export class Renderer {
   bloom: UnrealBloomPass;
   grade: ShaderPass;
   distort: ShaderPass;
+  gtao: GTAOPass | null = null;
+  bokeh: BokehPass;
   smaa: SMAAPass | null = null;
   quality: Quality = 'high';
   sun: THREE.DirectionalLight;
@@ -116,6 +126,36 @@ export class Renderer {
 
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
+    try {
+      this.gtao = new GTAOPass(this.scene, this.camera, 512, 512);
+      this.gtao.updateGtaoMaterial({ radius: 2.2, distanceExponent: 1.2, thickness: 4, scale: 1.3, samples: 12, distanceFallOff: 1 });
+      this.gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 12 });
+      this.gtao.blendIntensity = 0.9;
+      // AO should only see solid, lit geometry: hide FX (particles, additive/transparent meshes, sky) while it renders
+      const gtao = this.gtao;
+      const baseRender = gtao.render.bind(gtao);
+      const hidden: THREE.Object3D[] = [];
+      gtao.render = (renderer, writeBuffer, readBuffer, deltaTime, maskActive) => {
+        this.scene.traverseVisible((o) => {
+          const m = (o as THREE.Mesh).material as THREE.Material | undefined;
+          const fx = (o as THREE.Points).isPoints || (o as THREE.Line).isLine ||
+            (m && (m.transparent || !m.depthWrite || (m as THREE.MeshBasicMaterial).isMeshBasicMaterial || (m as THREE.ShaderMaterial).isShaderMaterial));
+          if (fx && o.visible && !(o as THREE.Light).isLight) {
+            o.visible = false;
+            hidden.push(o);
+          }
+        });
+        baseRender(renderer, writeBuffer, readBuffer, deltaTime, maskActive);
+        for (const o of hidden) o.visible = true;
+        hidden.length = 0;
+      };
+      this.composer.addPass(this.gtao);
+    } catch {
+      this.gtao = null;
+    }
+    this.bokeh = new BokehPass(this.scene, this.camera, { focus: 11, aperture: 0.0005, maxblur: 0.006 });
+    this.bokeh.enabled = false;
+    this.composer.addPass(this.bokeh);
     this.distort = new ShaderPass(DistortShader);
     this.composer.addPass(this.distort);
     this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.6, 0.45, 1.0);
@@ -150,6 +190,7 @@ export class Renderer {
     }
     this.renderer.shadowMap.needsUpdate = true;
     if (this.smaa) this.smaa.enabled = q !== 'low';
+    if (this.gtao) this.gtao.enabled = q !== 'low';
     this.scene.traverse((o) => {
       const m = (o as THREE.Mesh).material as THREE.Material | undefined;
       if (m) m.needsUpdate = true;

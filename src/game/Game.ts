@@ -311,7 +311,7 @@ export class Game {
 
   private setShowShip(id: ShipId) {
     const def = SHIPS.find((x) => x.id === id)!;
-    this.setShowModel(def.model, 4.2, heroMapper(def.accent, 1.2));
+    this.setShowModel(def.model, 4.2, heroMapper(def.accent, 0.5));
   }
 
   private setShowModel(model: ModelName, size: number, mapper: ReturnType<typeof heroMapper>) {
@@ -353,6 +353,8 @@ export class Game {
     (this.arena.dust.material as THREE.PointsMaterial).color.set(night ? 0x8ab0ff : 0xffb08a);
     this.player.light.intensity = night ? 9 : 4;
     this.audio.theme = night ? 'night' : 'dusk';
+    (r.grade.uniforms.uShadowTint.value as THREE.Vector3).set(night ? -0.03 : -0.02, night ? 0.01 : 0.03, night ? 0.08 : 0.06);
+    (r.grade.uniforms.uHighTint.value as THREE.Vector3).set(night ? 0.0 : 0.05, night ? 0.03 : 0.02, night ? 0.05 : -0.03);
   }
 
   nightUnlocked() {
@@ -584,6 +586,7 @@ export class Game {
   private updateCamera(dt: number) {
     const cam = this.r.camera;
     const aspect = this.r.width / this.r.height;
+    this.r.bokeh.enabled = this.state === 'menu' && this.hangarOpen && this.r.quality !== 'low';
     if (this.state === 'menu' && this.hangarOpen) {
       const a = this.time * 0.25;
       const dist = this.r.width > this.r.height ? 10 : 15;
@@ -591,6 +594,7 @@ export class Game {
       cam.position.lerp(this.camPos, 1 - Math.exp(-3 * dt));
       this.camLook.set(0, 2.2, 0);
       cam.lookAt(this.camLook);
+      ((this.r.bokeh.uniforms as Record<string, { value: number }>).focus).value = cam.position.distanceTo(this.camLook);
       const W = this.r.width, H = this.r.height;
       if (W > H) cam.setViewOffset(W, H, W * 0.2, 0, W, H);
       else cam.setViewOffset(W, H, 0, H * 0.27, W, H);
