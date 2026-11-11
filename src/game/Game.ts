@@ -15,6 +15,7 @@ import { Projectiles } from './Projectiles';
 import { WeaponSystem } from './Weapons';
 import { Pickups, type PowerKind } from './Pickups';
 import { Hazards } from './Hazards';
+import { Lighting } from './Lighting';
 import { rollChoices, describe, applyChoice, type Choice } from './Upgrades';
 import { ARENA_RADIUS, BOSS_TIMES, FINAL_TIME, xpForLevel, type EType } from './data';
 import { ACHIEVEMENTS, MODS, SHIPS, UPGRADES, dailySetup, loadMeta, modMult, saveMeta, shardsForRun, upLv, type MetaState, type ModId, type ShipId } from './meta';
@@ -43,6 +44,7 @@ export class Game {
   weapons: WeaponSystem;
   pickups: Pickups;
   hazards: Hazards;
+  lighting: Lighting;
 
   colors = {
     cyan: C(0.35, 0.95, 1, 3),
@@ -144,6 +146,7 @@ export class Game {
     this.weapons = new WeaponSystem(scene, this);
     this.pickups = new Pickups(scene, assets, this);
     this.hazards = new Hazards(scene, this);
+    this.lighting = new Lighting(scene, this);
     this.player.root.visible = false;
     for (const t of this.player.trails) t.visible = false;
     this.player.magnetRing.visible = false;
@@ -366,6 +369,7 @@ export class Game {
   applySettings(s: Settings) {
     this.settings = s;
     store.set('prismfall.settings', s);
+    if (this.lighting) this.lighting.setLightsEnabled(s.quality !== 'low');
     if (this.r.quality !== s.quality) this.r.setQuality(s.quality);
     this.audio.setVolumes(s.sfx, s.music);
     this.r.bloom.strength = s.quality === 'low' ? 0.5 : 0.6;
@@ -543,6 +547,7 @@ export class Game {
       this.proj.sync(this.time);
       this.pickups.sync(this.time);
     }
+    this.lighting.update(this.state === 'play' ? dt : 0.016);
     this.fx.writeShocks(this.state === 'play' ? dt : 0.016, this.r.distort.uniforms.uWaves.value as THREE.Vector4[], this.r.width / this.r.height);
     const ps = this.r.pointScale();
     this.particles.mat.uniforms.uScale.value = ps;
@@ -891,6 +896,7 @@ export class Game {
     if (big) this.particles.fireball(e.x, e.def.hover, e.z, 1.2, 12);
     if (big) {
       this.fx.shock(e.x, e.z, 6, 0.8, 0.45);
+      this.lighting.flash(e.x, e.z, 0xff9a50, 40, 14, 0.4);
       this.fx.ring(e.x, e.z, 4, e.def.color, 0.4, 3);
       this.fx.scorch(e.x, e.z, 2.5);
       this.shake = Math.max(this.shake, 0.4);
@@ -948,6 +954,7 @@ export class Game {
     }
     this.particles.burst(e.x, 2, e.z, this.colors.white, 60, 16, 0.8, 1.2, 0.8);
     this.fx.shock(e.x, e.z, 40, 2.2, 1.4);
+    this.lighting.flash(e.x, e.z, this.boss.color, 160, 45, 1.6);
     this.fx.shock(e.x, e.z, 22, 1.5, 0.9);
     for (let i = 0; i < 4; i++) this.particles.fireball(e.x + rand(-3, 3), 2, e.z + rand(-3, 3), 3, 22);
     this.smoke.puff(e.x, 1.5, e.z, 40, 4, 3.5);
@@ -982,6 +989,7 @@ export class Game {
     const col = new THREE.Color(1, 0.25, 0.2).multiplyScalar(3);
     this.particles.burst(e.x, 1, e.z, col, 30, 12, 0.5, 0.9, 0.5);
     this.particles.fireball(e.x, 1, e.z, 1.4, 14);
+    this.lighting.flash(e.x, e.z, 0xff5030, 45, 14, 0.4);
     this.smoke.puff(e.x, 1, e.z, 8, 1.5, 1.8);
     this.fx.ring(e.x, e.z, r, 0xff3a2a, 0.35, 3);
     this.fx.scorch(e.x, e.z, 2.2);
@@ -1049,6 +1057,7 @@ export class Game {
     this.debris.spawn(P.x, 1, P.z, new THREE.Color(0.9, 0.9, 0.95), 24, 12, 1.4);
     this.particles.fireball(P.x, 1, P.z, 2.2, 26);
     this.fx.shock(P.x, P.z, 20, 1.8, 1.0);
+    this.lighting.flash(P.x, P.z, 0x6ff0ff, 120, 30, 1.2);
     this.smoke.puff(P.x, 1, P.z, 24, 2.5, 3);
     this.fx.ring(P.x, P.z, 14, 0x5ef2ff, 1, 4);
     this.fx.scorch(P.x, P.z, 4);
@@ -1090,6 +1099,7 @@ export class Game {
     } else {
       this.audio.sfx('bomb');
       this.fx.shock(x, z, 45, 2.5, 1.3);
+      this.lighting.flash(x, z, 0xffb060, 200, 60, 1.2);
       this.ui.flash('rgba(255,200,120,0.75)');
       this.shake = 1.3;
       this.fx.ring(x, z, 34, 0xffaa33, 1.0, 4);

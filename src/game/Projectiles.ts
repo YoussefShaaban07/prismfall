@@ -117,6 +117,7 @@ export class Projectiles {
     g.particles.burst(x, 1, z, g.colors.white, 8, radius * 2, 0.3, 1.2, 0.5);
     g.fx.ring(x, z, radius * 1.15, color, 0.35, 3);
     g.fx.shock(x, z, radius * 2.2, 0.7, 0.4);
+    g.lighting.flash(x, z, color.getHex(), 30, radius * 5, 0.3);
     if (scorch && Math.random() < 0.5) g.fx.scorch(x, z, radius * 0.8);
     g.debris.spawn(x, 0.6, z, g.colors.debris, 3, 6, 0.8);
     g.shake = Math.max(g.shake, 0.35);
