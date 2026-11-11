@@ -38,9 +38,9 @@ Three-day build. Each session picks up the next unchecked items, playtests with 
 - [x] Two new weapons: Wingman Drones (escort ships in V formation) and Gravity Mines (pull then detonate), with evolutions
 - [ ] Night Shift map variant (night HDRI, cold palette) unlocked after first win, with its own enemy mix
 - [ ] Mutators / daily challenge with seeded modifiers
-- [ ] Boss intro cinematic (camera push + name card)
-- [ ] Local top-10 leaderboard with run details
-- [ ] Accessibility: reduced flashing, colorblind-safe bullets
+- [x] Boss intro cinematic (camera push, letterbox, slow-mo, name card)
+- [x] Local top-10 leaderboard with run details (Hangar → Records)
+- [x] Accessibility: reduce-flashing mode, high-contrast enemy bullets
 - [ ] Unit tests (vitest) for upgrades/meta/progression + CI check
 
 ### Day 3 — polish & ship

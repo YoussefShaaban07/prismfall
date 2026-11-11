@@ -378,3 +378,10 @@ body.cine #hud .top, body.cine #minimap, body.cine .combo { opacity: 0; transiti
 @keyframes bossCard { 0% { opacity: 0; transform: translateX(-40px); letter-spacing: .1em; } 15%, 80% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateX(40px); } }
 .bosscard .bc1 { font-family: var(--display); font-size: 12px; letter-spacing: .6em; color: #ff8aa0; text-shadow: 0 0 10px #ff2050; }
 .bosscard .bc2 { font-family: var(--display); font-weight: 900; font-size: clamp(30px, 6vw, 68px); letter-spacing: .18em; color: #fff; text-shadow: 0 0 30px #c86bff, 0 0 4px #fff; }
+.toplist { display: grid; gap: 4px; margin-bottom: 12px; }
+.toplist .th { font-family: var(--display); font-size: 10px; letter-spacing: .3em; color: var(--cyan); margin-bottom: 2px; }
+.toplist .tr { display: grid; grid-template-columns: 22px 110px 1fr; gap: 8px; align-items: center; padding: 6px 10px; border-radius: 8px; background: rgba(255, 255, 255, .03); font-size: 14px; }
+.toplist .tr em { font-style: normal; font-family: var(--display); font-size: 11px; color: rgba(255, 255, 255, .5); }
+.toplist .tr b { font-family: var(--display); font-size: 14px; color: var(--gold); }
+.toplist .tr span { color: rgba(255, 255, 255, .7); }
+.toplist .tr.win b { color: #7ff6ff; }

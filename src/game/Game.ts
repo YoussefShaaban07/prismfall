@@ -106,6 +106,7 @@ export class Game {
   private last = performance.now();
   private snapCam = false;
   cineT = 0;
+  private lastEntry: MetaState['top'][number] | null = null;
   private fpsAcc = 0;
   private fpsN = 0;
   private autoQDone = false;
@@ -297,7 +298,7 @@ export class Game {
     Object.assign(this, {
       dmgLog: {}, T: 0, kills: 0, score: 0, combo: 0, comboT: 0, maxCombo: 0, damageDealt: 0, pendingLevels: 0,
       bossesKilled: 0, nextBoss: BOSS_TIMES[0], bossWarn: 0, won: false, endless: false, rerolls: 3 + upLv(this.meta, 'rerolls'), untouchedT: 0, achT: 0, runAch: [], paidShards: 0, tutStep: this.meta.seenTutorial ? 99 : 0,
-      cineT: 0, spawnAcc: 0, nextSurge: 50, nextElite: 95, freezeT: 0, slowT: 0, deathT: 0, victoryT: 0, shake: 0, hurtT: 0,
+      cineT: 0, lastEntry: null, spawnAcc: 0, nextSurge: 50, nextElite: 95, freezeT: 0, slowT: 0, deathT: 0, victoryT: 0, shake: 0, hurtT: 0,
     });
     this.input.releaseAll();
     this.input.enabled = true;
@@ -405,8 +406,9 @@ export class Game {
     }
     this.particles.mat.uniforms.uScale.value = this.r.pointScale();
     const g = this.r.grade.uniforms;
-    g.uHurt.value = damp(g.uHurt.value as number, this.hurtT > 0 ? 0.55 : 0, 10, dt || 0.016);
-    g.uAberr.value = damp(g.uAberr.value as number, this.hurtT > 0 ? 1 : this.player.dashing ? 0.6 : 0, 12, dt || 0.016);
+    const calm = !!this.settings.calm;
+    g.uHurt.value = damp(g.uHurt.value as number, this.hurtT > 0 ? (calm ? 0.2 : 0.55) : 0, 10, dt || 0.016);
+    g.uAberr.value = damp(g.uAberr.value as number, calm ? 0 : this.hurtT > 0 ? 1 : this.player.dashing ? 0.6 : 0, 12, dt || 0.016);
     this.hurtT = Math.max(0, this.hurtT - dt);
     this.r.render(this.time);
   };
@@ -495,7 +497,7 @@ export class Game {
     cam.position.lerp(this.camPos, this.snapCam ? 1 : 1 - Math.exp(-6 * dt));
     this.snapCam = false;
     let sx = 0, sy = 0;
-    if (this.shake > 0 && this.settings.shake) {
+    if (this.shake > 0 && this.settings.shake && !this.settings.calm) {
       const s = this.shake * this.shake * 1.4;
       sx = rand(-s, s);
       sy = rand(-s, s);
@@ -1130,6 +1132,12 @@ export class Game {
     m.stats.bestScore = Math.max(m.stats.bestScore, Math.round(this.score));
     m.stats.bestTime = Math.max(m.stats.bestTime, Math.floor(this.T));
     m.stats.shardsEarned += shards;
+    const entry = { score: Math.round(this.score), time: Math.floor(this.T), level: this.player.level, kills: this.kills, ship: m.ship, win: this.won, date: new Date().toISOString().slice(0, 10) };
+    if (this.endless && this.lastEntry) m.top = m.top.filter((t) => t !== this.lastEntry);
+    this.lastEntry = entry;
+    m.top.push(entry);
+    m.top.sort((a, b) => b.score - a.score);
+    m.top = m.top.slice(0, 10);
     saveMeta(m);
     this.ui.showOver({
       shards, achievements: this.runAch,

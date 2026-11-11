@@ -62,7 +62,8 @@ export class Projectiles {
 
   enemyShot(x: number, z: number, vx: number, vz: number, dmg: number, color: number, size = 1) {
     if (this.shots.length > 890) return;
-    this.shots.push({ x, z, vx, vz, dmg, life: 6, color: new THREE.Color(color).multiplyScalar(1.5), size });
+    const c = this.g.settings.contrast ? new THREE.Color(1, 0.95, 0.1).multiplyScalar(1.6) : new THREE.Color(color).multiplyScalar(1.5);
+    this.shots.push({ x, z, vx, vz, dmg, life: 6, color: c, size });
   }
 
   clear() {

@@ -10,6 +10,8 @@ export interface Settings {
   music: number;
   shake: boolean;
   numbers: boolean;
+  calm?: boolean;
+  contrast?: boolean;
 }
 
 export interface HudState {
@@ -268,6 +270,7 @@ export class UI {
   }
 
   flash(color = 'rgba(255,255,255,0.7)') {
+    if (this.settings.calm) return;
     const f = $('#flash');
     f.style.background = color;
     f.classList.remove('go');
@@ -417,6 +420,8 @@ export class UI {
       ($('#musVol') as HTMLInputElement).value = String(s.music);
       ($('#shakeChk') as HTMLInputElement).checked = s.shake;
       ($('#numChk') as HTMLInputElement).checked = s.numbers;
+      ($('#calmChk') as HTMLInputElement).checked = !!s.calm;
+      ($('#contrastChk') as HTMLInputElement).checked = !!s.contrast;
     };
     q.forEach((b) =>
       b.addEventListener('click', () => {
@@ -435,6 +440,14 @@ export class UI {
     });
     $('#shakeChk').addEventListener('change', (e) => {
       s.shake = (e.target as HTMLInputElement).checked;
+      this.onSettings(s);
+    });
+    $('#calmChk').addEventListener('change', (e) => {
+      s.calm = (e.target as HTMLInputElement).checked;
+      this.onSettings(s);
+    });
+    $('#contrastChk').addEventListener('change', (e) => {
+      s.contrast = (e.target as HTMLInputElement).checked;
       this.onSettings(s);
     });
     $('#numChk').addEventListener('change', (e) => {
@@ -504,6 +517,7 @@ export class UI {
           <div class="st"><label>TOTAL KILLS</label><b>${fmtNum(st.kills)}</b></div>
           <div class="st"><label>BOSSES</label><b>${fmtNum(st.bosses)}</b></div>
         </div>
+        <div class="toplist"><div class="th">TOP RUNS</div>${meta.top.length ? meta.top.map((t, i) => `<div class="tr ${t.win ? 'win' : ''}"><em>${i + 1}</em><b>${fmtNum(t.score)}</b><span>${fmtTime(t.time)} · LV ${t.level} · ${SHIPS.find((x) => x.id === t.ship)?.name ?? ''}${t.win ? ' · ★' : ''}</span></div>`).join('') : '<div class="tr"><span>No runs yet</span></div>'}</div>
         <div class="achlist">${ACHIEVEMENTS.map((a) => {
           const got = meta.achievements.includes(a.id);
           return `<div class="ach ${got ? 'got' : ''}"><div class="ai">${got ? '★' : '☆'}</div><div><b>${a.name}</b><span>${a.desc}</span></div><em>◆ ${a.reward}</em></div>`;
@@ -694,6 +708,8 @@ const TEMPLATE = /* html */ `
       <div class="set"><label>Music</label><input id="musVol" type="range" min="0" max="1" step="0.05"></div>
       <div class="set"><label>Screen shake</label><input id="shakeChk" type="checkbox"></div>
       <div class="set"><label>Damage numbers</label><input id="numChk" type="checkbox"></div>
+      <div class="set"><label>Reduce flashing</label><input id="calmChk" type="checkbox"></div>
+      <div class="set"><label>High-contrast enemy bullets</label><input id="contrastChk" type="checkbox"></div>
     </div>
     <div class="ctlhelp">
       <b>Keyboard</b> WASD move · Space dash · 1/2/3 pick · R reroll · Esc pause · M mute<br/>

@@ -62,6 +62,7 @@ export interface MetaState {
   stats: { runs: number; kills: number; wins: number; bosses: number; bestTime: number; bestScore: number; shardsEarned: number };
   achievements: string[];
   seenTutorial: boolean;
+  top: { score: number; time: number; level: number; kills: number; ship: ShipId; win: boolean; date: string }[];
 }
 
 const KEY = 'prismfall.meta.v1';
@@ -75,6 +76,7 @@ export function loadMeta(): MetaState {
     stats: { runs: 0, kills: 0, wins: 0, bosses: 0, bestTime: 0, bestScore: 0, shardsEarned: 0 },
     achievements: [],
     seenTutorial: false,
+    top: [],
   };
   const m = store.get<Partial<MetaState>>(KEY, {});
   return { ...d, ...m, stats: { ...d.stats, ...(m.stats ?? {}) }, upgrades: { ...(m.upgrades ?? {}) } };
