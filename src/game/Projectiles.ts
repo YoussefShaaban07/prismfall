@@ -23,6 +23,7 @@ export class Projectiles {
   missiles: Missile[] = [];
   shots: EShot[] = [];
   boltMesh: THREE.InstancedMesh;
+  boltGlow: THREE.InstancedMesh;
   missileMesh: THREE.InstancedMesh;
   shotMesh: THREE.InstancedMesh;
   shotCore: THREE.InstancedMesh;
@@ -38,6 +39,26 @@ export class Projectiles {
     const bg = new THREE.CapsuleGeometry(0.11, 1.1, 4, 8);
     bg.rotateX(Math.PI / 2);
     this.boltMesh = instanced(bg, 700, scene);
+    const gg = new THREE.PlaneGeometry(0.9, 3.2);
+    gg.rotateX(-Math.PI / 2);
+    gg.translate(0, 0, -0.6);
+    this.boltGlow = instanced(gg, 700, scene);
+    const gm = this.boltGlow.material as THREE.MeshBasicMaterial;
+    gm.transparent = true;
+    gm.blending = THREE.AdditiveBlending;
+    gm.depthWrite = false;
+    gm.opacity = 0.35;
+    gm.map = (() => {
+      const c = document.createElement('canvas');
+      c.width = 32; c.height = 128;
+      const x = c.getContext('2d')!;
+      const gr = x.createRadialGradient(16, 40, 0, 16, 64, 64);
+      gr.addColorStop(0, 'rgba(255,255,255,1)');
+      gr.addColorStop(1, 'rgba(255,255,255,0)');
+      x.fillStyle = gr;
+      x.fillRect(0, 0, 32, 128);
+      return new THREE.CanvasTexture(c);
+    })();
     const mg = new THREE.ConeGeometry(0.18, 0.8, 8);
     mg.rotateX(Math.PI / 2);
     this.missileMesh = instanced(mg, 120, scene);
@@ -209,10 +230,14 @@ export class Projectiles {
       this.m.compose(this.p.set(b.x, 1.0, b.z), this.q, this.s.set(1, 1, 1));
       this.boltMesh.setMatrixAt(i, this.m);
       this.boltMesh.setColorAt(i, b.color);
+      this.boltGlow.setMatrixAt(i, this.m);
+      this.boltGlow.setColorAt(i, b.color);
     }
-    this.boltMesh.count = this.bolts.length;
-    this.boltMesh.instanceMatrix.needsUpdate = true;
-    if (this.boltMesh.instanceColor) this.boltMesh.instanceColor.needsUpdate = true;
+    for (const mesh of [this.boltMesh, this.boltGlow]) {
+      mesh.count = this.bolts.length;
+      mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    }
 
     for (let i = 0; i < this.missiles.length; i++) {
       const m = this.missiles[i];

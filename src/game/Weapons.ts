@@ -4,6 +4,7 @@ import { rand, TAU } from '../core/util';
 import { WSTATS, type WeaponId } from './data';
 import type { Enemy } from './Enemies';
 import type { Game } from './Game';
+import { Trail } from './Trails';
 
 export class WeaponSystem {
   timers = new Map<WeaponId, number>();
@@ -15,7 +16,8 @@ export class WeaponSystem {
   private hue = 0;
   private boltColor = new THREE.Color(0.35, 0.95, 1).multiplyScalar(4);
   private wingColor = new THREE.Color(1, 0.5, 0.85).multiplyScalar(3.5);
-  wingmen: { obj: THREE.Group; x: number; z: number; ang: number; t: number }[] = [];
+  wingmen: { obj: THREE.Group; x: number; z: number; ang: number; t: number; trail: Trail }[] = [];
+  private tv = new THREE.Vector3();
   mines: { x: number; z: number; t: number; arm: number; life: number; r: number; dmg: number; pull: number; obj: THREE.Group }[] = [];
   private minePool: THREE.Group[] = [];
 
@@ -41,7 +43,9 @@ export class WeaponSystem {
       inner.add(obj);
       inner.visible = false;
       scene.add(inner);
-      this.wingmen.push({ obj: inner, x: 0, z: 0, ang: 0, t: rand(0, 0.5) });
+      const trail = new Trail(scene, 0xff8ad8, 0.25, 18, 0.02);
+      trail.visible = false;
+      this.wingmen.push({ obj: inner, x: 0, z: 0, ang: 0, t: rand(0, 0.5), trail });
     }
   }
 
@@ -63,7 +67,7 @@ export class WeaponSystem {
   }
 
   reset() {
-    for (const w of this.wingmen) w.obj.visible = false;
+    for (const w of this.wingmen) { w.obj.visible = false; w.trail.visible = false; }
     for (const m of this.mines) { m.obj.visible = false; this.minePool.push(m.obj); }
     this.mines.length = 0;
     this.timers.clear();
@@ -274,9 +278,12 @@ export class WeaponSystem {
       const w = this.wingmen[k];
       if (k >= n) {
         w.obj.visible = false;
+        w.trail.visible = false;
         continue;
       }
       if (!w.obj.visible) {
+        w.trail.reset();
+        w.trail.visible = true;
         w.obj.visible = true;
         w.x = P.x;
         w.z = P.z;
@@ -308,7 +315,7 @@ export class WeaponSystem {
       w.ang += Math.atan2(Math.sin(face - w.ang), Math.cos(face - w.ang)) * Math.min(1, dt * 10);
       w.obj.position.set(w.x, 1.3 + Math.sin(g.time * 3 + k) * 0.15, w.z);
       w.obj.rotation.set(0, w.ang, Math.sin(g.time * 2 + k) * 0.15);
-      if (Math.random() < 0.4) g.particles.emit(w.x - Math.sin(w.ang) * 0.6, 1.3, w.z - Math.cos(w.ang) * 0.6, 0, 0, 0, 0.25, 0.35, g.colors.pink, 0);
+      w.trail.update(dt, this.tv.set(w.x - Math.sin(w.ang) * 0.5, 1.3, w.z - Math.cos(w.ang) * 0.5));
     }
   }
 

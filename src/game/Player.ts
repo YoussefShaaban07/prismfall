@@ -5,6 +5,7 @@ import type { Input } from '../core/Input';
 import { angleDiff, clamp, damp } from '../core/util';
 import { ARENA_RADIUS, xpForLevel, type PassiveId, type WeaponId } from './data';
 import { SHIPS, upLv, type MetaState, type ShipDef } from './meta';
+import { Trail } from './Trails';
 
 /** Kenney ships point down -Z in model space; rotate so +Z (our "forward") matches. */
 export const SHIP_YAW = Math.PI;
@@ -54,6 +55,8 @@ export class Player {
   private scene: THREE.Scene;
   private ghostMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.3, 0.9, 1).multiplyScalar(1.5), transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false });
   private ghostT = 0;
+  trails: Trail[] = [];
+  private tv = new THREE.Vector3();
 
   constructor(scene: THREE.Scene, assets: Assets) {
     this.assets = assets;
@@ -101,6 +104,7 @@ export class Player {
     scene.add(this.root);
 
     this.buildGhosts();
+    for (let i = 0; i < 2; i++) this.trails.push(new Trail(scene, 0x37e8ff, 0.32, 26, 0.016));
   }
 
   private buildGhosts() {
@@ -137,6 +141,7 @@ export class Player {
     this.ship.userData.built = true;
     holder.add(this.ship);
     this.light.color.set(def.accent);
+    for (const t of this.trails) t.setColor(def.accent);
     for (const f of this.flames) (f.material as THREE.MeshBasicMaterial).color.set(def.accent).multiplyScalar(6);
     this.buildGhosts();
     for (const gh of this.ghosts) gh.g.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) (m.material as THREE.MeshBasicMaterial).color.set(def.accent).multiplyScalar(1.5); });
@@ -182,6 +187,7 @@ export class Player {
     this.weapons.set(def.weapon, 1);
     this.root.visible = true;
     this.ship.visible = true;
+    for (const t of this.trails) t.reset();
   }
 
   get dashing() {
@@ -259,6 +265,15 @@ export class Player {
     // blink on damage i-frames (not dash)
     this.ship.visible = !(this.inv > 0 && !this.dashing && Math.floor(time * 20) % 2 === 0);
     this.magnetRing.position.set(this.x, 0.08, this.z);
+    // engine ribbons from both nozzles
+    this.root.updateMatrixWorld(true);
+    this.trails.forEach((t, i) => {
+      this.flames[i].getWorldPosition(this.tv);
+      t.intensity = this.dashing ? 1.1 : 0.3 + Math.min(1, sp / this.speed) * 0.6;
+      t.width = this.dashing ? 0.7 : 0.32;
+      t.visible = this.root.visible;
+      t.update(dt, this.tv);
+    });
     this.magnetRing.scale.setScalar(this.magnet);
     return dashed;
   }

@@ -144,6 +144,7 @@ export class Game {
     this.pickups = new Pickups(scene, assets, this);
     this.hazards = new Hazards(scene, this);
     this.player.root.visible = false;
+    for (const t of this.player.trails) t.visible = false;
     this.player.magnetRing.visible = false;
     this.meta = loadMeta();
     this.previewShip = this.meta.ship;
@@ -432,6 +433,7 @@ export class Game {
     this.pickups.clear();
     this.fx.clear();
     this.player.root.visible = false;
+    for (const t of this.player.trails) t.visible = false;
     this.player.magnetRing.visible = false;
     this.weapons.reset();
     this.ui.hideHud();
@@ -477,7 +479,7 @@ export class Game {
   debugHold = false;
 
   /** Debug: advance visuals by dt without the rAF loop (for deterministic screenshots). */
-  debugFrame(dt: number) {
+  debugFrame(dt: number, render = true) {
     this.time += dt;
     if (this.state === 'play') this.update(dt);
     this.updateCamera(dt);
@@ -490,7 +492,7 @@ export class Game {
     const ps = this.r.pointScale();
     this.particles.mat.uniforms.uScale.value = ps;
     this.smoke.mat.uniforms.uScale.value = ps;
-    this.r.render(this.time);
+    if (render) this.r.render(this.time);
   }
 
   private loop = (now: number) => {
@@ -1024,6 +1026,7 @@ export class Game {
     P.dead = true;
     P.root.visible = false;
     P.magnetRing.visible = false;
+    for (const t of P.trails) t.visible = false;
     this.deathT = 2.2;
     this.slowT = 1.6;
     this.shake = 1.4;
