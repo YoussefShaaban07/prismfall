@@ -34,6 +34,15 @@ Three-day build. Each session picks up the next unchecked items, playtests with 
 - [x] Boss attack variety: signature attacks (carpet bombing, acid rain, laser sweep) via a hazard system
 - [x] First-run tutorial prompts (adapts to keyboard / gamepad / touch)
 
+### Day 2.5 — more content
+- [ ] Two new weapons: Wingman Drones (escort ships that shoot) and Gravity Mines
+- [ ] Night Shift map variant (night HDRI, cold palette) unlocked after first win, with its own enemy mix
+- [ ] Mutators / daily challenge with seeded modifiers
+- [ ] Boss intro cinematic (camera push + name card)
+- [ ] Local top-10 leaderboard with run details
+- [ ] Accessibility: reduced flashing, colorblind-safe bullets
+- [ ] Unit tests (vitest) for upgrades/meta/progression + CI check
+
 ### Day 3 — polish & ship
 - [x] Menu/controller navigation (D-pad/arrows + A/Enter, B/Esc back), settings from main menu, control reference
 - [x] PWA: manifest + offline cache + INSTALL APP button for desktop
