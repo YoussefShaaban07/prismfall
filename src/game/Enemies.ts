@@ -1,0 +1,375 @@
+import * as THREE from 'three';
+import type { Assets } from '../core/Assets';
+import { alienMapper } from '../core/Assets';
+import { rand, TAU, angleDiff } from '../core/util';
+import { ARENA_RADIUS, EDEFS, hpScale, type EDef, type EType } from './data';
+import { SpatialGrid } from './SpatialGrid';
+import type { Game } from './Game';
+import { SHIP_YAW } from './Player';
+
+export interface Enemy {
+  id: number;
+  type: EType;
+  def: EDef;
+  x: number;
+  z: number;
+  vx: number;
+  vz: number;
+  kx: number;
+  kz: number;
+  r: number;
+  hp: number;
+  maxHp: number;
+  spd: number;
+  dmg: number;
+  flash: number;
+  yaw: number;
+  tumble: number;
+  st: number;
+  timer: number;
+  aimx: number;
+  aimz: number;
+  bladeCD: number;
+  spawnT: number;
+  dead: boolean;
+  phase: number;
+  sub: number;
+  alpha: number;
+  elite: boolean;
+  slow: number;
+}
+
+const INSTANCED: EType[] = ['drone', 'dart', 'spitter', 'meteor', 'shard', 'brute', 'wraith'];
+
+interface TypeRender {
+  meshes: THREE.InstancedMesh[];
+  flash: THREE.InstancedBufferAttribute;
+  max: number;
+}
+
+let NEXT_ID = 1;
+
+export class EnemyManager {
+  list: Enemy[] = [];
+  grid = new SpatialGrid<Enemy>(3);
+  render = new Map<EType, TypeRender>();
+  private tmp: Enemy[] = [];
+  private m = new THREE.Matrix4();
+  private q = new THREE.Quaternion();
+  private e = new THREE.Euler();
+  private p = new THREE.Vector3();
+  private s = new THREE.Vector3();
+  private eliteColor = new THREE.Color(1, 0.85, 0.3);
+  private white = new THREE.Color(1, 1, 1);
+
+  constructor(scene: THREE.Scene, assets: Assets, private g: Game) {
+    for (const type of INSTANCED) {
+      const def = EDEFS[type];
+      const model = assets.get(def.model);
+      const mapper = alienMapper(def.color, 2.4, type === 'meteor' || type === 'shard' ? 1.6 : 1.1);
+      const flash = new THREE.InstancedBufferAttribute(new Float32Array(def.max), 1);
+      flash.setUsage(THREE.DynamicDrawUsage);
+      const meshes: THREE.InstancedMesh[] = [];
+      for (const part of model.parts) {
+        const geo = part.geo.clone();
+        geo.setAttribute('aFlash', flash);
+        const mat = mapper(part.matName, part.mat);
+        const im = new THREE.InstancedMesh(geo, mat, def.max);
+        im.count = 0;
+        im.castShadow = true;
+        im.frustumCulled = false;
+        for (let i = 0; i < def.max; i++) im.setColorAt(i, this.white);
+        scene.add(im);
+        meshes.push(im);
+      }
+      this.render.set(type, { meshes, flash, max: def.max });
+    }
+  }
+
+  count(type?: EType) {
+    if (!type) return this.list.length;
+    let n = 0;
+    for (const e of this.list) if (e.type === type) n++;
+    return n;
+  }
+
+  canSpawn(type: EType) {
+    return this.count(type) < EDEFS[type].max;
+  }
+
+  spawn(type: EType, x: number, z: number, elite = false): Enemy | null {
+    const def = EDEFS[type];
+    if (type !== 'boss' && !this.canSpawn(type)) return null;
+    const T = this.g.T;
+    const hm = hpScale(T) * (elite ? 6 : 1);
+    const e: Enemy = {
+      id: NEXT_ID++,
+      type, def, x, z, vx: 0, vz: 0, kx: 0, kz: 0,
+      r: def.radius * (elite ? 1.35 : 1),
+      hp: def.hp * hm, maxHp: def.hp * hm,
+      spd: def.speed * (1 + Math.min(0.4, T / 1200)) * rand(0.92, 1.08),
+      dmg: def.damage * (1 + T / 900) * (elite ? 1.4 : 1),
+      flash: 0, yaw: rand(0, TAU), tumble: rand(0, TAU),
+      st: 0, timer: rand(0.8, 2.5), aimx: 0, aimz: 1, bladeCD: 0,
+      spawnT: 0.5, dead: false, phase: 0, sub: 0, alpha: 1, elite, slow: 0,
+    };
+    this.list.push(e);
+    return e;
+  }
+
+  clear() {
+    this.list.length = 0;
+    this.grid.clear();
+    for (const r of this.render.values()) for (const m of r.meshes) m.count = 0;
+  }
+
+  query(x: number, z: number, r: number): Enemy[] {
+    return this.grid.query(x, z, r, this.tmp);
+  }
+
+  nearest(x: number, z: number, maxD: number, exclude?: Set<Enemy>): Enemy | null {
+    let best: Enemy | null = null;
+    let bd = maxD * maxD;
+    for (const e of this.list) {
+      if (e.dead || e.spawnT > 0.25 || (exclude && exclude.has(e))) continue;
+      const dx = e.x - x, dz = e.z - z;
+      const d = dx * dx + dz * dz;
+      if (d < bd) {
+        bd = d;
+        best = e;
+      }
+    }
+    return best;
+  }
+
+  update(dt: number) {
+    const g = this.g;
+    const P = g.player;
+    const R = ARENA_RADIUS - 0.8;
+    for (let i = 0; i < this.list.length; i++) {
+      const e = this.list[i];
+      if (e.dead) continue;
+      if (e.spawnT > 0) e.spawnT -= dt;
+      e.flash = Math.max(0, e.flash - dt);
+      e.bladeCD -= dt;
+      e.slow = Math.max(0, e.slow - dt);
+      const dx = P.x - e.x, dz = P.z - e.z;
+      const d = Math.hypot(dx, dz) || 1;
+      const ux = dx / d, uz = dz / d;
+      const spd = e.spd * (e.slow > 0 ? 0.5 : 1);
+      let tx = ux * spd, tz = uz * spd;
+      let steer = 5;
+
+      switch (e.type) {
+        case 'drone': {
+          const w = Math.sin(g.time * 3 + e.id) * 0.45;
+          tx = (ux - uz * w) * spd;
+          tz = (uz + ux * w) * spd;
+          break;
+        }
+        case 'dart': {
+          e.timer -= dt;
+          if (e.st === 0) {
+            if (e.timer <= 0 && d < 15 && e.spawnT <= 0) {
+              e.st = 1;
+              e.timer = 0.65;
+              e.aimx = ux;
+              e.aimz = uz;
+              g.fx.telegraph(e.x, e.z, Math.atan2(ux, uz), 15, 1.0, 0.65);
+            }
+          } else if (e.st === 1) {
+            tx = tz = 0;
+            steer = 10;
+            if (e.timer <= 0) {
+              e.st = 2;
+              e.timer = 0.5;
+              g.audio.sfx('dash');
+            }
+          } else {
+            tx = e.aimx * spd * 6;
+            tz = e.aimz * spd * 6;
+            steer = 20;
+            if (Math.random() < 0.6) g.particles.emit(e.x, 0.8, e.z, 0, 0.5, 0, 0.35, 0.5, g.colors.orange, 2);
+            if (e.timer <= 0) {
+              e.st = 0;
+              e.timer = rand(1.8, 3);
+            }
+          }
+          break;
+        }
+        case 'spitter': {
+          if (d < 10) {
+            tx = -ux * spd;
+            tz = -uz * spd;
+          } else if (d < 15) {
+            const side = e.id % 2 ? 1 : -1;
+            tx = -uz * spd * 0.8 * side;
+            tz = ux * spd * 0.8 * side;
+          }
+          e.timer -= dt;
+          if (e.timer <= 0 && d < 24 && e.spawnT <= 0) {
+            e.timer = rand(2.0, 2.8);
+            const n = e.elite ? 5 : g.T > 300 ? 3 : 1;
+            for (let k = 0; k < n; k++) {
+              const a = Math.atan2(ux, uz) + (k - (n - 1) / 2) * 0.22;
+              g.proj.enemyShot(e.x, e.z, Math.sin(a) * 11, Math.cos(a) * 11, e.dmg * 0.9, 0x26ffb0);
+            }
+          }
+          break;
+        }
+        case 'meteor':
+        case 'shard':
+          e.tumble += dt * 3;
+          break;
+        case 'brute':
+          steer = 2;
+          break;
+        case 'wraith': {
+          e.timer -= dt;
+          if (e.timer <= 0 && d > 6 && d < 30 && e.spawnT <= 0) {
+            // blink toward the player
+            g.particles.burst(e.x, 1, e.z, g.colors.wraith, 16, 6, 0.4, 0.5);
+            const jump = Math.min(d - 3, 9);
+            e.x += ux * jump;
+            e.z += uz * jump;
+            g.particles.burst(e.x, 1, e.z, g.colors.wraith, 16, 6, 0.4, 0.5);
+            e.timer = rand(2.2, 3.4);
+          }
+          const w = Math.sin(g.time * 2 + e.id) * 0.6;
+          tx = (ux - uz * w) * spd;
+          tz = (uz + ux * w) * spd;
+          break;
+        }
+        case 'boss':
+          g.boss.update(e, dt, ux, uz, d);
+          tx = e.vx;
+          tz = e.vz;
+          steer = 0;
+          break;
+      }
+
+      if (steer > 0) {
+        const k = 1 - Math.exp(-steer * dt);
+        e.vx += (tx - e.vx) * k;
+        e.vz += (tz - e.vz) * k;
+      }
+      // knockback decays fast
+      const kd = Math.exp(-7 * dt);
+      e.x += (e.vx + e.kx) * dt;
+      e.z += (e.vz + e.kz) * dt;
+      e.kx *= kd;
+      e.kz *= kd;
+
+      // separation from neighbours
+      if (e.type !== 'boss') {
+        const near = this.grid.query(e.x, e.z, e.r + 1.4, this.tmp);
+        let px = 0, pz = 0;
+        for (let k = 0; k < near.length && k < 12; k++) {
+          const o = near[k];
+          if (o === e || o.dead) continue;
+          const ox = e.x - o.x, oz = e.z - o.z;
+          const rr = e.r + o.r;
+          const dd = ox * ox + oz * oz;
+          if (dd < rr * rr && dd > 0.0001) {
+            const dl = Math.sqrt(dd);
+            const push = (rr - dl) / dl;
+            const wgt = o.type === 'boss' ? 1 : o.r / (e.r + o.r);
+            px += ox * push * wgt;
+            pz += oz * push * wgt;
+          }
+        }
+        e.x += px * Math.min(1, dt * 10);
+        e.z += pz * Math.min(1, dt * 10);
+      }
+
+      // arena bounds
+      const rd = Math.hypot(e.x, e.z);
+      const lim = R - e.r;
+      if (rd > lim) {
+        e.x *= lim / rd;
+        e.z *= lim / rd;
+      }
+
+      // facing
+      const sp = Math.hypot(e.vx, e.vz);
+      if (e.type !== 'meteor' && e.type !== 'shard') {
+        const target = e.type === 'dart' && e.st === 1 ? Math.atan2(e.aimx, e.aimz) : sp > 0.3 ? Math.atan2(e.vx, e.vz) : e.yaw;
+        e.yaw += angleDiff(e.yaw, target) * Math.min(1, dt * 8);
+      }
+
+      // contact damage
+      if (e.spawnT <= 0 && !P.dead) {
+        const cd = e.r + P.r * 0.85;
+        if (dx * dx + dz * dz < cd * cd) g.hurtPlayer(e.dmg, e);
+      }
+
+      // relocate stragglers that fell far behind
+      if (e.type !== 'boss' && d > 48) {
+        const sp2 = g.spawnPoint(26, 32);
+        e.x = sp2.x;
+        e.z = sp2.z;
+        e.vx = e.vz = 0;
+      }
+    }
+
+    // compact and rebuild grid
+    let w = 0;
+    for (let i = 0; i < this.list.length; i++) {
+      const e = this.list[i];
+      if (!e.dead) this.list[w++] = e;
+    }
+    this.list.length = w;
+    this.grid.clear();
+    for (const e of this.list) this.grid.insert(e);
+  }
+
+  sync(time: number) {
+    const counts = new Map<EType, number>();
+    for (const e of this.list) {
+      if (e.type === 'boss') continue;
+      const r = this.render.get(e.type)!;
+      const idx = counts.get(e.type) ?? 0;
+      if (idx >= r.max) continue;
+      counts.set(e.type, idx + 1);
+      const def = e.def;
+      const spawnK = e.spawnT > 0 ? 1 - e.spawnT / 0.5 : 1;
+      const ease = 1 - Math.pow(1 - Math.max(0, spawnK), 3);
+      let sc = def.size * (e.elite ? 1.35 : 1) * ease;
+      let y = def.hover + Math.sin(time * 2.5 + e.id) * 0.15;
+      if (e.spawnT > 0) y += (1 - ease) * 6; // drop in from above
+      let pitch = 0, roll = 0;
+      if (e.type === 'meteor' || e.type === 'shard') {
+        pitch = e.tumble;
+        roll = e.tumble * 0.6;
+      } else {
+        const bank = Math.sin(time * 2 + e.id) * 0.15;
+        roll = bank;
+      }
+      if (e.type === 'dart' && e.st === 1) {
+        sc *= 1 + Math.sin(time * 40) * 0.06;
+        pitch = -0.25;
+      }
+      const yawOff = e.type === 'meteor' || e.type === 'shard' ? 0 : SHIP_YAW;
+      this.e.set(pitch, e.yaw + yawOff, roll, 'YXZ');
+      this.q.setFromEuler(this.e);
+      this.p.set(e.x, y, e.z);
+      this.s.set(sc, sc, sc);
+      this.m.compose(this.p, this.q, this.s);
+      r.flash.array[idx] = e.flash > 0 ? Math.min(1, e.flash * 14) : 0;
+      for (const mesh of r.meshes) {
+        mesh.setMatrixAt(idx, this.m);
+        if (e.elite) mesh.setColorAt(idx, this.eliteColor);
+        else mesh.setColorAt(idx, this.white);
+      }
+    }
+    for (const [type, r] of this.render) {
+      const n = counts.get(type) ?? 0;
+      for (const mesh of r.meshes) {
+        mesh.count = n;
+        mesh.instanceMatrix.needsUpdate = true;
+        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+      }
+      r.flash.needsUpdate = true;
+    }
+  }
+}

@@ -1,0 +1,287 @@
+import * as THREE from 'three';
+import type { Assets, ModelName } from '../core/Assets';
+import { alienMapper } from '../core/Assets';
+import { rand, TAU, angleDiff, pickWeighted } from '../core/util';
+import { BOSS_NAMES, EDEFS, hpScale } from './data';
+import type { Enemy } from './Enemies';
+import type { Game } from './Game';
+import { SHIP_YAW } from './Player';
+
+interface BossLook {
+  model: ModelName;
+  color: number;
+  size: number;
+}
+const LOOKS: BossLook[] = [
+  { model: 'craft_cargoA', color: 0xc86bff, size: 9 },
+  { model: 'craft_miner', color: 0x2fffa8, size: 9.5 },
+  { model: 'craft_speederD', color: 0xff3b5c, size: 10 },
+];
+
+export class BossController {
+  e: Enemy | null = null;
+  name = '';
+  final = false;
+  group = new THREE.Group();
+  body: THREE.Group | null = null;
+  rings: THREE.Mesh[] = [];
+  mats: THREE.MeshStandardMaterial[] = [];
+  light: THREE.PointLight;
+  color = new THREE.Color();
+  index = 0;
+  private spin = 0;
+
+  constructor(scene: THREE.Scene, private assets: Assets, private g: Game) {
+    scene.add(this.group);
+    this.group.visible = false;
+    this.light = new THREE.PointLight(0xc86bff, 10, 24, 1.5);
+    this.light.position.y = 4;
+    this.group.add(this.light);
+  }
+
+  private build(final: boolean, idx: number) {
+    if (this.body) {
+      this.group.remove(this.body);
+    }
+    for (const r of this.rings) this.group.remove(r);
+    this.rings = [];
+    this.mats = [];
+    const body = new THREE.Group();
+    let look: BossLook;
+    if (final) {
+      look = { model: 'rock_crystalsLargeA', color: 0x7ff6ff, size: 11 };
+    } else {
+      look = LOOKS[idx % LOOKS.length];
+    }
+    this.color.set(look.color);
+    const mapper = alienMapper(look.color, final ? 2.2 : 1.1, 0.7);
+    const ship = this.assets.object(look.model, look.size, (n, s) => {
+      const m = mapper(n, s) as THREE.MeshStandardMaterial;
+      this.mats.push(m);
+      return m;
+    });
+    if (!final) ship.rotation.y = SHIP_YAW;
+    body.add(ship);
+    if (!final) {
+      // twin turrets bolted on top
+      for (const sx of [-1.2, 1.2]) {
+        const t = this.assets.object('turret_double', 2.2, (n, s) => {
+          const m = mapper(n, s) as THREE.MeshStandardMaterial;
+          this.mats.push(m);
+          return m;
+        });
+        t.position.set(sx, (ship.userData.height as number) * 0.85, 0);
+        body.add(t);
+      }
+    } else {
+      // crystal core glow
+      const core = new THREE.Mesh(
+        new THREE.OctahedronGeometry(2.2, 0),
+        new THREE.MeshBasicMaterial({ color: new THREE.Color(0.6, 1, 1).multiplyScalar(1.8) }),
+      );
+      core.position.y = 7;
+      body.add(core);
+      body.userData.core = core;
+    }
+    // energy rings
+    const ringMat = new THREE.MeshBasicMaterial({ color: this.color.clone().multiplyScalar(1.6), transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false });
+    const n = final ? 3 : 2;
+    for (let i = 0; i < n; i++) {
+      const r = new THREE.Mesh(new THREE.TorusGeometry(5.6 + i * 1.5, 0.08, 8, 96), ringMat);
+      r.position.y = 2.5;
+      this.group.add(r);
+      this.rings.push(r);
+    }
+    this.light.color.copy(this.color);
+    this.group.add(body);
+    this.body = body;
+  }
+
+  spawn(final: boolean) {
+    const g = this.g;
+    const idx = g.bossesKilled;
+    this.final = final;
+    this.index = idx;
+    this.build(final, idx);
+    const a = rand(0, TAU);
+    const p = g.spawnPoint(18, 22, a);
+    const e = g.enemies.spawn('boss', p.x, p.z)!;
+    const hp = 1700 * hpScale(g.T) * (final ? 2.2 : 1) * (g.endless ? 1.5 : 1);
+    e.hp = e.maxHp = hp;
+    e.r = final ? 4.2 : 3.4;
+    e.spd = final ? 2.6 : 2.3 + idx * 0.2;
+    e.dmg = EDEFS.boss.damage * (1 + g.T / 600);
+    e.phase = 0;
+    e.timer = 2.5;
+    e.spawnT = 1.2;
+    this.e = e;
+    this.name = final ? 'THE PRISM CORE' : BOSS_NAMES[idx % BOSS_NAMES.length];
+    this.group.visible = true;
+    this.group.position.set(e.x, 0, e.z);
+    g.fx.ring(e.x, e.z, 14, this.color, 1.0, 2);
+    g.particles.ring(e.x, 0.5, e.z, this.color, 80, 18, 0.8, 0.9);
+    g.shake = Math.max(g.shake, 1.2);
+  }
+
+  clear() {
+    this.e = null;
+    this.group.visible = false;
+  }
+
+  /** Called from EnemyManager.update for the boss entity. Writes e.vx/e.vz directly. */
+  update(e: Enemy, dt: number, ux: number, uz: number, d: number) {
+    const g = this.g;
+    const fast = this.final ? 1.35 : 1 + this.index * 0.1;
+    e.timer -= dt;
+    e.sub -= dt;
+    const aim = Math.atan2(ux, uz);
+    const k = 1 - Math.exp(-3 * dt);
+    const moveTo = (tx: number, tz: number) => {
+      e.vx += (tx - e.vx) * k;
+      e.vz += (tz - e.vz) * k;
+    };
+    const shoot = (a: number, spd: number, size = 1) =>
+      g.proj.enemyShot(e.x + Math.sin(a) * 2.5, e.z + Math.cos(a) * 2.5, Math.sin(a) * spd, Math.cos(a) * spd, e.dmg * 0.55, this.color.getHex(), size);
+
+    if (e.spawnT > 0) {
+      moveTo(0, 0);
+      return;
+    }
+
+    switch (e.phase) {
+      case 0: // stalk the player
+        moveTo(ux * e.spd, uz * e.spd);
+        if (e.timer <= 0) this.nextPhase(e);
+        break;
+      case 1: // radial bursts
+        moveTo(0, 0);
+        if (e.sub <= 0) {
+          e.sub = 0.65 / fast;
+          const n = this.final ? 30 : 18 + this.index * 4;
+          const off = rand(0, TAU);
+          for (let i = 0; i < n; i++) shoot(off + (i / n) * TAU, 9 * fast);
+          g.audio.sfx('zap');
+          g.fx.ring(e.x, e.z, 5, this.color, 0.35, 3);
+        }
+        if (e.timer <= 0) this.toChase(e);
+        break;
+      case 2: // spiral stream
+        moveTo(ux * e.spd * 0.25, uz * e.spd * 0.25);
+        if (e.sub <= 0) {
+          e.sub = 0.075 / fast;
+          this.spin += 0.32;
+          const arms = this.final ? 4 : 2 + (this.index % 2);
+          for (let i = 0; i < arms; i++) shoot(this.spin + (i / arms) * TAU, 10 * fast, 0.9);
+        }
+        if (e.timer <= 0) this.toChase(e);
+        break;
+      case 3: // summon escorts
+        moveTo(0, 0);
+        if (e.sub <= 0 && e.st < 1) {
+          e.st = 1;
+          const n = this.final ? 10 : 6 + this.index * 2;
+          for (let i = 0; i < n; i++) {
+            const a = (i / n) * TAU;
+            const type = this.final ? (i % 2 ? 'wraith' : 'dart') : i % 3 === 0 ? 'dart' : 'drone';
+            const s = g.enemies.spawn(type, e.x + Math.sin(a) * 5, e.z + Math.cos(a) * 5);
+            if (s) g.fx.ring(s.x, s.z, 2, this.color, 0.4, 3);
+          }
+          g.audio.sfx('spawn');
+        }
+        if (e.timer <= 0) this.toChase(e);
+        break;
+      case 4: // charge: telegraph then dash
+        if (e.st === 0) {
+          moveTo(0, 0);
+          e.aimx = ux;
+          e.aimz = uz;
+          if (e.sub <= 0) {
+            e.st = 1;
+            e.sub = 0.9 / fast;
+            g.fx.telegraph(e.x, e.z, aim, 34, e.r * 2, 0.9 / fast);
+          }
+        } else if (e.st === 1) {
+          moveTo(0, 0);
+          if (e.sub <= 0) {
+            e.st = 2;
+            e.sub = 0.75;
+            g.audio.sfx('dash');
+          }
+        } else {
+          e.vx = e.aimx * e.spd * 9;
+          e.vz = e.aimz * e.spd * 9;
+          g.particles.emit(e.x, 1.5, e.z, rand(-2, 2), 1, rand(-2, 2), 0.5, 1.4, this.color, 2);
+          if (e.sub <= 0) this.toChase(e);
+        }
+        break;
+      case 5: // final only: rotating cross of bullet walls + aimed volleys
+        moveTo(0, 0);
+        if (e.sub <= 0) {
+          e.sub = 0.11;
+          this.spin += 0.11;
+          for (let i = 0; i < 6; i++) shoot(this.spin + (i / 6) * TAU, 8.5, 1.1);
+          if (Math.random() < 0.18) for (let j = -2; j <= 2; j++) shoot(aim + j * 0.12, 15, 0.8);
+        }
+        if (e.timer <= 0) this.toChase(e);
+        break;
+    }
+    void d;
+  }
+
+  private toChase(e: Enemy) {
+    e.phase = 0;
+    e.timer = this.final ? rand(1.2, 2) : rand(1.8, 3);
+    e.st = 0;
+  }
+
+  private nextPhase(e: Enemy) {
+    const opts: [number, number][] = [[1, 3], [2, 3], [3, 1.5], [4, 2.5]];
+    if (this.final) opts.push([5, 3]);
+    let p = pickWeighted(opts);
+    if (p === e.st) p = pickWeighted(opts);
+    e.phase = p;
+    e.st = 0;
+    e.sub = 0.2;
+    e.timer = p === 1 ? 2.2 : p === 2 ? 2.8 : p === 3 ? 1.2 : p === 4 ? 2.6 : 3.5;
+    if (p === 4) e.sub = 0.1;
+  }
+
+  sync(time: number, dt: number) {
+    const e = this.e;
+    if (!e || !this.body) return;
+    this.group.position.set(e.x, 0, e.z);
+    const spawnK = e.spawnT > 0 ? 1 - e.spawnT / 1.2 : 1;
+    const y = 1.2 + Math.sin(time * 1.4) * 0.3 + (1 - spawnK) * 12;
+    this.body.position.y = y;
+    const sp = Math.hypot(e.vx, e.vz);
+    if (!this.final) {
+      const target = sp > 0.5 ? Math.atan2(e.vx, e.vz) : Math.atan2(this.g.player.x - e.x, this.g.player.z - e.z);
+      e.yaw += angleDiff(e.yaw, target) * Math.min(1, dt * 3);
+      this.body.rotation.y = e.yaw;
+      this.body.rotation.z = Math.sin(time) * 0.06;
+    } else {
+      this.body.rotation.y += dt * 0.6;
+      const core = this.body.userData.core as THREE.Mesh | undefined;
+      if (core) {
+        core.rotation.x += dt * 1.3;
+        core.rotation.y += dt * 2;
+        const pulse = 1 + Math.sin(time * 6) * 0.08;
+        core.scale.setScalar(pulse);
+      }
+    }
+    this.rings.forEach((r, i) => {
+      r.rotation.x = Math.PI / 2 + Math.sin(time * (0.7 + i * 0.3)) * 0.5;
+      r.rotation.y = time * (0.9 + i * 0.4) * (i % 2 ? -1 : 1);
+      r.position.y = y + 1.5;
+      const charge = e.phase === 4 && e.st === 1 ? 1.4 : 1;
+      r.scale.setScalar(charge * (1 + Math.sin(time * 3 + i) * 0.04));
+    });
+    const flash = e.flash > 0 ? Math.min(1, e.flash * 14) : 0;
+    for (const m of this.mats) {
+      const u = m.userData.rim as { uFlash: { value: number } } | undefined;
+      if (u) u.uFlash.value = flash * 0.15;
+    }
+    this.light.intensity = 10 + flash * 20;
+    this.light.position.y = y + 3;
+  }
+}
