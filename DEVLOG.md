@@ -49,7 +49,7 @@ Three-day build. Each session picks up the next unchecked items, playtests with 
 - [ ] Arabic language option (RTL-aware UI, Arabic-capable font)
 - [x] Run summary share card (frame snapshot + stats, download / native share)
 - [x] Story intro: typewriter mission briefing on first launch (skippable)
-- [ ] Perf pass on mid/low devices: instanced debris colors, particle caps, LOD for decor
+- [~] Perf pass: instance colors only uploaded on change (sync ~0.9 ms at 500 enemies, sim ~2.3 ms at 750); still to check particle caps on phones
 
 ### Day 3 — polish & ship
 - [x] Menu/controller navigation (D-pad/arrows + A/Enter, B/Esc back), settings from main menu, control reference

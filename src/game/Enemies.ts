@@ -45,6 +45,8 @@ interface TypeRender {
   meshes: THREE.InstancedMesh[];
   flash: THREE.InstancedBufferAttribute;
   max: number;
+  eliteAt: Uint8Array;
+  colorDirty: boolean;
 }
 
 let NEXT_ID = 1;
@@ -83,7 +85,7 @@ export class EnemyManager {
         scene.add(im);
         meshes.push(im);
       }
-      this.render.set(type, { meshes, flash, max: def.max });
+      this.render.set(type, { meshes, flash, max: def.max, eliteAt: new Uint8Array(def.max), colorDirty: false });
     }
   }
 
@@ -413,10 +415,15 @@ export class EnemyManager {
       this.s.set(sc, sc, sc);
       this.m.compose(this.p, this.q, this.s);
       r.flash.array[idx] = e.flash > 0 ? Math.min(1, e.flash * 14) : 0;
+      const el = e.elite ? 1 : 0;
+      const recolor = r.eliteAt[idx] !== el;
+      if (recolor) {
+        r.eliteAt[idx] = el;
+        r.colorDirty = true;
+      }
       for (const mesh of r.meshes) {
         mesh.setMatrixAt(idx, this.m);
-        if (e.elite) mesh.setColorAt(idx, this.eliteColor);
-        else mesh.setColorAt(idx, this.white);
+        if (recolor) mesh.setColorAt(idx, el ? this.eliteColor : this.white);
       }
     }
     for (const [type, r] of this.render) {
@@ -424,8 +431,9 @@ export class EnemyManager {
       for (const mesh of r.meshes) {
         mesh.count = n;
         mesh.instanceMatrix.needsUpdate = true;
-        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+        if (r.colorDirty && mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
       }
+      r.colorDirty = false;
       r.flash.needsUpdate = true;
     }
   }
