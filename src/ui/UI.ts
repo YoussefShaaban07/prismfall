@@ -62,6 +62,7 @@ export class UI {
   onMapToggle: () => void = () => {};
   onDaily: () => void = () => {};
   onPhoto: () => void = () => {};
+  icons = new Map<string, string>();
   onShareCard: () => CardData | null = () => null;
   onCodex: (open: boolean, kind: 'enemy' | 'boss' | 'ship', id: string) => void = () => {};
   private codexTab: 'enemy' | 'boss' | 'weapon' = 'enemy';
@@ -359,8 +360,9 @@ export class UI {
     const slotsKey = [...s.weapons].map(([k, v]) => k + v + (s.evolved.has(k) ? 'E' : '')).join() + '|' + [...s.passives].map(([k, v]) => k + v).join();
     if (slotsKey !== this.lastSlots) {
       this.lastSlots = slotsKey;
-      const w = [...s.weapons].map(([id, lv]) => slot(WEAPONS[id].icon, WEAPONS[id].color, s.evolved.has(id) ? 6 : lv, s.evolved.has(id))).join('');
-      const p = [...s.passives].map(([id, lv]) => slot(PASSIVES[id].icon, PASSIVES[id].color, lv, false, true)).join('');
+      const ic = (id: string, glyph: string) => (this.icons.get(id) ? `<img src="${this.icons.get(id)}" alt="" />` : glyph);
+      const w = [...s.weapons].map(([id, lv]) => slot(ic(id, WEAPONS[id].icon), WEAPONS[id].color, s.evolved.has(id) ? 6 : lv, s.evolved.has(id))).join('');
+      const p = [...s.passives].map(([id, lv]) => slot(ic(id, PASSIVES[id].icon), PASSIVES[id].color, lv, false, true)).join('');
       $('#slots').innerHTML = `<div class="row">${w}</div><div class="row">${p}</div>`;
     }
   }
@@ -499,7 +501,7 @@ export class UI {
         (c, i) => `
       <button class="card ${c.special ?? ''}" style="--c:${c.color};--d:${i * 70}ms" data-i="${i}">
         <div class="key">${i + 1}</div>
-        <div class="ic"><span>${c.icon}</span></div>
+        <div class="ic">${c.iconId && this.icons.get(c.iconId) ? `<img src="${this.icons.get(c.iconId)}" alt="" />` : `<span>${c.icon}</span>`}</div>
         <div class="txt">
           <div class="tag">${c.tag}</div>
           <div class="nm">${c.name}</div>

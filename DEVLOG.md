@@ -84,6 +84,7 @@ Three-day build. Each session picks up the next unchecked items, playtests with 
 - [ ] Full QA pass (desktop + phone sizes), README with screenshots, GitHub Pages deploy
 
 ## Session log
+- **S16 (Nov 11 afternoon)**: 3D-rendered icons for all 8 weapons, 8 modules and supplies (offscreen renderer at boot, auto-fit) used on level-up cards and HUD slots.
 - **S15b (Nov 11 afternoon)**: Night Shift low-angle review; cooler, softer searchlight cones and pools.
 - **S15 (Nov 11 afternoon)**: boss atmospheric entry (falls from 70m with fire/smoke, camera tracks it down, shockwave landing), comet tails on enemy bullets, wingman muzzle flashes.
 - **S14 (Nov 11 afternoon)**: low-angle photo-mode review of terrain, mountains, colony and force field (no seams/floating decor found); dust devils confirmed visible; colony beauty shot added to docs.

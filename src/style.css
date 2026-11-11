@@ -466,3 +466,6 @@ body.cine #threats { display: none; }
 #over::before { content: ''; position: fixed; inset: 0; background: var(--bg) center / cover no-repeat; filter: blur(3px) saturate(1.2); transform: scale(1.04); opacity: .55; z-index: -1; }
 body:has(#over:not(.hidden)) .toast { top: auto; bottom: calc(var(--sb) + 20px); }
 body.photo #hud > *:not(#hint):not(.top), body.photo #hud .top .left, body.photo #hud .top .center, body.photo #hud .scorebox, body.photo #floaters, body.photo #threats { visibility: hidden !important; }
+.card .ic img { width: 120%; height: 120%; object-fit: contain; filter: drop-shadow(0 0 10px var(--c)); animation: icFloat 2.4s ease-in-out infinite; }
+.slot span img { width: 26px; height: 26px; object-fit: contain; display: block; filter: drop-shadow(0 0 4px var(--c)); }
+.slot.pas span img { width: 20px; height: 20px; }

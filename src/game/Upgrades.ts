@@ -21,6 +21,7 @@ export interface CardView {
   level: number; // 0 for none
   max: number;
   special?: 'evo' | 'new';
+  iconId?: string;
 }
 
 export function rollChoices(P: Player, n = 3): Choice[] {
@@ -63,20 +64,20 @@ export function describe(c: Choice, P: Player): CardView {
   switch (c.kind) {
     case 'weapon': {
       const w = WEAPONS[c.id];
-      return { icon: w.icon, color: w.color, name: w.name, tag: c.level === 1 ? 'NEW WEAPON' : `LEVEL ${c.level}`, desc: w.levels[c.level - 1], level: c.level, max: MAX_WEAPON_LV, special: c.level === 1 ? 'new' : undefined };
+      return { icon: w.icon, color: w.color, name: w.name, tag: c.level === 1 ? 'NEW WEAPON' : `LEVEL ${c.level}`, desc: w.levels[c.level - 1], level: c.level, max: MAX_WEAPON_LV, special: c.level === 1 ? 'new' : undefined, iconId: c.id };
     }
     case 'passive': {
       const p = PASSIVES[c.id];
-      return { icon: p.icon, color: p.color, name: p.name, tag: c.level === 1 ? 'NEW MODULE' : `LEVEL ${c.level}`, desc: p.desc, level: c.level, max: MAX_PASSIVE_LV, special: c.level === 1 ? 'new' : undefined };
+      return { icon: p.icon, color: p.color, name: p.name, tag: c.level === 1 ? 'NEW MODULE' : `LEVEL ${c.level}`, desc: p.desc, level: c.level, max: MAX_PASSIVE_LV, special: c.level === 1 ? 'new' : undefined, iconId: c.id };
     }
     case 'evolve': {
       const w = WEAPONS[c.id];
-      return { icon: w.icon, color: w.color, name: w.evoName, tag: 'EVOLUTION', desc: w.levels[5], level: 0, max: 0, special: 'evo' };
+      return { icon: w.icon, color: w.color, name: w.evoName, tag: 'EVOLUTION', desc: w.levels[5], level: 0, max: 0, special: 'evo', iconId: c.id };
     }
     case 'heal':
-      return { icon: '✚', color: '#ff5e7e', name: 'Field Repair', tag: 'SUPPLY', desc: `Repair ${Math.round(P.maxHp * 0.5)} hull.`, level: 0, max: 0 };
+      return { icon: '✚', color: '#ff5e7e', name: 'Field Repair', tag: 'SUPPLY', desc: `Repair ${Math.round(P.maxHp * 0.5)} hull.`, level: 0, max: 0, iconId: 'heal' };
     case 'bounty':
-      return { icon: '★', color: '#ffd84f', name: 'Salvage Bounty', tag: 'SUPPLY', desc: '+2,500 score.', level: 0, max: 0 };
+      return { icon: '★', color: '#ffd84f', name: 'Salvage Bounty', tag: 'SUPPLY', desc: '+2,500 score.', level: 0, max: 0, iconId: 'bounty' };
   }
 }
 

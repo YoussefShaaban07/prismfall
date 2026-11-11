@@ -21,6 +21,8 @@ import { ARENA_RADIUS, BOSS_TIMES, FINAL_TIME, xpForLevel, type EType } from './
 import { ACHIEVEMENTS, MODS, SHIPS, UPGRADES, dailySetup, loadMeta, modMult, saveMeta, shardsForRun, upLv, type MetaState, type ModId, type ShipId } from './meta';
 import { heroMapper, alienMapper, type ModelName } from '../core/Assets';
 import { LOOKS } from './Boss';
+import { renderIcons } from '../ui/Icons';
+import { WEAPONS as WDEF, PASSIVES as PDEF } from './data';
 import { EDEFS as ED } from './data';
 
 type State = 'menu' | 'play' | 'levelup' | 'paused' | 'over' | 'photo';
@@ -145,6 +147,11 @@ export class Game {
     this.r = renderer;
     this.settings = store.get<Settings>('prismfall.settings', { quality: this.defaultQuality(), sfx: 0.8, music: 0.6, shake: true, numbers: true });
     this.ui = new UI(this.settings);
+    this.ui.icons = renderIcons([
+      ...Object.values(WDEF).map((w) => ({ id: w.id, color: w.color })),
+      ...Object.values(PDEF).map((p) => ({ id: p.id, color: p.color })),
+      { id: 'heal' as const, color: '#ff5e7e' }, { id: 'bounty' as const, color: '#ffd84f' },
+    ]);
     this.input = new Input(canvas, this.ui.joy, this.ui.knob, this.ui.dashBtn);
     const scene = this.r.scene;
     if (assets.env) {
