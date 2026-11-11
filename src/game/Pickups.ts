@@ -9,8 +9,8 @@ export type PowerKind = 'heal' | 'magnet' | 'bomb';
 interface Power { kind: PowerKind; x: number; z: number; t: number; obj: THREE.Group; beam: THREE.Mesh }
 
 const GEM_COLORS = [
-  new THREE.Color(0.3, 0.95, 1).multiplyScalar(3.2),
-  new THREE.Color(0.45, 1, 0.55).multiplyScalar(3.2),
+  new THREE.Color(0.3, 0.95, 1).multiplyScalar(2.4),
+  new THREE.Color(0.45, 1, 0.55).multiplyScalar(2.4),
   new THREE.Color(0.8, 0.45, 1).multiplyScalar(3.5),
   new THREE.Color(1, 0.8, 0.25).multiplyScalar(3.8),
 ];

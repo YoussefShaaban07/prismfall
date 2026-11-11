@@ -43,7 +43,7 @@ export class Projectiles {
     this.missileMesh = instanced(mg, 120, scene);
     this.shotMesh = instanced(new THREE.IcosahedronGeometry(0.34, 1), 900, scene);
     (this.shotMesh.material as THREE.MeshBasicMaterial).transparent = true;
-    (this.shotMesh.material as THREE.MeshBasicMaterial).opacity = 0.65;
+    (this.shotMesh.material as THREE.MeshBasicMaterial).opacity = 0.5;
     (this.shotMesh.material as THREE.MeshBasicMaterial).blending = THREE.AdditiveBlending;
     (this.shotMesh.material as THREE.MeshBasicMaterial).depthWrite = false;
     this.shotCore = instanced(new THREE.IcosahedronGeometry(0.18, 1), 900, scene);
@@ -62,7 +62,7 @@ export class Projectiles {
 
   enemyShot(x: number, z: number, vx: number, vz: number, dmg: number, color: number, size = 1) {
     if (this.shots.length > 890) return;
-    this.shots.push({ x, z, vx, vz, dmg, life: 6, color: new THREE.Color(color).multiplyScalar(2.2), size });
+    this.shots.push({ x, z, vx, vz, dmg, life: 6, color: new THREE.Color(color).multiplyScalar(1.5), size });
   }
 
   clear() {
@@ -229,7 +229,7 @@ export class Projectiles {
       this.shotMesh.setMatrixAt(i, this.m);
       this.shotMesh.setColorAt(i, s.color);
       this.shotCore.setMatrixAt(i, this.m);
-      this.c.copy(s.color).multiplyScalar(0.5).addScalar(0.9);
+      this.c.copy(s.color).multiplyScalar(0.7).addScalar(0.35);
       this.shotCore.setColorAt(i, this.c);
     }
     for (const mesh of [this.shotMesh, this.shotCore]) {

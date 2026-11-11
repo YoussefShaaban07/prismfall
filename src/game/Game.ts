@@ -104,6 +104,7 @@ export class Game {
   private camPos = new THREE.Vector3(0, 40, 30);
   private camLook = new THREE.Vector3();
   private last = performance.now();
+  private snapCam = false;
   private fpsAcc = 0;
   private fpsN = 0;
   private autoQDone = false;
@@ -249,7 +250,7 @@ export class Game {
     store.set('prismfall.settings', s);
     if (this.r.quality !== s.quality) this.r.setQuality(s.quality);
     this.audio.setVolumes(s.sfx, s.music);
-    this.r.bloom.strength = s.quality === 'low' ? 0.6 : 0.7;
+    this.r.bloom.strength = s.quality === 'low' ? 0.5 : 0.6;
   }
 
   /* ======================= flow ======================= */
@@ -343,7 +344,7 @@ export class Game {
 
   private loop = (now: number) => {
     requestAnimationFrame(this.loop);
-    let dt = Math.min(0.05, (now - this.last) / 1000);
+    let dt = clamp((now - this.last) / 1000, 0, 0.05);
     this.last = now;
     this.time += dt;
     this.input.update();
@@ -457,7 +458,8 @@ export class Game {
     const tx = P.x + P.vx * 0.12 * lead;
     const tz = P.z + P.vz * 0.12 * lead;
     this.camPos.set(tx, h, tz + h * 0.62);
-    cam.position.lerp(this.camPos, 1 - Math.exp(-6 * dt));
+    cam.position.lerp(this.camPos, this.snapCam ? 1 : 1 - Math.exp(-6 * dt));
+    this.snapCam = false;
     let sx = 0, sy = 0;
     if (this.shake > 0 && this.settings.shake) {
       const s = this.shake * this.shake * 1.4;
@@ -1025,6 +1027,7 @@ export class Game {
   debugSim(seconds: number, bot = true) {
     if (this.state === 'menu' || this.state === 'over') this.startRun();
     const dt = 1 / 60;
+    this.snapCam = true;
     let n = Math.floor(seconds * 60);
     while (n-- > 0) {
       if (this.state === 'levelup') {
