@@ -358,6 +358,8 @@ export class Game {
     (this.arena.dust.material as THREE.PointsMaterial).color.set(night ? 0x8ab0ff : 0xffb08a);
     this.player.light.intensity = night ? 9 : 4;
     this.audio.theme = night ? 'night' : 'dusk';
+    this.arena.setNight(night);
+    r.bloom.strength = (this.settings.quality === 'low' ? 0.5 : 0.6) * (night ? 0.75 : 1);
     (r.grade.uniforms.uShadowTint.value as THREE.Vector3).set(night ? -0.03 : -0.02, night ? 0.01 : 0.03, night ? 0.08 : 0.06);
     (r.grade.uniforms.uHighTint.value as THREE.Vector3).set(night ? 0.0 : 0.05, night ? 0.03 : 0.02, night ? 0.05 : -0.03);
   }
@@ -372,7 +374,7 @@ export class Game {
     if (this.lighting) this.lighting.setLightsEnabled(s.quality !== 'low');
     if (this.r.quality !== s.quality) this.r.setQuality(s.quality);
     this.audio.setVolumes(s.sfx, s.music);
-    this.r.bloom.strength = s.quality === 'low' ? 0.5 : 0.6;
+    this.r.bloom.strength = (s.quality === 'low' ? 0.5 : 0.6) * (this.night ? 0.75 : 1);
   }
 
   /* ======================= flow ======================= */
@@ -1082,7 +1084,7 @@ export class Game {
     const P = this.player;
     this.fx.shock(P.x, P.z, 5, 0.6, 0.3);
     this.audio.sfx('dash');
-    this.fx.ring(P.x, P.z, 3, 0x5ef2ff, 0.3, 3);
+    this.fx.ring(P.x, P.z, 3, 0x5ef2ff, 0.3, 1.5);
     this.particles.ring(P.x, 0.6, P.z, this.colors.cyan, 24, 7, 0.3, 0.45);
   }
 

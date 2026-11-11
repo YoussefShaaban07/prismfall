@@ -184,6 +184,8 @@ export class Arena {
   flare: Lensflare;
   sunHolder = new THREE.Object3D();
   windBoost = 1;
+  searchlights: { cone: THREE.Mesh; spot: THREE.Mesh; base: THREE.Vector3; phase: number; speed: number }[] = [];
+  night = false;
 
   constructor(scene: THREE.Scene, assets: Assets) {
     scene.add(this.group);
@@ -470,6 +472,46 @@ export class Arena {
     this.group.add(m2);
     this.spinners.push(m1, m2);
 
+    /* ----- colony searchlights (visible on Night Shift) ----- */
+    const coneMat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      uniforms: { uColor: { value: new THREE.Color(0.75, 0.85, 1.0) } },
+      vertexShader: /* glsl */ `varying float vT; varying vec3 vN; varying vec3 vV;
+        void main(){ vT = uv.y; vec4 w = modelMatrix * vec4(position, 1.0); vN = normalize(mat3(modelMatrix) * normal); vV = normalize(cameraPosition - w.xyz); gl_Position = projectionMatrix * viewMatrix * w; }`,
+      fragmentShader: /* glsl */ `uniform vec3 uColor; varying float vT; varying vec3 vN; varying vec3 vV;
+        void main(){ float edge = pow(abs(dot(normalize(vN), normalize(vV))), 1.5); float a = pow(vT, 1.6) * edge * 0.09; gl_FragColor = vec4(uColor * a, 1.0); }`,
+    });
+    const spotTex = (() => {
+      const c = document.createElement('canvas');
+      c.width = c.height = 64;
+      const x = c.getContext('2d')!;
+      const gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+      gr.addColorStop(0, 'rgba(255,255,255,0.9)');
+      gr.addColorStop(0.6, 'rgba(255,255,255,0.35)');
+      gr.addColorStop(1, 'rgba(255,255,255,0)');
+      x.fillStyle = gr;
+      x.fillRect(0, 0, 64, 64);
+      return new THREE.CanvasTexture(c);
+    })();
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * TAU + 0.4;
+      const base = new THREE.Vector3(Math.cos(a) * (R + 14), 14, Math.sin(a) * (R + 14));
+      const coneGeo = new THREE.CylinderGeometry(0.4, 6, 1, 24, 1, true);
+      coneGeo.translate(0, -0.5, 0);
+      const cone = new THREE.Mesh(coneGeo, coneMat);
+      cone.renderOrder = 6;
+      const spotGeo = new THREE.PlaneGeometry(1, 1);
+      spotGeo.rotateX(-Math.PI / 2);
+      const spot = new THREE.Mesh(spotGeo, new THREE.MeshBasicMaterial({ map: spotTex, color: new THREE.Color(0.55, 0.65, 0.9), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+      spot.renderOrder = 2;
+      cone.visible = spot.visible = false;
+      this.group.add(cone, spot);
+      this.searchlights.push({ cone, spot, base, phase: i * 1.7, speed: 0.18 + i * 0.03 });
+    }
+
     /* ----- sun lens flare ----- */
     this.flare = new Lensflare();
     const core = flareTex('core'), ring = flareTex('ring'), hex = flareTex('hex');
@@ -517,7 +559,31 @@ export class Arena {
     this.sunHolder.position.copy(cam.position).add(d);
   }
 
+  setNight(n: boolean) {
+    this.night = n;
+    for (const s of this.searchlights) s.cone.visible = s.spot.visible = n;
+  }
+
+  private updateSearchlights(time: number) {
+    if (!this.night) return;
+    const up = new THREE.Vector3(0, 1, 0);
+    for (const s of this.searchlights) {
+      const t = time * s.speed + s.phase;
+      const r = 14 + Math.sin(t * 1.3) * 30 + 20;
+      const tx = Math.cos(t) * r, tz = Math.sin(t * 0.8) * r;
+      const target = new THREE.Vector3(tx, 0, tz);
+      const dir = target.clone().sub(s.base);
+      const len = dir.length();
+      s.cone.position.copy(s.base);
+      s.cone.quaternion.setFromUnitVectors(up, dir.clone().normalize().negate());
+      s.cone.scale.set(1, len, 1);
+      s.spot.position.set(tx, 0.09, tz);
+      s.spot.scale.set(13, 1, 13);
+    }
+  }
+
   update(dt: number, time: number, px: number, pz: number, danger: number) {
+    this.updateSearchlights(time);
     const U = this.groundUniforms;
     U.uTime.value = time;
     U.uPlayer.value.set(px, pz);
