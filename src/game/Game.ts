@@ -110,6 +110,7 @@ export class Game {
   private camLook = new THREE.Vector3();
   private last = performance.now();
   snapCam = false;
+  private rimLights: THREE.PointLight[] = [];
   private lookSmooth = new THREE.Vector3(0, 4, 0);
   private menuPath = new THREE.CatmullRomCurve3(
     [
@@ -314,7 +315,7 @@ export class Game {
   private buildShowroom() {
     const pad = this.assets.object('platform_large', 7, heroMapper(0x5ef2ff, 0.3));
     this.showroom.add(pad);
-    const ringMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.35, 0.95, 1).multiplyScalar(1.2), transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false });
+    const ringMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.35, 0.95, 1).multiplyScalar(0.8), transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false });
     for (let i = 0; i < 2; i++) {
       const r = new THREE.Mesh(new THREE.TorusGeometry(3.3 + i * 0.5, 0.04, 8, 96), ringMat);
       r.rotation.x = Math.PI / 2;
@@ -325,6 +326,21 @@ export class Game {
     spot.position.set(4, 12, 6);
     spot.target.position.set(0, 1, 0);
     this.showroom.add(spot, spot.target);
+    // polished black-chrome pad top: reflects the HDR sky and the orbiting rim lights
+    const padTop = (pad.userData.height as number) + 0.02;
+    const chrome = new THREE.Mesh(
+      new THREE.CircleGeometry(3.25, 64).rotateX(-Math.PI / 2),
+      new THREE.MeshStandardMaterial({ color: 0x0b0d14, metalness: 1, roughness: 0.12, envMapIntensity: 1.4 }),
+    );
+    chrome.position.y = padTop;
+    chrome.receiveShadow = true;
+    this.showroom.add(chrome);
+    // turntable rim lights orbit the ship
+    for (const c of [0x5ef2ff, 0xff4fd8]) {
+      const l = new THREE.PointLight(c, 0, 12, 1.5);
+      this.showroom.add(l);
+      this.rimLights.push(l);
+    }
     this.r.scene.add(this.showroom);
     this.setShowShip(this.meta.ship);
   }
@@ -422,6 +438,7 @@ export class Game {
     this.player.root.visible = true;
     this.showroom.visible = false;
     this.hangarOpen = false;
+    for (const l of this.rimLights) l.intensity = 0;
     this.r.camera.clearViewOffset();
     this.player.magnetRing.visible = true;
     Object.assign(this, {
@@ -613,6 +630,12 @@ export class Game {
   }
 
   private updateMenu(dt: number) {
+    const showcase = this.hangarOpen;
+    this.rimLights.forEach((l, i) => {
+      const a = this.time * 0.8 + i * Math.PI;
+      l.position.set(Math.cos(a) * 5, 3.5, Math.sin(a) * 5);
+      l.intensity = showcase ? 25 : 0;
+    });
     if (this.showShip) {
       this.showShip.rotation.y = this.time * 0.5;
       this.showShip.position.y = 2.2 + Math.sin(this.time * 1.5) * 0.2;
