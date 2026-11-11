@@ -63,6 +63,8 @@ export interface MetaState {
   achievements: string[];
   seenTutorial: boolean;
   map: 'dusk' | 'night';
+  mods: ModId[];
+  daily: Record<string, number>;
   top: { score: number; time: number; level: number; kills: number; ship: ShipId; win: boolean; date: string }[];
 }
 
@@ -78,6 +80,8 @@ export function loadMeta(): MetaState {
     achievements: [],
     seenTutorial: false,
     map: 'dusk',
+    mods: [],
+    daily: {},
     top: [],
   };
   const m = store.get<Partial<MetaState>>(KEY, {});
@@ -92,6 +96,33 @@ export const upLv = (m: MetaState, id: UpgradeId) => m.upgrades[id] ?? 0;
 
 export function shardsForRun(r: { kills: number; bosses: number; time: number; victory: boolean; level: number }) {
   return Math.floor(r.kills / 30 + r.bosses * 25 + r.time / 20 + r.level * 0.6 + (r.victory ? 120 : 0));
+}
+
+/* ======================= mutators & daily challenge ======================= */
+
+export type ModId = 'glass' | 'tide' | 'hardlight' | 'elites' | 'speed' | 'norepair';
+export interface ModDef { id: ModId; name: string; desc: string; mult: number }
+export const MODS: ModDef[] = [
+  { id: 'glass', name: 'Glass Cannon', desc: '+50% damage, half hull', mult: 1.3 },
+  { id: 'tide', name: 'Swarm Tide', desc: '+40% enemy spawns', mult: 1.4 },
+  { id: 'hardlight', name: 'Hard Light', desc: 'Enemy bullets 30% faster', mult: 1.2 },
+  { id: 'elites', name: 'Elite Hunt', desc: 'Golden elites every 35s', mult: 1.2 },
+  { id: 'speed', name: 'Overdrive', desc: 'Everything moves 15% faster', mult: 1.25 },
+  { id: 'norepair', name: 'No Repairs', desc: 'No repair drops or level-up repairs', mult: 1.5 },
+];
+export const modMult = (mods: ModId[]) => mods.reduce((m, id) => m * (MODS.find((x) => x.id === id)?.mult ?? 1), 1);
+
+/** Deterministic daily setup: same ship + two mutators for everyone on a given date. */
+export function dailySetup(date = new Date()) {
+  const key = date.toISOString().slice(0, 10);
+  let h = 2166136261;
+  for (const ch of key) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0;
+  const rnd = () => ((h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0) / 4294967296);
+  const ship = SHIPS[Math.floor(rnd() * SHIPS.length)].id;
+  const pool = [...MODS.map((m) => m.id)];
+  const mods: ModId[] = [];
+  while (mods.length < 2) mods.push(pool.splice(Math.floor(rnd() * pool.length), 1)[0]);
+  return { key, ship, mods };
 }
 
 /* ======================= achievements ======================= */

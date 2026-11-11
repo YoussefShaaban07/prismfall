@@ -37,7 +37,7 @@ Three-day build. Each session picks up the next unchecked items, playtests with 
 ### Day 2.5 — more content
 - [x] Two new weapons: Wingman Drones (escort ships in V formation) and Gravity Mines (pull then detonate), with evolutions
 - [x] Night Shift sector: night HDRI, moonlight, aurora sky, neon-forward grid; unlocked by first win; earlier phantoms/mines, +15% spawns, ×1.5 score, ×1.3 shards
-- [ ] Mutators / daily challenge with seeded modifiers
+- [x] Mutators (6, stackable score/shard multipliers) + date-seeded Daily Challenge with per-day best
 - [x] Boss intro cinematic (camera push, letterbox, slow-mo, name card)
 - [x] Local top-10 leaderboard with run details (Hangar → Records)
 - [x] Accessibility: reduce-flashing mode, high-contrast enemy bullets
@@ -50,6 +50,7 @@ Three-day build. Each session picks up the next unchecked items, playtests with 
 - [ ] Full QA pass (desktop + phone sizes), README with screenshots, GitHub Pages deploy
 
 ## Session log
+- **S2d (Nov 10 night)**: Night Shift sector, mutators + daily challenge, main menu redesigned as a left column so the 3D showroom stays visible.
 - **S2c (Nov 10 night)**: boss intro cinematic, top-10 leaderboard, accessibility options, vitest suite + CI.
 - **S2b (Nov 10 night)**: 8-weapon pool, lighter scorch decals, bot now sidesteps bullets/hazards. 6-run sample: deaths at 3:53–10:09, 1 win — good roguelite curve before hangar upgrades.
 - **S2 (Nov 10 night)**: boss signatures + hazards; fixed negative frame-delta bug that blew up post-processing after picking upgrades; balance (more repairs, cubic late HP); bloom/bullet readability; README + screenshots.

@@ -17,7 +17,7 @@ import { Pickups, type PowerKind } from './Pickups';
 import { Hazards } from './Hazards';
 import { rollChoices, describe, applyChoice, type Choice } from './Upgrades';
 import { ARENA_RADIUS, BOSS_TIMES, FINAL_TIME, xpForLevel, type EType } from './data';
-import { ACHIEVEMENTS, SHIPS, UPGRADES, loadMeta, saveMeta, shardsForRun, upLv, type MetaState, type ShipId } from './meta';
+import { ACHIEVEMENTS, MODS, SHIPS, UPGRADES, dailySetup, loadMeta, modMult, saveMeta, shardsForRun, upLv, type MetaState, type ModId, type ShipId } from './meta';
 import { heroMapper } from '../core/Assets';
 
 type State = 'menu' | 'play' | 'levelup' | 'paused' | 'over';
@@ -107,6 +107,9 @@ export class Game {
   private snapCam = false;
   cineT = 0;
   night = false;
+  mods = new Set<ModId>();
+  dailyKey: string | null = null;
+  scoreMult = 1;
   private sunOff = new THREE.Vector3(-30, 45, 18);
   private lastEntry: MetaState['top'][number] | null = null;
   private fpsAcc = 0;
@@ -145,6 +148,7 @@ export class Game {
     this.bindUI();
     this.ui.showMenu(this.meta.stats.bestScore, this.meta.stats.bestTime, this.input.touchUsed, this.meta.shards);
     this.ui.setMapLabel(this.meta.map, this.nightUnlocked());
+    this.ui.renderMods(this.meta);
     requestAnimationFrame(this.loop);
     document.addEventListener('visibilitychange', () => {
       if (document.hidden && this.state === 'play') this.pause();
@@ -159,7 +163,7 @@ export class Game {
   private bindUI() {
     const ui = this.ui;
     ui.onPlay = () => this.startRun();
-    ui.onRetry = () => this.startRun();
+    ui.onRetry = () => this.startRun(!!this.dailyKey);
     ui.onResume = () => this.togglePause();
     ui.onQuit = () => this.toMenu();
     ui.onEndless = () => this.continueEndless();
@@ -174,6 +178,15 @@ export class Game {
       this.setShowShip(this.previewShip);
       if (open) ui.openHangar(this.meta, this.previewShip);
       else ui.closeHangar();
+    };
+    ui.onDaily = () => this.startRun(true);
+    ui.onModToggle = (id) => {
+      const i = this.meta.mods.indexOf(id);
+      if (i >= 0) this.meta.mods.splice(i, 1);
+      else this.meta.mods.push(id);
+      saveMeta(this.meta);
+      this.audio.sfx('click');
+      ui.renderMods(this.meta);
     };
     ui.onMapToggle = () => {
       if (!this.nightUnlocked()) {
@@ -315,7 +328,8 @@ export class Game {
 
   /* ======================= flow ======================= */
 
-  startRun() {
+  startRun(daily = false) {
+    if (typeof daily !== 'boolean') daily = false;
     this.audio.init();
     this.audio.startMusic();
     this.audio.resetMusic();
@@ -328,8 +342,16 @@ export class Game {
     this.debris.clear();
     this.fx.clear();
     this.weapons.reset();
-    const ship = SHIPS.find((x) => x.id === this.meta.ship) ?? SHIPS[0];
+    const ds = daily ? dailySetup() : null;
+    this.dailyKey = ds ? ds.key : null;
+    this.mods = new Set(ds ? ds.mods : this.meta.mods);
+    const ship = SHIPS.find((x) => x.id === (ds ? ds.ship : this.meta.ship)) ?? SHIPS[0];
     this.player.reset(this.meta, ship);
+    if (this.mods.has('glass')) {
+      this.player.dmg *= 1.5;
+      this.player.maxHp = this.player.hp = Math.ceil(this.player.maxHp / 2);
+    }
+    this.scoreMult = modMult([...this.mods]) * (this.night ? 1.5 : 1);
     this.player.root.visible = true;
     this.showroom.visible = false;
     this.hangarOpen = false;
@@ -345,7 +367,9 @@ export class Game {
     this.state = 'play';
     document.body.classList.remove('cine');
     this.ui.startRun(this.input.touchUsed);
-    this.ui.banner('DEFEND THE COLONY', 'Survive · Level up · Evolve', '#5ef2ff', 2400);
+    const modNames = [...this.mods].map((m) => MODS.find((x) => x.id === m)!.name).join(' · ');
+    if (ds) this.ui.banner('DAILY CHALLENGE', `${ship.name} · ${modNames}`, '#ffd84f', 3000);
+    else this.ui.banner('DEFEND THE COLONY', modNames || 'Survive · Level up · Evolve', '#5ef2ff', 2400);
     // opening ring of drones dropping in
     for (let i = 0; i < 8; i++) {
       const a = (i / 8) * TAU;
@@ -372,6 +396,7 @@ export class Game {
     this.cineT = 0;
     this.ui.showMenu(this.meta.stats.bestScore, this.meta.stats.bestTime, this.input.touchUsed, this.meta.shards);
     this.ui.setMapLabel(this.meta.map, this.nightUnlocked());
+    this.ui.renderMods(this.meta);
     this.showroom.visible = true;
   }
 
@@ -422,6 +447,7 @@ export class Game {
         this.slowT -= dt;
         dt *= 0.3;
       }
+      if (this.mods.has('speed')) dt *= 1.15;
       if (this.cineT > 0) {
         this.cineT -= dt;
         document.body.classList.toggle('cine', this.cineT > 0);
@@ -503,7 +529,9 @@ export class Game {
       else cam.setViewOffset(W, H, 0, H * 0.27, W, H);
       return;
     }
-    cam.clearViewOffset();
+    if (this.state === 'menu' && this.r.width > this.r.height * 1.1 && this.r.width > 760) {
+      cam.setViewOffset(this.r.width, this.r.height, -this.r.width * 0.16, 0, this.r.width, this.r.height);
+    } else cam.clearViewOffset();
     if (this.state === 'menu') {
       if (this.showShip) {
         this.showShip.rotation.y = this.time * 0.5;
@@ -664,7 +692,7 @@ export class Game {
     }
 
     // regular spawns
-    const rate = Math.min(22, 0.9 + T / 42 + Math.pow(T / 120, 2)) * (this.boss.e ? 0.22 : 1) * (this.endless ? 1.3 : 1) * (this.night ? 1.15 : 1);
+    const rate = Math.min(22, 0.9 + T / 42 + Math.pow(T / 120, 2)) * (this.boss.e ? 0.22 : 1) * (this.endless ? 1.3 : 1) * (this.night ? 1.15 : 1) * (this.mods.has('tide') ? 1.4 : 1);
     this.spawnAcc += rate * dt;
     let guard = 0;
     while (this.spawnAcc >= 1 && guard++ < 20) {
@@ -698,7 +726,7 @@ export class Game {
 
     // elites: tougher golden variants that always drop supplies
     if (T >= this.nextElite) {
-      this.nextElite += 70;
+      this.nextElite += this.mods.has('elites') ? 35 : 70;
       const pool: EType[] = T > 240 ? ['brute', 'wraith', 'spitter'] : ['brute', 'spitter', 'meteor'];
       const p = this.spawnPoint(20, 26);
       const e = this.enemies.spawn(pool[Math.floor(Math.random() * pool.length)], p.x, p.z, true);
@@ -764,7 +792,7 @@ export class Game {
     this.combo++;
     this.comboT = 2.6;
     this.maxCombo = Math.max(this.maxCombo, this.combo);
-    this.score += Math.round(e.def.score * (1 + Math.floor(this.combo / 10) * 0.2) * (e.elite ? 10 : 1) * (this.night ? 1.5 : 1));
+    this.score += Math.round(e.def.score * (1 + Math.floor(this.combo / 10) * 0.2) * (e.elite ? 10 : 1) * this.scoreMult);
     const col = new THREE.Color(e.def.color).multiplyScalar(3);
     const big = e.type === 'brute' || e.elite;
     this.particles.burst(e.x, e.def.hover + 0.3, e.z, col, big ? 40 : 14, big ? 12 : 8, 0.6, big ? 1 : 0.6, 0.6);
@@ -781,11 +809,11 @@ export class Game {
     // loot
     this.pickups.dropGem(e.x, e.z, e.def.xp * (e.elite ? 12 : 1));
     if (e.elite) {
-      const kinds: PowerKind[] = ['heal', 'magnet', 'bomb'];
-      this.pickups.dropPower(kinds[Math.floor(Math.random() * 3)], e.x + 1, e.z);
+      const kinds: PowerKind[] = this.mods.has('norepair') ? ['magnet', 'bomb'] : ['heal', 'magnet', 'bomb'];
+      this.pickups.dropPower(kinds[Math.floor(Math.random() * kinds.length)], e.x + 1, e.z);
     } else {
       const r = Math.random();
-      if (r < 0.011) this.pickups.dropPower('heal', e.x, e.z);
+      if (r < 0.011) { if (!this.mods.has('norepair')) this.pickups.dropPower('heal', e.x, e.z); }
       else if (r < 0.0145) this.pickups.dropPower('magnet', e.x, e.z);
       else if (r < 0.017) this.pickups.dropPower('bomb', e.x, e.z);
     }
@@ -834,7 +862,7 @@ export class Game {
     // treasure: a fountain of crystals worth ~2 levels
     const total = this.player.xpNext * 2.2 + xpForLevel(this.player.level + 1);
     for (let i = 0; i < 18; i++) this.pickups.dropGem(e.x + rand(-2, 2), e.z + rand(-2, 2), Math.ceil(total / 18));
-    this.pickups.dropPower('heal', e.x + 2, e.z);
+    if (!this.mods.has('norepair')) this.pickups.dropPower('heal', e.x + 2, e.z);
     this.pickups.dropPower('magnet', e.x - 2, e.z);
     if (final && !this.won) {
       this.won = true;
@@ -1007,7 +1035,7 @@ export class Game {
     }
     this.pendingLevels--;
     this.player.inv = Math.max(this.player.inv, 0.8);
-    this.player.hp = Math.min(this.player.maxHp, this.player.hp + this.player.maxHp * 0.08);
+    if (!this.mods.has('norepair')) this.player.hp = Math.min(this.player.maxHp, this.player.hp + this.player.maxHp * 0.08);
     this.state = 'play';
     this.last = performance.now();
   }
@@ -1162,7 +1190,8 @@ export class Game {
     const m = this.meta;
     const best = m.stats.bestScore;
     const newBest = this.score > best;
-    const total = Math.round(shardsForRun({ kills: this.kills, bosses: this.bossesKilled, time: this.T, victory: this.won, level: this.player.level }) * (this.night ? 1.3 : 1));
+    const total = Math.round(shardsForRun({ kills: this.kills, bosses: this.bossesKilled, time: this.T, victory: this.won, level: this.player.level }) * (this.night ? 1.3 : 1) * (1 + (modMult([...this.mods]) - 1) * 0.5));
+    if (this.dailyKey) m.daily[this.dailyKey] = Math.max(m.daily[this.dailyKey] ?? 0, Math.round(this.score));
     const shards = Math.max(0, total - this.paidShards);
     const firstEnd = this.paidShards === 0 && !this.endless;
     this.paidShards = total;

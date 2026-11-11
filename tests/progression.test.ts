@@ -124,3 +124,15 @@ describe('spatial grid', () => {
     }
   });
 });
+
+import { dailySetup, modMult, MODS } from '../src/game/meta';
+describe('daily challenge', () => {
+  it('is deterministic per date and picks 2 distinct mods', () => {
+    const a = dailySetup(new Date('2026-11-11T12:00:00Z'));
+    const b = dailySetup(new Date('2026-11-11T12:00:00Z'));
+    expect(a).toEqual(b);
+    expect(new Set(a.mods).size).toBe(2);
+    expect(modMult(a.mods)).toBeGreaterThan(1);
+    expect(MODS.length).toBeGreaterThanOrEqual(6);
+  });
+});

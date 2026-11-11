@@ -2,7 +2,7 @@ import type { CardView } from '../game/Upgrades';
 import { fmtNum, fmtTime } from '../core/util';
 import { PASSIVES, WEAPONS, FINAL_TIME, ARENA_RADIUS, type PassiveId, type WeaponId } from '../game/data';
 import type { Quality } from '../core/Renderer';
-import { ACHIEVEMENTS, SHIPS, UPGRADES, upLv, type MetaState, type ShipId, type UpgradeId } from '../game/meta';
+import { ACHIEVEMENTS, MODS, SHIPS, UPGRADES, dailySetup, modMult, upLv, type MetaState, type ModId, type ShipId, type UpgradeId } from '../game/meta';
 
 export interface Settings {
   quality: Quality;
@@ -58,6 +58,8 @@ export class UI {
   onClick: () => void = () => {};
   onHangar: (open: boolean) => void = () => {};
   onMapToggle: () => void = () => {};
+  onDaily: () => void = () => {};
+  onModToggle: (id: ModId) => void = () => {};
   onShipPreview: (id: ShipId) => void = () => {};
   onShipAction: (id: ShipId) => void = () => {};
   onBuy: (id: UpgradeId) => void = () => {};
@@ -92,6 +94,9 @@ export class UI {
     $('#creditsBtn').addEventListener('click', () => this.show('#credits'));
     $('#hangarBtn').addEventListener('click', () => this.onHangar(true));
     $('#mapBtn').addEventListener('click', () => this.onMapToggle());
+    $('#dailyBtn').addEventListener('click', () => this.onDaily());
+    $('#modsBtn').addEventListener('click', () => this.show('#modsScreen'));
+    $('#modsClose').addEventListener('click', () => this.hide('#modsScreen'));
     $('#menuSettingsBtn').addEventListener('click', () => this.show('#settingsScreen'));
     $('#pauseSettingsBtn').addEventListener('click', () => this.show('#settingsScreen'));
     $('#settingsClose').addEventListener('click', () => this.hide('#settingsScreen'));
@@ -129,6 +134,18 @@ export class UI {
     $('#ctlHint').textContent = touch ? 'Drag anywhere to fly · Tap DASH to dodge' : 'WASD / Arrows to fly · SPACE to dash · ESC to pause · Gamepad supported';
   }
 
+  renderMods(meta: MetaState) {
+    const m = modMult(meta.mods);
+    $('#modsBtn').innerHTML = `MUTATORS${meta.mods.length ? ` <span class="mshards">×${m.toFixed(2)}</span>` : ''}`;
+    $('#modsMult').textContent = `SCORE ×${m.toFixed(2)}`;
+    const list = $('#modList');
+    list.innerHTML = MODS.map((d) => `<button class="modrow ${meta.mods.includes(d.id) ? 'on' : ''}" data-m="${d.id}"><b>${d.name}</b><span>${d.desc}</span><em>×${d.mult}</em></button>`).join('');
+    list.querySelectorAll<HTMLElement>('[data-m]').forEach((b) => b.addEventListener('click', () => this.onModToggle(b.dataset.m as ModId)));
+    const ds = dailySetup();
+    const best = meta.daily[ds.key];
+    $('#dailyBtn').innerHTML = `DAILY <small>${SHIPS.find((x) => x.id === ds.ship)!.name} · ${ds.mods.map((id) => MODS.find((x) => x.id === id)!.name).join(' + ')}${best ? ` · best ${fmtNum(best)}` : ''}</small>`;
+  }
+
   setMapLabel(map: 'dusk' | 'night', unlocked: boolean) {
     const b = $('#mapBtn');
     b.innerHTML = map === 'night' ? 'SECTOR · <b>NIGHT SHIFT</b> <small>×1.5 score</small>' : `SECTOR · <b>DUSK OUTPOST</b>${unlocked ? '' : ' <small>🔒 Night Shift</small>'}`;
@@ -136,7 +153,7 @@ export class UI {
   }
 
   hideAll() {
-    for (const s of ['#menu', '#levelup', '#pause', '#over', '#how', '#credits', '#hangar', '#settingsScreen']) this.hide(s);
+    for (const s of ['#menu', '#levelup', '#pause', '#over', '#how', '#credits', '#hangar', '#settingsScreen', '#modsScreen']) this.hide(s);
   }
 
   startRun(touch: boolean) {
@@ -355,7 +372,7 @@ export class UI {
 
   /* ---------- gamepad / keyboard menu navigation ---------- */
   private topScreen(): HTMLElement | null {
-    const order = ['#settingsScreen', '#how', '#credits', '#levelup', '#hangar', '#pause', '#over', '#menu'];
+    const order = ['#modsScreen', '#settingsScreen', '#how', '#credits', '#levelup', '#hangar', '#pause', '#over', '#menu'];
     for (const sel of order) {
       const el = $(sel);
       if (el && !el.classList.contains('hidden')) return el;
@@ -412,7 +429,7 @@ export class UI {
   }
 
   back() {
-    for (const sel of ['#settingsScreen', '#how', '#credits']) {
+    for (const sel of ['#modsScreen', '#settingsScreen', '#how', '#credits']) {
       if (!$(sel).classList.contains('hidden')) { this.hide(sel); return true; }
     }
     if (!$('#hangar').classList.contains('hidden')) { this.onHangar(false); return true; }
@@ -632,14 +649,13 @@ const TEMPLATE = /* html */ `
     <div class="eyebrow">MARS · COLONY OUTPOST 7</div>
     <div class="logo">PRISM<span>FALL</span></div>
     <div class="tagline">A crystal swarm has fallen from the sky. Hold the line for ten minutes, then shatter the Prism Core.</div>
-    <button id="playBtn" class="btn primary">LAUNCH</button>
-    <button id="mapBtn" class="btn mapbtn"></button>
-    <div class="menurow">
-      <button id="hangarBtn" class="btn">HANGAR <span id="menuShards" class="mshards"></span></button>
-      <button id="howBtn" class="btn ghost">HOW TO PLAY</button>
-      <button id="menuSettingsBtn" class="btn ghost">SETTINGS</button>
-      <button id="creditsBtn" class="btn ghost">CREDITS</button>
-      <button id="installBtn" class="btn ghost hidden">INSTALL APP</button>
+    <div class="mbtns">
+      <button id="playBtn" class="btn primary wide">LAUNCH</button>
+      <button id="mapBtn" class="btn mapbtn wide"></button>
+      <button id="dailyBtn" class="btn dailybtn wide">DAILY</button>
+      <div class="pair"><button id="hangarBtn" class="btn">HANGAR <span id="menuShards" class="mshards"></span></button><button id="modsBtn" class="btn">MUTATORS</button></div>
+      <div class="pair"><button id="menuSettingsBtn" class="btn ghost">SETTINGS</button><button id="howBtn" class="btn ghost">HOW TO PLAY</button></div>
+      <div class="pair"><button id="creditsBtn" class="btn ghost">CREDITS</button><button id="installBtn" class="btn ghost hidden">INSTALL APP</button></div>
     </div>
     <div id="bestTxt" class="best"></div>
     <div id="ctlHint" class="ctl"></div>
@@ -704,6 +720,16 @@ const TEMPLATE = /* html */ `
     <button id="pauseSettingsBtn" class="btn ghost">SETTINGS</button>
     <button id="resumeBtn" class="btn primary">RESUME</button>
     <button id="quitBtn" class="btn ghost">QUIT TO MENU</button>
+  </div>
+</div>
+
+<div id="modsScreen" class="screen modal hidden">
+  <div class="panel">
+    <h2>MUTATORS</h2>
+    <p>Make runs harder for a bigger score and more shards.</p>
+    <div id="modList" class="modlist"></div>
+    <div id="modsMult" class="modsmult"></div>
+    <button id="modsClose" class="btn">DONE</button>
   </div>
 </div>
 
