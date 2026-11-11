@@ -2,6 +2,7 @@ import type { CardView } from '../game/Upgrades';
 import { fmtNum, fmtTime } from '../core/util';
 import { PASSIVES, WEAPONS, FINAL_TIME, ARENA_RADIUS, type PassiveId, type WeaponId } from '../game/data';
 import type { Quality } from '../core/Renderer';
+import { ACHIEVEMENTS, SHIPS, UPGRADES, upLv, type MetaState, type ShipId, type UpgradeId } from '../game/meta';
 
 export interface Settings {
   quality: Quality;
@@ -24,6 +25,7 @@ export interface MinimapData {
 }
 
 export interface RunStats {
+  shards: number; achievements: string[];
   victory: boolean; time: number; level: number; kills: number; score: number; maxCombo: number; bosses: number;
   best: number; newBest: boolean; damage: number; weapons: Map<WeaponId, number>; evolved: Set<WeaponId>;
 }
@@ -52,6 +54,14 @@ export class UI {
   onEndless: () => void = () => {};
   onSettings: (s: Settings) => void = () => {};
   onClick: () => void = () => {};
+  onHangar: (open: boolean) => void = () => {};
+  onShipPreview: (id: ShipId) => void = () => {};
+  onShipAction: (id: ShipId) => void = () => {};
+  onBuy: (id: UpgradeId) => void = () => {};
+  private hangarTab: 'ships' | 'upgrades' | 'records' = 'ships';
+  private previewShip: ShipId = 'comet';
+  private toastQ: { t: string; d: string }[] = [];
+  private toastBusy = false;
 
   constructor(public settings: Settings) {
     this.root = document.getElementById('ui')!;
@@ -77,6 +87,14 @@ export class UI {
     $('#howBtn').addEventListener('click', () => this.show('#how'));
     $('#howClose').addEventListener('click', () => this.hide('#how'));
     $('#creditsBtn').addEventListener('click', () => this.show('#credits'));
+    $('#hangarBtn').addEventListener('click', () => this.onHangar(true));
+    $('#hangarClose').addEventListener('click', () => this.onHangar(false));
+    document.querySelectorAll<HTMLElement>('.htab').forEach((b) =>
+      b.addEventListener('click', () => {
+        this.hangarTab = b.dataset.t as 'ships' | 'upgrades' | 'records';
+        this.onShipPreview(this.previewShip);
+      }),
+    );
     $('#creditsClose').addEventListener('click', () => this.hide('#credits'));
     this.root.addEventListener('click', (e) => {
       if ((e.target as HTMLElement).closest('button')) this.onClick();
@@ -96,15 +114,16 @@ export class UI {
     /* preload screen lives in index.html */
   }
 
-  showMenu(best: number, bestTime: number, touch: boolean) {
+  showMenu(best: number, bestTime: number, touch: boolean, shards = 0) {
     this.hideAll();
     this.show('#menu');
+    $('#menuShards').innerHTML = `<span class="shard">◆</span> ${fmtNum(shards)}`;
     $('#bestTxt').innerHTML = best > 0 ? `BEST <b>${fmtNum(best)}</b> &nbsp;·&nbsp; LONGEST <b>${fmtTime(bestTime)}</b>` : 'No runs yet. The colony is counting on you.';
     $('#ctlHint').textContent = touch ? 'Drag anywhere to fly · Tap DASH to dodge' : 'WASD / Arrows to fly · SPACE to dash · ESC to pause · Gamepad supported';
   }
 
   hideAll() {
-    for (const s of ['#menu', '#levelup', '#pause', '#over', '#how', '#credits']) this.hide(s);
+    for (const s of ['#menu', '#levelup', '#pause', '#over', '#how', '#credits', '#hangar']) this.hide(s);
   }
 
   startRun(touch: boolean) {
@@ -345,6 +364,96 @@ export class UI {
     sync();
   }
 
+  /* ---------- hangar ---------- */
+  openHangar(meta: MetaState, preview: ShipId) {
+    this.hide('#menu');
+    this.show('#hangar');
+    this.renderHangar(meta, preview);
+  }
+  closeHangar() {
+    this.hide('#hangar');
+    this.show('#menu');
+  }
+
+  renderHangar(meta: MetaState, preview: ShipId) {
+    this.previewShip = preview;
+    $('#hShards').textContent = fmtNum(meta.shards);
+    document.querySelectorAll<HTMLElement>('.htab').forEach((b) => b.classList.toggle('on', b.dataset.t === this.hangarTab));
+    const body = $('#hBody');
+    if (this.hangarTab === 'ships') {
+      const sd = SHIPS.find((x) => x.id === preview)!;
+      const owned = meta.owned.includes(sd.id);
+      const sel = meta.ship === sd.id;
+      const btn = sel ? '<button class="btn small" disabled>SELECTED</button>'
+        : owned ? `<button class="btn primary small" id="shipAct">SELECT</button>`
+        : `<button class="btn primary small ${meta.shards < sd.cost ? 'poor' : ''}" id="shipAct">UNLOCK · ◆ ${sd.cost}</button>`;
+      body.innerHTML = `
+        <div class="shiplist">${SHIPS.map((x) => `<button class="shipchip ${x.id === preview ? 'on' : ''} ${meta.owned.includes(x.id) ? '' : 'locked'}" data-id="${x.id}" style="--c:#${x.accent.toString(16).padStart(6, '0')}">${x.name}${meta.ship === x.id ? ' ✓' : meta.owned.includes(x.id) ? '' : ' 🔒'}</button>`).join('')}</div>
+        <div class="shipinfo" style="--c:#${sd.accent.toString(16).padStart(6, '0')}">
+          <div class="sname">${sd.name}</div>
+          <div class="sblurb">${sd.blurb}</div>
+          <ul class="perks">${sd.perks.map((p) => `<li>${p}</li>`).join('')}</ul>
+          <div class="sstats">
+            ${bar('HULL', sd.hp / 150)}${bar('SPEED', (sd.speed - 0.8) / 0.4)}${bar('DASH', (1.2 - sd.dash) / 0.6)}${bar('ARMOR', sd.armor / 2)}
+          </div>
+          ${btn}
+        </div>`;
+      body.querySelectorAll<HTMLElement>('.shipchip').forEach((b) => b.addEventListener('click', () => this.onShipPreview(b.dataset.id as ShipId)));
+      body.querySelector('#shipAct')?.addEventListener('click', () => this.onShipAction(sd.id));
+    } else if (this.hangarTab === 'upgrades') {
+      body.innerHTML = `<div class="uplist">${UPGRADES.map((u) => {
+        const lv = upLv(meta, u.id);
+        const maxed = lv >= u.max;
+        const cost = u.cost(lv);
+        return `<div class="uprow">
+          <div class="uic">${u.icon}</div>
+          <div class="utx"><b>${u.name}</b><span>${lv > 0 ? u.desc(lv) : u.desc(1).replace(/^/, 'Next: ')}${!maxed && lv > 0 ? ` <em>→ ${u.desc(lv + 1)}</em>` : ''}</span>
+            <div class="pips">${Array.from({ length: u.max }, (_, k) => `<i class="${k < lv ? 'on' : ''}"></i>`).join('')}</div></div>
+          <button class="btn small ${maxed ? '' : meta.shards < cost ? 'poor' : 'primary'}" data-u="${u.id}" ${maxed ? 'disabled' : ''}>${maxed ? 'MAX' : '◆ ' + cost}</button>
+        </div>`;
+      }).join('')}</div>`;
+      body.querySelectorAll<HTMLElement>('[data-u]').forEach((b) => b.addEventListener('click', () => this.onBuy(b.dataset.u as UpgradeId)));
+    } else {
+      const st = meta.stats;
+      body.innerHTML = `
+        <div class="recgrid">
+          <div class="st"><label>RUNS</label><b>${fmtNum(st.runs)}</b></div>
+          <div class="st"><label>VICTORIES</label><b>${fmtNum(st.wins)}</b></div>
+          <div class="st"><label>BEST SCORE</label><b>${fmtNum(st.bestScore)}</b></div>
+          <div class="st"><label>LONGEST</label><b>${fmtTime(st.bestTime)}</b></div>
+          <div class="st"><label>TOTAL KILLS</label><b>${fmtNum(st.kills)}</b></div>
+          <div class="st"><label>BOSSES</label><b>${fmtNum(st.bosses)}</b></div>
+        </div>
+        <div class="achlist">${ACHIEVEMENTS.map((a) => {
+          const got = meta.achievements.includes(a.id);
+          return `<div class="ach ${got ? 'got' : ''}"><div class="ai">${got ? '★' : '☆'}</div><div><b>${a.name}</b><span>${a.desc}</span></div><em>◆ ${a.reward}</em></div>`;
+        }).join('')}</div>`;
+    }
+  }
+
+  toast(title: string, desc: string) {
+    this.toastQ.push({ t: title, d: desc });
+    if (!this.toastBusy) this.nextToast();
+  }
+  private nextToast() {
+    const n = this.toastQ.shift();
+    const el = $('#toast');
+    if (!n) {
+      this.toastBusy = false;
+      return;
+    }
+    this.toastBusy = true;
+    $('.tt', el).textContent = n.t;
+    $('.td', el).textContent = n.d;
+    el.classList.remove('on');
+    void el.offsetWidth;
+    el.classList.add('on');
+    setTimeout(() => {
+      el.classList.remove('on');
+      setTimeout(() => this.nextToast(), 350);
+    }, 2600);
+  }
+
   /* ---------- game over ---------- */
   showOver(st: RunStats) {
     this.hud.classList.add('hidden');
@@ -360,10 +469,17 @@ export class UI {
       <div class="st"><label>MAX COMBO</label><b>${fmtNum(st.maxCombo)}</b></div>
       <div class="st"><label>BOSSES</label><b>${st.bosses}</b></div>
       <div class="st"><label>DAMAGE</label><b>${fmtNum(st.damage)}</b></div>
-      <div class="loadout">${ev}</div>`;
+      <div class="loadout">${ev}</div>
+      <div class="st big shards"><label>PRISM SHARDS EARNED</label><b>◆ ${fmtNum(st.shards)}</b></div>
+      ${st.achievements.length ? `<div class="loadout ach-new">${st.achievements.map((a) => `<span>★ ${a}</span>`).join('')}</div>` : ''}`;
     $('#endlessBtn').classList.toggle('hidden', !st.victory);
     this.show('#over');
   }
+}
+
+function bar(label: string, v: number) {
+  const p = Math.round(Math.max(0.08, Math.min(1, v)) * 100);
+  return `<div class="sbar"><label>${label}</label><div><i style="width:${p}%"></i></div></div>`;
 }
 
 function slot(icon: string, color: string, lv: number, evo: boolean, passive = false) {
@@ -404,6 +520,7 @@ const TEMPLATE = /* html */ `
     <div class="tagline">A crystal swarm has fallen from the sky. Hold the line for ten minutes, then shatter the Prism Core.</div>
     <button id="playBtn" class="btn primary">LAUNCH</button>
     <div class="menurow">
+      <button id="hangarBtn" class="btn">HANGAR <span id="menuShards" class="mshards"></span></button>
       <button id="howBtn" class="btn ghost">HOW TO PLAY</button>
       <button id="creditsBtn" class="btn ghost">CREDITS</button>
     </div>
@@ -442,6 +559,17 @@ const TEMPLATE = /* html */ `
     <button id="creditsClose" class="btn">CLOSE</button>
   </div>
 </div>
+
+<div id="hangar" class="screen hidden">
+  <div class="hpanel">
+    <div class="hhead"><h2>HANGAR</h2><div class="hshards"><span class="shard">◆</span> <b id="hShards">0</b></div></div>
+    <div class="htabs"><button class="htab on" data-t="ships">SHIPS</button><button class="htab" data-t="upgrades">UPGRADES</button><button class="htab" data-t="records">RECORDS</button></div>
+    <div id="hBody" class="hbody"></div>
+    <button id="hangarClose" class="btn ghost">BACK</button>
+  </div>
+</div>
+
+<div id="toast" class="toast"><div class="tl">ACHIEVEMENT UNLOCKED</div><div class="tt"></div><div class="td"></div></div>
 
 <div id="levelup" class="screen hidden">
   <div class="lvwrap">

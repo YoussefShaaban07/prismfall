@@ -22,14 +22,14 @@ Three-day build. Each session picks up the next unchecked items, playtests with 
 - [x] HUD, minimap, banners, damage numbers, pause + settings, game-over stats
 - [x] Procedural SFX + adaptive synthwave music
 - [x] Bot playtest harness
-- [ ] Balance pass: bot should reach boss 1 reliably; good human run ~ 10 min
-- [ ] Juice pass: hit-stop on elites, kill streak announcer, dash afterimages, crystal trails
-- [ ] Open-source CC0 sound effects layered with synth
+- [x] Balance pass (first round): build choices now decide runs; strong builds reach 9-10 min
+- [x] Juice pass: hit-stop on elites, combo tier announcer, dash afterimages, crystal trails, low-hull heartbeat
+- [x] Open-source sound effects (Kenney MIT kits) layered with synth
 
 ### Day 2 — depth & replay value
-- [ ] Hangar meta-progression: earn Prism Shards per run, spend on permanent upgrades
-- [ ] Selectable ships (Kenney speeders) with unique stats + starting weapon, unlocks
-- [ ] Achievements / challenges
+- [x] Hangar meta-progression: Prism Shards per run, 8 permanent upgrades, revive
+- [x] 6 selectable ships with unique stats + starting weapon, 3D showroom
+- [x] 12 achievements with shard rewards + in-run toasts
 - [ ] More enemy variety late game (turret bunkers, kamikaze swarms), boss attack variety
 - [ ] First-run tutorial prompts
 
@@ -40,4 +40,5 @@ Three-day build. Each session picks up the next unchecked items, playtests with 
 - [ ] Full QA pass (desktop + phone sizes), README with screenshots, GitHub Pages deploy
 
 ## Session log
+- **S1b (Nov 10 eve)**: sound samples, balance rounds via bot sims, juice pass, hangar/ships/upgrades/achievements/records.
 - **S1 (Nov 10 eve)**: built the whole core loop and every system above; tuned bloom/glow so models read clearly; bosses enlarged; early-game spawn/XP rebalanced after bot runs (bot died ~2:30–4:00).

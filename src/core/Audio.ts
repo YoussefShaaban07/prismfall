@@ -6,7 +6,7 @@ const mtof = (m: number) => 440 * Math.pow(2, (m - 69) / 12);
 
 type Sfx =
   | 'shoot' | 'hit' | 'kill' | 'pick' | 'level' | 'hurt' | 'zap' | 'boom' | 'nova' | 'warn'
-  | 'bossdie' | 'heal' | 'select' | 'dash' | 'lance' | 'missile' | 'click' | 'bomb' | 'evolve' | 'spawn';
+  | 'bossdie' | 'heal' | 'select' | 'dash' | 'lance' | 'missile' | 'click' | 'bomb' | 'evolve' | 'spawn' | 'heart';
 
 export class Audio {
   ctx: AudioContext | null = null;
@@ -266,6 +266,10 @@ export class Audio {
         break;
       case 'click':
         this.osc(1200, now, 0.04, 'square', 0.03, B, 900);
+        break;
+      case 'heart':
+        this.osc(62, now, 0.16, 'sine', 0.35, B, 40);
+        this.osc(58, now + 0.2, 0.18, 'sine', 0.28, B, 38);
         break;
       case 'spawn':
         this.osc(200, now, 0.4, 'sine', 0.05, B, 600);

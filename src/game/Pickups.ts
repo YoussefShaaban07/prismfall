@@ -113,6 +113,7 @@ export class Pickups {
       }
       gm.x += gm.vx * dt;
       gm.z += gm.vz * dt;
+      if (gm.mag && Math.random() < 0.25) g.particles.emit(gm.x, gm.y, gm.z, 0, 0, 0, 0.22, 0.35, this.gemColor(gm.v), 0);
       if (!P.dead && d < P.r + 0.6) {
         this.pickStreak++;
         this.pickStreakT = 0.6;

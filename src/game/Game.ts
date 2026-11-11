@@ -16,6 +16,8 @@ import { WeaponSystem } from './Weapons';
 import { Pickups, type PowerKind } from './Pickups';
 import { rollChoices, describe, applyChoice, type Choice } from './Upgrades';
 import { ARENA_RADIUS, BOSS_TIMES, FINAL_TIME, xpForLevel, type EType } from './data';
+import { ACHIEVEMENTS, SHIPS, UPGRADES, loadMeta, saveMeta, shardsForRun, upLv, type MetaState, type ShipId } from './meta';
+import { heroMapper } from '../core/Assets';
 
 type State = 'menu' | 'play' | 'levelup' | 'paused' | 'over';
 
@@ -79,9 +81,21 @@ export class Game {
   shake = 0;
   hurtT = 0;
   hudT = 0;
+  heartT = 0;
   mmT = 0;
   choices: Choice[] = [];
   dmgLog: Record<string, number> = {};
+  meta: MetaState;
+  showroom = new THREE.Group();
+  showShip: THREE.Group | null = null;
+  hangarOpen = false;
+  previewShip: ShipId = 'comet';
+  untouchedT = 0;
+  achT = 0;
+  runAch: string[] = [];
+  paidShards = 0;
+  killsAtEndless = 0;
+  bossesAtEndless = 0;
   settings: Settings;
 
   private camPos = new THREE.Vector3(0, 40, 30);
@@ -110,10 +124,13 @@ export class Game {
     this.pickups = new Pickups(scene, assets, this);
     this.player.root.visible = false;
     this.player.magnetRing.visible = false;
+    this.meta = loadMeta();
+    this.previewShip = this.meta.ship;
+    this.buildShowroom();
 
     this.applySettings(this.settings);
     this.bindUI();
-    this.ui.showMenu(store.get('prismfall.best', 0), store.get('prismfall.bestTime', 0), this.input.touchUsed);
+    this.ui.showMenu(this.meta.stats.bestScore, this.meta.stats.bestTime, this.input.touchUsed, this.meta.shards);
     requestAnimationFrame(this.loop);
     document.addEventListener('visibilitychange', () => {
       if (document.hidden && this.state === 'play') this.pause();
@@ -134,6 +151,41 @@ export class Game {
     ui.onEndless = () => this.continueEndless();
     ui.onClick = () => this.audio.sfx('click');
     ui.onSettings = (s) => this.applySettings(s);
+    ui.onHangar = (open) => {
+      this.hangarOpen = open;
+      this.previewShip = this.meta.ship;
+      this.setShowShip(this.previewShip);
+      if (open) ui.openHangar(this.meta, this.previewShip);
+      else ui.closeHangar();
+    };
+    ui.onShipPreview = (id) => {
+      this.previewShip = id;
+      this.setShowShip(id);
+      ui.renderHangar(this.meta, id);
+    };
+    ui.onShipAction = (id) => {
+      const def = SHIPS.find((x) => x.id === id)!;
+      if (!this.meta.owned.includes(id)) {
+        if (this.meta.shards < def.cost) return;
+        this.meta.shards -= def.cost;
+        this.meta.owned.push(id);
+        this.audio.sfx('evolve');
+        if (this.meta.owned.length === SHIPS.length) this.unlockAch('all_ships');
+      } else this.audio.sfx('select');
+      this.meta.ship = id;
+      saveMeta(this.meta);
+      ui.renderHangar(this.meta, id);
+    };
+    ui.onBuy = (id) => {
+      const u = UPGRADES.find((x) => x.id === id)!;
+      const lv = upLv(this.meta, id);
+      if (lv >= u.max || this.meta.shards < u.cost(lv)) return;
+      this.meta.shards -= u.cost(lv);
+      this.meta.upgrades[id] = lv + 1;
+      saveMeta(this.meta);
+      this.audio.sfx('level');
+      ui.renderHangar(this.meta, this.previewShip);
+    };
     this.input.onPause = () => this.togglePause();
     this.input.onKey = (code) => {
       if (this.state === 'levelup') {
@@ -154,6 +206,32 @@ export class Game {
         if (i === 4) ui.reroll();
       } else if ((this.state === 'menu' || this.state === 'over') && i === 0) this.startRun();
     };
+  }
+
+  private buildShowroom() {
+    const pad = this.assets.object('platform_large', 7, heroMapper(0x5ef2ff, 0.3));
+    this.showroom.add(pad);
+    const ringMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.35, 0.95, 1).multiplyScalar(1.2), transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false });
+    for (let i = 0; i < 2; i++) {
+      const r = new THREE.Mesh(new THREE.TorusGeometry(3.3 + i * 0.5, 0.04, 8, 96), ringMat);
+      r.rotation.x = Math.PI / 2;
+      r.position.y = 0.35 + i * 0.05;
+      this.showroom.add(r);
+    }
+    const spot = new THREE.SpotLight(0xbff8ff, 9, 30, 0.5, 0.6, 1.5);
+    spot.position.set(4, 12, 6);
+    spot.target.position.set(0, 1, 0);
+    this.showroom.add(spot, spot.target);
+    this.r.scene.add(this.showroom);
+    this.setShowShip(this.meta.ship);
+  }
+
+  private setShowShip(id: ShipId) {
+    const def = SHIPS.find((x) => x.id === id)!;
+    if (this.showShip) this.showroom.remove(this.showShip);
+    this.showShip = this.assets.object(def.model, 4.2, heroMapper(def.accent, 1.2));
+    this.showShip.position.y = 2.2;
+    this.showroom.add(this.showShip);
   }
 
   applySettings(s: Settings) {
@@ -178,12 +256,16 @@ export class Game {
     this.debris.clear();
     this.fx.clear();
     this.weapons.reset();
-    this.player.reset();
+    const ship = SHIPS.find((x) => x.id === this.meta.ship) ?? SHIPS[0];
+    this.player.reset(this.meta, ship);
     this.player.root.visible = true;
+    this.showroom.visible = false;
+    this.hangarOpen = false;
+    this.r.camera.clearViewOffset();
     this.player.magnetRing.visible = true;
     Object.assign(this, {
       dmgLog: {}, T: 0, kills: 0, score: 0, combo: 0, comboT: 0, maxCombo: 0, damageDealt: 0, pendingLevels: 0,
-      bossesKilled: 0, nextBoss: BOSS_TIMES[0], bossWarn: 0, won: false, endless: false, rerolls: 3,
+      bossesKilled: 0, nextBoss: BOSS_TIMES[0], bossWarn: 0, won: false, endless: false, rerolls: 3 + upLv(this.meta, 'rerolls'), untouchedT: 0, achT: 0, runAch: [], paidShards: 0,
       spawnAcc: 0, nextSurge: 50, nextElite: 95, freezeT: 0, slowT: 0, deathT: 0, victoryT: 0, shake: 0, hurtT: 0,
     });
     this.input.releaseAll();
@@ -213,7 +295,8 @@ export class Game {
     this.ui.hideHud();
     this.audio.intensity = 0;
     document.body.classList.remove('lowhp');
-    this.ui.showMenu(store.get('prismfall.best', 0), store.get('prismfall.bestTime', 0), this.input.touchUsed);
+    this.ui.showMenu(this.meta.stats.bestScore, this.meta.stats.bestTime, this.input.touchUsed, this.meta.shards);
+    this.showroom.visible = true;
   }
 
   togglePause() {
@@ -235,6 +318,8 @@ export class Game {
 
   continueEndless() {
     this.endless = true;
+    this.killsAtEndless = this.kills;
+    this.bossesAtEndless = this.bossesKilled;
     this.state = 'play';
     this.input.enabled = true;
     this.nextBoss = this.T + 90;
@@ -287,6 +372,10 @@ export class Game {
   };
 
   private updateMenu(dt: number) {
+    if (this.showShip) {
+      this.showShip.rotation.y = this.time * 0.5;
+      this.showShip.position.y = 2.2 + Math.sin(this.time * 1.5) * 0.2;
+    }
     this.arena.groundUniforms.uPulse.value = 0.3;
     this.particles.update(dt);
     // ambient sparks rising from the ground
@@ -299,7 +388,24 @@ export class Game {
   private updateCamera(dt: number) {
     const cam = this.r.camera;
     const aspect = this.r.width / this.r.height;
+    if (this.state === 'menu' && this.hangarOpen) {
+      const a = this.time * 0.25;
+      const dist = this.r.width > this.r.height ? 10 : 15;
+      this.camPos.set(Math.sin(a) * dist, 4.5 + (dist - 10) * 0.3, Math.cos(a) * dist);
+      cam.position.lerp(this.camPos, 1 - Math.exp(-3 * dt));
+      this.camLook.set(0, 2.2, 0);
+      cam.lookAt(this.camLook);
+      const W = this.r.width, H = this.r.height;
+      if (W > H) cam.setViewOffset(W, H, W * 0.2, 0, W, H);
+      else cam.setViewOffset(W, H, 0, H * 0.27, W, H);
+      return;
+    }
+    cam.clearViewOffset();
     if (this.state === 'menu') {
+      if (this.showShip) {
+        this.showShip.rotation.y = this.time * 0.5;
+        this.showShip.position.y = 2.2 + Math.sin(this.time * 1.5) * 0.2;
+      }
       const a = this.time * 0.06;
       this.camPos.set(Math.sin(a) * 46, 15 + Math.sin(this.time * 0.2) * 3, Math.cos(a) * 46);
       cam.position.lerp(this.camPos, 1 - Math.exp(-2 * dt));
@@ -366,6 +472,23 @@ export class Game {
     if (this.combo > 0) {
       this.comboT -= dt;
       if (this.comboT <= 0) this.combo = 0;
+    }
+
+    // achievements
+    if (!P.dead) this.untouchedT += dt;
+    this.achT -= dt;
+    if (this.achT <= 0) {
+      this.achT = 0.5;
+      this.checkAch();
+    }
+
+    // heartbeat when hull is critical
+    if (!P.dead && P.hp / P.maxHp < 0.3) {
+      this.heartT -= dt;
+      if (this.heartT <= 0) {
+        this.heartT = 0.55 + (P.hp / P.maxHp) * 2;
+        this.audio.sfx('heart');
+      }
     }
 
     // music intensity
@@ -527,6 +650,7 @@ export class Game {
     this.particles.burst(e.x, e.def.hover + 0.3, e.z, col, big ? 40 : 14, big ? 12 : 8, 0.6, big ? 1 : 0.6, 0.6);
     this.particles.burst(e.x, e.def.hover + 0.3, e.z, this.colors.white, big ? 10 : 4, 5, 0.25, 0.8, 0.3);
     this.debris.spawn(e.x, e.def.hover, e.z, this.colors.debris, big ? 10 : 3, big ? 9 : 6, big ? 1.4 : 0.8);
+    if (e.elite) this.freezeT = Math.max(this.freezeT, 0.06);
     if (big) {
       this.fx.ring(e.x, e.z, 4, e.def.color, 0.4, 3);
       this.fx.scorch(e.x, e.z, 2.5);
@@ -557,9 +681,11 @@ export class Game {
         }
       }
     }
-    if (this.combo > 0 && this.combo % 50 === 0) {
-      this.ui.banner(`${this.combo} COMBO`, `+${this.combo * 20} bonus`, '#ffd84f', 1400);
-      this.score += this.combo * 20;
+    const tiers: Record<number, string> = { 50: 'RAMPAGE', 100: 'UNSTOPPABLE', 200: 'PRISM FURY', 400: 'GODLIKE', 800: 'SUPERNOVA' };
+    if (tiers[this.combo]) {
+      this.ui.banner(tiers[this.combo], `${this.combo} combo · +${(this.combo * 25).toLocaleString()}`, '#ffd84f', 1500);
+      this.score += this.combo * 25;
+      this.audio.sfx('level');
     }
   }
 
@@ -604,6 +730,7 @@ export class Game {
     const P = this.player;
     if (P.inv > 0 || P.dead || this.victoryT > 0) return;
     const amt = Math.max(1, dmg - P.armor);
+    this.untouchedT = -1e9;
     const key = src ? src.type : 'bullet';
     this.dmgLog[key] = (this.dmgLog[key] ?? 0) + amt;
     P.hp -= amt;
@@ -629,6 +756,20 @@ export class Game {
 
   private playerDeath() {
     const P = this.player;
+    if (P.revives > 0) {
+      P.revives--;
+      P.hp = P.maxHp * 0.5;
+      P.inv = 3;
+      this.freezeT = 0.15;
+      this.ui.flash('rgba(255,180,90,0.7)');
+      this.ui.banner('PHOENIX PROTOCOL', 'Hull restored · one life left', '#ffb347', 2200);
+      this.audio.sfx('evolve');
+      for (const e of this.enemies.query(P.x, P.z, 14)) if (!e.dead && e.type !== 'boss') this.damage(e, 99999, 0, 0);
+      this.proj.clearEnemyShots();
+      this.fx.ring(P.x, P.z, 14, 0xffb347, 0.8, 3);
+      this.particles.ring(P.x, 0.6, P.z, this.colors.orange, 60, 16, 0.6, 0.8);
+      return;
+    }
     P.hp = 0;
     P.dead = true;
     P.root.visible = false;
@@ -654,6 +795,7 @@ export class Game {
 
   gainXp(v: number) {
     const P = this.player;
+    v *= P.xpMul;
     P.xp += v;
     this.score += v;
     while (P.xp >= P.xpNext) {
@@ -733,6 +875,35 @@ export class Game {
     this.last = performance.now();
   }
 
+  /* ======================= achievements ======================= */
+
+  unlockAch(id: string) {
+    if (this.meta.achievements.includes(id)) return;
+    const a = ACHIEVEMENTS.find((x) => x.id === id);
+    if (!a) return;
+    this.meta.achievements.push(id);
+    this.meta.shards += a.reward;
+    this.runAch.push(a.name);
+    saveMeta(this.meta);
+    this.ui.toast(a.name, `${a.desc} · +◆${a.reward}`);
+    this.audio.sfx('heal');
+  }
+
+  private checkAch() {
+    const P = this.player;
+    if (this.kills >= 100) this.unlockAch('first_blood');
+    if (this.kills >= 1000) this.unlockAch('kills1000');
+    if (this.T >= 180) this.unlockAch('survivor3');
+    if (this.bossesKilled >= 1) this.unlockAch('boss1');
+    if (P.evolved.size > 0) this.unlockAch('evolve');
+    if (this.maxCombo >= 100) this.unlockAch('combo100');
+    if (P.level >= 30) this.unlockAch('level30');
+    if (P.weapons.size >= 5) this.unlockAch('full_build');
+    if (this.untouchedT >= 120) this.unlockAch('untouchable');
+    if (this.won) this.unlockAch('win');
+    if (this.endless && this.T >= 900) this.unlockAch('endless15');
+  }
+
   /* ======================= debug / automated playtesting ======================= */
 
   /** Simple survival bot: flee threats, chase crystals, stay off the walls, dash when cornered. */
@@ -805,11 +976,25 @@ export class Game {
     this.input.enabled = false;
     this.input.releaseAll();
     document.body.classList.remove('lowhp');
-    const best = store.get('prismfall.best', 0);
+    this.checkAch();
+    const m = this.meta;
+    const best = m.stats.bestScore;
     const newBest = this.score > best;
-    if (newBest) store.set('prismfall.best', Math.round(this.score));
-    store.set('prismfall.bestTime', Math.max(store.get('prismfall.bestTime', 0), Math.floor(this.T)));
+    const total = shardsForRun({ kills: this.kills, bosses: this.bossesKilled, time: this.T, victory: this.won, level: this.player.level });
+    const shards = Math.max(0, total - this.paidShards);
+    const firstEnd = this.paidShards === 0 && !this.endless;
+    this.paidShards = total;
+    m.shards += shards;
+    if (firstEnd) m.stats.runs++;
+    m.stats.kills += this.kills - (this.endless ? this.killsAtEndless : 0);
+    m.stats.bosses += this.bossesKilled - (this.endless ? this.bossesAtEndless : 0);
+    if (victory && !this.endless) m.stats.wins++;
+    m.stats.bestScore = Math.max(m.stats.bestScore, Math.round(this.score));
+    m.stats.bestTime = Math.max(m.stats.bestTime, Math.floor(this.T));
+    m.stats.shardsEarned += shards;
+    saveMeta(m);
     this.ui.showOver({
+      shards, achievements: this.runAch,
       victory, time: this.T, level: this.player.level, kills: this.kills, score: this.score, maxCombo: this.maxCombo,
       bosses: this.bossesKilled, best, newBest, damage: this.damageDealt, weapons: this.player.weapons, evolved: this.player.evolved,
     });

@@ -4,6 +4,7 @@ import { heroMapper } from '../core/Assets';
 import type { Input } from '../core/Input';
 import { angleDiff, clamp, damp } from '../core/util';
 import { ARENA_RADIUS, xpForLevel, type PassiveId, type WeaponId } from './data';
+import { SHIPS, upLv, type MetaState, type ShipDef } from './meta';
 
 /** Kenney ships point down -Z in model space; rotate so +Z (our "forward") matches. */
 export const SHIP_YAW = Math.PI;
@@ -45,8 +46,18 @@ export class Player {
   shield: THREE.Mesh;
   light: THREE.PointLight;
   magnetRing: THREE.Mesh;
+  ghosts: { g: THREE.Group; t: number }[] = [];
+  shipDef: ShipDef = SHIPS[0];
+  xpMul = 1;
+  revives = 0;
+  private assets: Assets;
+  private scene: THREE.Scene;
+  private ghostMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.3, 0.9, 1).multiplyScalar(1.5), transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false });
+  private ghostT = 0;
 
   constructor(scene: THREE.Scene, assets: Assets) {
+    this.assets = assets;
+    this.scene = scene;
     this.ship = assets.object('craft_speederA', 2.4, heroMapper(0x37e8ff, 1.8));
     this.ship.rotation.y = SHIP_YAW;
     const holder = new THREE.Group();
@@ -88,19 +99,89 @@ export class Player {
     this.light.position.y = 2.5;
     this.root.add(this.light);
     scene.add(this.root);
+
+    this.buildGhosts();
   }
 
-  reset() {
+  private buildGhosts() {
+    for (const gh of this.ghosts) this.scene.remove(gh.g);
+    this.ghosts = [];
+    // dash afterimages share the ship geometry
+    for (let i = 0; i < 6; i++) {
+      const g = new THREE.Group();
+      const inner = new THREE.Group();
+      g.add(inner);
+      this.ship.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh) return;
+        const gm = new THREE.Mesh(m.geometry, this.ghostMat.clone());
+        m.updateWorldMatrix(true, false);
+        gm.matrixAutoUpdate = false;
+        gm.matrix.copy(m.matrix);
+        inner.add(gm);
+      });
+      inner.scale.copy((this.ship.children[0] as THREE.Object3D).scale);
+      g.visible = false;
+      this.scene.add(g);
+      this.ghosts.push({ g, t: 0 });
+    }
+  }
+
+  setShip(def: ShipDef) {
+    if (this.shipDef.id === def.id && this.ship.userData.built) return;
+    this.shipDef = def;
+    const holder = this.root.userData.holder as THREE.Group;
+    holder.remove(this.ship);
+    this.ship = this.assets.object(def.model, 2.4, heroMapper(def.accent, 1.8));
+    this.ship.rotation.y = SHIP_YAW;
+    this.ship.userData.built = true;
+    holder.add(this.ship);
+    this.light.color.set(def.accent);
+    for (const f of this.flames) (f.material as THREE.MeshBasicMaterial).color.set(def.accent).multiplyScalar(6);
+    this.buildGhosts();
+    for (const gh of this.ghosts) gh.g.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) (m.material as THREE.MeshBasicMaterial).color.set(def.accent).multiplyScalar(1.5); });
+  }
+
+  private spawnGhost() {
+    const gh = this.ghosts.find((q) => q.t <= 0) ?? this.ghosts[0];
+    gh.t = 0.3;
+    gh.g.visible = true;
+    const holder = this.root.userData.holder as THREE.Group;
+    gh.g.position.set(this.x, holder.position.y, this.z);
+    gh.g.rotation.set(0, this.ang + SHIP_YAW, 0);
+  }
+
+  private updateGhosts(dt: number) {
+    for (const gh of this.ghosts) {
+      if (gh.t <= 0) continue;
+      gh.t -= dt;
+      if (gh.t <= 0) { gh.g.visible = false; continue; }
+      const op = (gh.t / 0.3) * 0.45;
+      gh.g.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) (m.material as THREE.MeshBasicMaterial).opacity = op; });
+    }
+  }
+
+  reset(meta: MetaState, def: ShipDef) {
+    this.setShip(def);
+    const hp = def.hp + upLv(meta, 'hull') * 10;
     Object.assign(this, {
-      x: 0, z: 0, vx: 0, vz: 0, ang: 0, bank: 0, hp: 100, maxHp: 100, inv: 0, level: 1, xp: 0,
-      xpNext: xpForLevel(1), speed: 9, magnet: 4, dmg: 1, cd: 1, area: 1, regen: 0, armor: 0,
-      dashCD: 0, dashMax: 2.4, dashT: 0, dead: false,
+      x: 0, z: 0, vx: 0, vz: 0, ang: 0, bank: 0, hp, maxHp: hp, inv: 0, level: 1, xp: 0,
+      xpNext: xpForLevel(1),
+      speed: 9 * def.speed * (1 + upLv(meta, 'thrusters') * 0.04),
+      magnet: 4 * def.magnet * (1 + upLv(meta, 'tractor') * 0.12),
+      dmg: 1 + upLv(meta, 'calib') * 0.05,
+      cd: 1 - upLv(meta, 'reactor') * 0.03,
+      area: def.area, regen: 0, armor: def.armor,
+      dashCD: 0, dashMax: 2.4 * def.dash, dashT: 0, dead: false,
+      xpMul: def.xp * (1 + upLv(meta, 'salvage') * 0.08),
+      revives: upLv(meta, 'revive'),
     });
     this.weapons.clear();
     this.passives.clear();
     this.evolved.clear();
-    this.weapons.set('blaster', 1);
+    this.weapons.set(def.weapon, 1);
     this.root.visible = true;
+    this.ship.visible = true;
   }
 
   get dashing() {
@@ -129,8 +210,11 @@ export class Player {
       dashed = true;
     }
 
+    this.updateGhosts(dt);
     if (this.dashT > 0) {
       this.dashT -= dt;
+      this.ghostT -= dt;
+      if (this.ghostT <= 0) { this.ghostT = 0.04; this.spawnGhost(); }
       this.vx = this.dashX * this.speed * 3.6;
       this.vz = this.dashZ * this.speed * 3.6;
     } else {
