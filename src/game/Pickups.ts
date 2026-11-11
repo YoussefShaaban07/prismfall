@@ -55,7 +55,7 @@ export class Pickups {
     this.gemMesh.castShadow = true;
     for (let i = 0; i < this.max; i++) this.gemMesh.setColorAt(i, GEM_COLORS[0]);
     scene.add(this.gemMesh);
-    this.beamGeo = new THREE.CylinderGeometry(0.35, 0.6, 9, 16, 1, true);
+    this.beamGeo = new THREE.CylinderGeometry(0.25, 0.5, 9, 20, 1, true);
     this.beamGeo.translate(0, 4.5, 0);
   }
 
@@ -83,7 +83,18 @@ export class Pickups {
     obj.position.set(x, 0.4, z);
     const beam = new THREE.Mesh(
       this.beamGeo,
-      new THREE.MeshBasicMaterial({ color: new THREE.Color(def.color).multiplyScalar(1.4), transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+      new THREE.ShaderMaterial({
+        transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+        uniforms: { uColor: { value: new THREE.Color(def.color) }, opacity: { value: 0.2 }, uTime: { value: 0 } },
+        vertexShader: /* glsl */ `varying vec2 vUv; varying vec3 vN; varying vec3 vV; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position,1.0); vN = normalize(mat3(modelMatrix) * normal); vV = normalize(cameraPosition - w.xyz); gl_Position = projectionMatrix * viewMatrix * w; }`,
+        fragmentShader: /* glsl */ `uniform vec3 uColor; uniform float opacity; uniform float uTime; varying vec2 vUv; varying vec3 vN; varying vec3 vV;
+          void main(){
+            float fade = pow(1.0 - vUv.y, 2.0);
+            float edge = 1.0 - abs(dot(normalize(vN), normalize(vV)));
+            float bands = 0.7 + 0.3 * sin(vUv.y * 40.0 - uTime * 6.0);
+            gl_FragColor = vec4(uColor * fade * (0.25 + edge * 1.2) * bands * opacity * 3.0, 1.0);
+          }`,
+      }),
     );
     beam.position.set(x, 0, z);
     this.scene.add(obj, beam);
@@ -146,7 +157,9 @@ export class Pickups {
       const fading = p.t > 22;
       const vis = !fading || Math.floor(p.t * 8) % 2 === 0;
       p.obj.visible = vis;
-      (p.beam.material as THREE.MeshBasicMaterial).opacity = 0.16 + Math.sin(p.t * 4) * 0.06;
+      const bm = p.beam.material as THREE.ShaderMaterial;
+      bm.uniforms.opacity.value = 0.16 + Math.sin(p.t * 4) * 0.06;
+      bm.uniforms.uTime.value = p.t;
       p.beam.visible = vis;
       const d = Math.hypot(P.x - p.x, P.z - p.z);
       if (!P.dead && d < P.r + 1.1) {
