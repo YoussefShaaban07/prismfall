@@ -889,7 +889,7 @@ export class Game {
       const pool: EType[] = T > 240 ? ['brute', 'wraith', 'spitter'] : ['brute', 'spitter', 'meteor'];
       const p = this.spawnPoint(20, 26);
       const e = this.enemies.spawn(pool[Math.floor(Math.random() * pool.length)], p.x, p.z, true);
-      if (e) this.ui.banner('ELITE DETECTED', `Golden ${e.def.name} · drops supplies`, '#ffd84f', 1800);
+      if (e) this.ui.banner('ELITE DETECTED', `${{ shielded: 'Shielded', regen: 'Regenerating', volatile: 'Volatile' }[e.affix as 'shielded'] ?? 'Golden'} ${e.def.name} · drops supplies`, '#ffd84f', 1800);
     }
   }
 
@@ -928,6 +928,19 @@ export class Game {
     if (e.dead) return;
     const crit = chance(0.08);
     if (crit) amt *= 2;
+    if (e.shield > 0) {
+      // shield soaks damage first and sparks blue
+      const soak = Math.min(e.shield, amt);
+      e.shield -= soak;
+      amt -= soak;
+      this.particles.emit(e.x, e.def.hover + 0.5, e.z, rand(-3, 3), rand(1, 3), rand(-3, 3), 0.25, 0.35, this.colors.cyan, 3);
+      if (e.shield <= 0) {
+        this.fx.ring(e.x, e.z, e.r * 3, 0x6fd8ff, 0.35, 2);
+        this.particles.burst(e.x, e.def.hover + 0.5, e.z, this.colors.cyan, 24, 8, 0.4, 0.5);
+        this.audio.sfx('zap');
+      }
+      if (amt <= 0) { e.flash = 0.05; return; }
+    }
     e.hp -= amt;
     this.damageDealt += amt;
     e.flash = 0.08;
@@ -960,6 +973,10 @@ export class Game {
     this.particles.burst(e.x, e.def.hover + 0.3, e.z, this.colors.white, big ? 10 : 4, 5, 0.25, 0.8, 0.3);
     this.debris.spawn(e.x, e.def.hover, e.z, this.colors.debris, big ? 10 : 3, big ? 9 : 6, big ? 1.4 : 0.8);
     if (e.elite) this.freezeT = Math.max(this.freezeT, 0.06);
+    if (e.affix === 'volatile') {
+      // volatile elites detonate: big blast that hurts nearby enemies and the player
+      this.hazards.blast(e.x, e.z, 5.5, 0.7, e.dmg * 1.2, 0xff4a2a);
+    }
     this.smoke.puff(e.x, e.def.hover, e.z, big ? 7 : 2, big ? 1.4 : 0.6, big ? 1.8 : 1.0);
     if (big) this.particles.fireball(e.x, e.def.hover, e.z, 1.2, 12);
     if (big) {
@@ -1191,7 +1208,16 @@ export class Game {
     this.audio.sfx('level');
     this.choices = rollChoices(this.player);
     this.showChoices();
-    this.particles.ring(this.player.x, 0.6, this.player.z, this.colors.yellow, 40, 10, 0.5, 0.6);
+    const P = this.player;
+    // level-up burst: a rising column of light and a gold shock ring
+    this.particles.ring(P.x, 0.6, P.z, this.colors.yellow, 40, 10, 0.5, 0.6);
+    for (let k = 0; k < 40; k++) {
+      const a = rand(0, TAU), r = rand(0.2, 1.4);
+      this.particles.emit(P.x + Math.cos(a) * r, 0.3, P.z + Math.sin(a) * r, 0, rand(6, 14), 0, rand(0.5, 0.9), 0.35, this.colors.yellow, 1.2, 0);
+    }
+    this.fx.ring(P.x, P.z, 6, 0xffd84f, 0.5, 1.6);
+    this.fx.shock(P.x, P.z, 7, 0.6, 0.4);
+    this.lighting.flash(P.x, P.z, 0xffd84f, 30, 16, 0.5);
   }
 
   private showChoices() {
@@ -1215,7 +1241,17 @@ export class Game {
     this.audio.sfx(c.kind === 'evolve' ? 'evolve' : 'select');
     if (c.kind === 'evolve') {
       this.ui.banner('EVOLUTION', describe(c, this.player).name.toUpperCase(), describe(c, this.player).color, 2000);
-      this.fx.ring(this.player.x, this.player.z, 10, 0xffd84f, 0.8, 4);
+      const P = this.player;
+      const col = new THREE.Color(describe(c, P).color);
+      // evolution cutscene: freeze, white flash, prismatic shock rings, a burst in the weapon's colour
+      this.freezeT = 0.25;
+      this.slowT = 0.9;
+      this.ui.flash('rgba(255,250,235,0.85)');
+      for (let i = 0; i < 3; i++) this.fx.ring(P.x, P.z, 8 + i * 6, [0xffd84f, 0xff4fd8, 0x5ef2ff][i], 0.7 + i * 0.2, 2);
+      this.fx.shock(P.x, P.z, 22, 1.6, 0.9);
+      this.particles.burst(P.x, 1, P.z, col.clone().multiplyScalar(2.5), 70, 14, 1, 0.7, 1);
+      this.lighting.flash(P.x, P.z, col, 90, 30, 1.0);
+      this.shake = Math.max(this.shake, 0.6);
     }
     this.pendingLevels--;
     this.player.inv = Math.max(this.player.inv, 0.8);

@@ -246,6 +246,11 @@ export class WeaponSystem {
     }
     const col = knock < 0 ? 0xc86bff : 0x7dff9b;
     g.fx.ring(P.x, P.z, r, col, 0.45, 3.5);
+    // evolved nova (singularity detonation) cracks the ground in a ring of scorches
+    if (visual && this.idx('nova') === 5) for (let k = 0; k < 10; k++) {
+      const ca = (k / 10) * TAU + rand(-0.1, 0.1);
+      g.fx.scorch(P.x + Math.cos(ca) * r * 0.75, P.z + Math.sin(ca) * r * 0.75, rand(0.8, 1.4));
+    }
     if (visual) g.fx.shock(P.x, P.z, r * 1.2, 0.9, 0.45);
     g.fx.ring(P.x, P.z, r * 0.7, col, 0.35, 2);
     if (visual) {
@@ -268,7 +273,9 @@ export class WeaponSystem {
       const perp = Math.abs(ex * dz - ez * dx);
       if (perp < w + e.r) g.damage(e, dmg, dx * 4, dz * 4);
     }
-    g.fx.beam(P.x, P.z, a, len, w * 1.4, evo ? 0xffc04a : 0xffe14f, 0.35);
+    // evolved lance: solar beams cycle through a prismatic spectrum
+    const beamCol = evo ? new THREE.Color().setHSL((g.time * 0.35 + a / TAU) % 1, 1, 0.6).getHex() : 0xffe14f;
+    g.fx.beam(P.x, P.z, a, len, w * 1.4, beamCol, 0.35);
     // molten scorch line along the beam path + heat shimmer at the muzzle
     if (Math.random() < 0.5) for (let t = 3; t < len; t += 6) g.fx.scorch(P.x + dx * t, P.z + dz * t, w * 1.1);
     g.fx.shock(P.x + dx * 1.5, P.z + dz * 1.5, 3, 0.5, 0.25);
@@ -418,6 +425,11 @@ export class WeaponSystem {
         }
       }
       if (Math.random() < 0.3) g.particles.emit(x, 1, z, 0, 0, 0, 0.25, 0.45, g.colors.pink, 0);
+      // evolved saw halo: blades throw a sparking rooster tail off the ground
+      if (evo && Math.random() < 0.5) {
+        const ta = a + Math.PI / 2 * dir;
+        g.particles.emit(x, 0.3, z, Math.sin(ta) * 8 + rand(-1, 1), rand(2, 5), Math.cos(ta) * 8 + rand(-1, 1), 0.3, 0.22, g.colors.orange, 3, -16);
+      }
     }
   }
 }

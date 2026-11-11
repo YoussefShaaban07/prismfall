@@ -84,6 +84,7 @@ Three-day build. Each session picks up the next unchecked items, playtests with 
 - [ ] Full QA pass (desktop + phone sizes), README with screenshots, GitHub Pages deploy
 
 ## Session log
+- **S7 (Nov 11 early)**: level-up light column, evolution cutscene (freeze, flash, prismatic rings), rainbow solar lance, sparking saw halo, nova ground-crack ring; elite affixes Shielded/Regenerating/Volatile with distinct shader auras.
 - **S6 (Nov 11 early)**: lance scorch + heat shimmer, chain-arc side forks, directional hit sparks, off-screen boss/elite arrows, victory orbit with fireworks.
 - **S5 (Nov 11 early)**: tracking turrets, ground grit, floor fissures, automated QA sweep.
 - **S4b (Nov 11 early)**: searchlights, Core overhaul, charge glows, flythrough, nav lights, beacon beams, portrait HUD fix, LOW-quality phone check.

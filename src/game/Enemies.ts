@@ -37,6 +37,8 @@ export interface Enemy {
   alpha: number;
   elite: boolean;
   slow: number;
+  affix: '' | 'shielded' | 'regen' | 'volatile';
+  shield: number;
 }
 
 const INSTANCED: EType[] = ['drone', 'dart', 'spitter', 'meteor', 'shard', 'brute', 'wraith', 'turret', 'bomber'];
@@ -71,6 +73,24 @@ export class EnemyManager {
   list: Enemy[] = [];
   corpses: Corpse[] = [];
   private depthMat = dissolveDepthMaterial();
+  private auras: THREE.Mesh[] = [];
+  private auraMat(): THREE.ShaderMaterial {
+    return new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      uniforms: { uTime: { value: 0 }, uColor: { value: new THREE.Color() }, uK: { value: 1 }, uMode: { value: 0 } },
+      vertexShader: /* glsl */ `varying vec3 vN; varying vec3 vV; varying vec2 vUv; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position,1.0); vN = normalize(mat3(modelMatrix) * normal); vV = normalize(cameraPosition - w.xyz); gl_Position = projectionMatrix * viewMatrix * w; }`,
+      fragmentShader: /* glsl */ `uniform float uTime; uniform vec3 uColor; uniform float uK; uniform float uMode; varying vec3 vN; varying vec3 vV; varying vec2 vUv;
+        float hex(vec2 p){ p.x *= 1.1547; p.y += mod(floor(p.x), 2.0) * 0.5; p = abs(fract(p) - 0.5); return abs(max(p.x * 1.5 + p.y, p.y * 2.0) - 1.0); }
+        void main(){
+          float f = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), 2.0);
+          float pat;
+          if (uMode < 0.5) pat = 1.0 - smoothstep(0.0, 0.1, hex(vec2(vUv.x * 18.0, vUv.y * 9.0)));          // shield: hex cells
+          else if (uMode < 1.5) pat = smoothstep(0.8, 1.0, sin(vUv.y * 30.0 + uTime * 6.0));                 // regen: rising bands
+          else pat = 0.5 + 0.5 * sin(uTime * 14.0);                                                           // volatile: hazard pulse
+          gl_FragColor = vec4(uColor * (f * 1.2 + pat * (0.25 + f)) * uK, 1.0);
+        }`,
+    });
+  }
   grid = new SpatialGrid<Enemy>(3);
   render = new Map<EType, TypeRender>();
   private tmp: Enemy[] = [];
@@ -82,7 +102,9 @@ export class EnemyManager {
   private eliteColor = new THREE.Color(1, 0.85, 0.3);
   private white = new THREE.Color(1, 1, 1);
 
+  private scene: THREE.Scene;
   constructor(scene: THREE.Scene, assets: Assets, private g: Game) {
+    this.scene = scene;
     for (const type of INSTANCED) {
       const def = EDEFS[type];
       const model = assets.get(def.model);
@@ -138,7 +160,9 @@ export class EnemyManager {
       flash: 0, yaw: rand(0, TAU), tumble: rand(0, TAU),
       st: 0, timer: rand(0.8, 2.5), aimx: 0, aimz: 1, bladeCD: 0,
       spawnT: 0.5, dead: false, phase: 0, sub: 0, alpha: 1, elite, slow: 0,
+      affix: elite ? (['shielded', 'regen', 'volatile'] as const)[Math.floor(Math.random() * 3)] : '', shield: 0,
     };
+    if (e.affix === 'shielded') e.shield = e.maxHp * 0.6;
     this.list.push(e);
     return e;
   }
@@ -153,6 +177,7 @@ export class EnemyManager {
   }
 
   clear() {
+    for (const a of this.auras) a.visible = false;
     this.corpses.length = 0;
     this.list.length = 0;
     this.grid.clear();
@@ -189,6 +214,7 @@ export class EnemyManager {
       e.flash = Math.max(0, e.flash - dt);
       e.bladeCD -= dt;
       e.slow = Math.max(0, e.slow - dt);
+      if (e.affix === 'regen' && e.hp < e.maxHp) e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.04 * dt);
       const dx = P.x - e.x, dz = P.z - e.z;
       const d = Math.hypot(dx, dz) || 1;
       const ux = dx / d, uz = dz / d;
@@ -502,6 +528,29 @@ export class EnemyManager {
       }
       for (const mesh of r.meshes) mesh.setMatrixAt(idx, this.m);
     }
+    // affix auras around elites
+    let ai = 0;
+    for (const e of this.list) {
+      if (!e.affix || e.dead) continue;
+      let m = this.auras[ai];
+      if (!m) {
+        m = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 16), this.auraMat());
+        m.renderOrder = 5;
+        this.scene.add(m);
+        this.auras.push(m);
+      }
+      ai++;
+      const u = (m.material as THREE.ShaderMaterial).uniforms;
+      u.uTime.value = time;
+      u.uMode.value = e.affix === 'shielded' ? 0 : e.affix === 'regen' ? 1 : 2;
+      (u.uColor.value as THREE.Color).set(e.affix === 'shielded' ? 0x6fd8ff : e.affix === 'regen' ? 0x6dff8a : 0xff4a2a);
+      u.uK.value = e.affix === 'shielded' ? (e.shield > 0 ? 0.8 : 0) : 0.4;
+      m.visible = e.affix !== 'shielded' || e.shield > 0;
+      m.position.set(e.x, e.def.hover + 0.4, e.z);
+      m.scale.setScalar(e.r * 2.2 * (e.affix === 'volatile' ? 1 + Math.sin(time * 14) * 0.05 : 1));
+    }
+    for (let i = ai; i < this.auras.length; i++) this.auras[i].visible = false;
+
     for (const [type, r] of this.render) {
       const n = counts.get(type) ?? 0;
       for (const mesh of r.meshes) {
