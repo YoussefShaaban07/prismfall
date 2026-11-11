@@ -473,6 +473,9 @@ export class Game {
     this.settings = s;
     store.set('prismfall.settings', s);
     if (this.lighting) this.lighting.setLightsEnabled(s.quality !== 'low');
+    // phones on LOW: fewer live particles and smoke puffs (additive overdraw is their bottleneck)
+    if (this.particles) this.particles.limit = s.quality === 'low' ? 2600 : this.particles.max;
+    if (this.smoke) this.smoke.limit = s.quality === 'low' ? 600 : this.smoke.max;
     if (this.r.quality !== s.quality) this.r.setQuality(s.quality);
     this.audio.setVolumes(s.sfx, s.music);
     this.r.bloom.strength = (s.quality === 'low' ? 0.5 : 0.6) * (this.night ? 0.75 : 1);

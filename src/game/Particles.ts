@@ -20,8 +20,11 @@ export class Particles {
   points: THREE.Points;
   mat: THREE.ShaderMaterial;
 
+  /** soft cap below max: LOW quality halves particle overdraw on phones */
+  limit = 6000;
   constructor(scene: THREE.Scene, max = 6000) {
     this.max = max;
+    this.limit = max;
     this.pos = new Float32Array(max * 3);
     this.col = new Float32Array(max * 3);
     this.size = new Float32Array(max);
@@ -69,7 +72,7 @@ export class Particles {
   }
 
   emit(x: number, y: number, z: number, vx: number, vy: number, vz: number, life: number, size: number, c: THREE.Color, drag = 2, grav = 0) {
-    if (this.count >= this.max) return;
+    if (this.count >= this.limit) return;
     const i = this.count++;
     const i3 = i * 3;
     this.pos[i3] = x; this.pos[i3 + 1] = y; this.pos[i3 + 2] = z;
@@ -86,7 +89,7 @@ export class Particles {
   /** Billowing fireball: white-hot core cooling to orange and deep red. */
   fireball(x: number, y: number, z: number, radius: number, n = 14) {
     for (let k = 0; k < n; k++) {
-      if (this.count >= this.max) return;
+      if (this.count >= this.limit) return;
       const a = Math.random() * TAU, el = Math.random() * 0.8;
       const sp = radius * rand(1.2, 3.2);
       this.emit(x, y + rand(0, 0.4), z, Math.cos(a) * sp * (1 - el), sp * el * 0.8 + 1, Math.sin(a) * sp * (1 - el), rand(0.3, 0.6), radius * rand(0.6, 1.2), this.tmpC, 4, 1.5);
@@ -267,6 +270,7 @@ export class Debris {
 /** Soft, non-additive smoke puffs that billow, rise and fade. */
 export class Smoke {
   max = 1400;
+  limit = 1400;
   count = 0;
   pos: Float32Array;
   vel: Float32Array;
@@ -339,7 +343,7 @@ export class Smoke {
 
   puff(x: number, y: number, z: number, n: number, radius = 1, life = 1.4, shade = 1) {
     for (let k = 0; k < n; k++) {
-      if (this.count >= this.max) return;
+      if (this.count >= this.limit) return;
       const i = this.count++;
       const i3 = i * 3;
       const a = Math.random() * TAU, r = Math.random() * radius * 0.6;
@@ -354,7 +358,7 @@ export class Smoke {
   }
 
   trail(x: number, y: number, z: number, size = 0.6, life = 0.9) {
-    if (this.count >= this.max) return;
+    if (this.count >= this.limit) return;
     const i = this.count++;
     const i3 = i * 3;
     this.pos[i3] = x; this.pos[i3 + 1] = y; this.pos[i3 + 2] = z;
