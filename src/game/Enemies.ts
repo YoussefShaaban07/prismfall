@@ -138,6 +138,36 @@ export class EnemyManager {
     }
   }
 
+  /** Ambient particles that make each elite affix readable at a glance. */
+  private affixFx(e: Enemy, dt: number) {
+    const g = this.g;
+    const y = e.def.hover + 0.4;
+    const R = e.r * 1.9;
+    if (e.affix === 'regen') {
+      // green motes drift up off the body; a dense stream while it is actively healing
+      const rate = e.hp < e.maxHp ? 24 : 8;
+      if (Math.random() < rate * dt) {
+        const a = rand(0, TAU), r = rand(0.3, 1) * R * 0.6;
+        g.particles.emit(e.x + Math.cos(a) * r, y + rand(-0.3, 0.4), e.z + Math.sin(a) * r, 0, rand(1.4, 2.6), 0, rand(0.8, 1.2), rand(0.28, 0.42), g.colors.green, 1.2, 0);
+      }
+    } else if (e.affix === 'volatile') {
+      // embers and smoke that get angrier as it nears death (and its blast)
+      const dmg = 1 - e.hp / e.maxHp;
+      for (let k = 0, n = (14 + dmg * 44) * dt; k < 3 && Math.random() < n - k; k++) {
+        const a = rand(0, TAU);
+        g.particles.emit(e.x + Math.cos(a) * e.r * 0.6, y, e.z + Math.sin(a) * e.r * 0.6, Math.cos(a) * rand(1, 3), rand(2, 5), Math.sin(a) * rand(1, 3), rand(0.4, 0.7), rand(0.22, 0.34), Math.random() < 0.3 ? g.colors.yellow : g.colors.orange, 2.5, -6);
+      }
+      if (Math.random() < (1.2 + dmg * 4) * dt) g.smoke.puff(e.x, y + 0.4, e.z, 1, 0.4, 1.0, 0.55);
+    } else if (e.affix === 'shielded' && e.shield > 0) {
+      // sparkles crawling over the barrier
+      if (Math.random() < 7 * dt) {
+        const a = rand(0, TAU), b = rand(-0.2, 1.2);
+        const cx = Math.cos(a) * Math.cos(b) * R * 1.1, cz = Math.sin(a) * Math.cos(b) * R * 1.1, cy = Math.sin(b) * R * 1.1;
+        g.particles.emit(e.x + cx, y + cy, e.z + cz, -Math.sin(a) * 1.2, 0.3, Math.cos(a) * 1.2, 0.4, 0.2, g.colors.cyan, 1, 0);
+      }
+    }
+  }
+
   count(type?: EType) {
     if (!type) return this.list.length;
     let n = 0;
@@ -222,6 +252,7 @@ export class EnemyManager {
       e.bladeCD -= dt;
       e.slow = Math.max(0, e.slow - dt);
       if (e.affix === 'regen' && e.hp < e.maxHp) e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.04 * dt);
+      if (e.affix) this.affixFx(e, dt);
       const dx = P.x - e.x, dz = P.z - e.z;
       const d = Math.hypot(dx, dz) || 1;
       const ux = dx / d, uz = dz / d;
@@ -553,7 +584,10 @@ export class EnemyManager {
       u.uTime.value = time;
       u.uMode.value = e.affix === 'shielded' ? 0 : e.affix === 'regen' ? 1 : 2;
       (u.uColor.value as THREE.Color).set(e.affix === 'shielded' ? 0x6fd8ff : e.affix === 'regen' ? 0x6dff8a : 0xff4a2a);
-      u.uK.value = e.affix === 'shielded' ? (e.shield > 0 ? 0.8 : 0) : 0.4;
+      const hurt = 1 - e.hp / e.maxHp;
+      u.uK.value = e.affix === 'shielded' ? (e.shield > 0 ? 0.8 : 0)
+        : e.affix === 'volatile' ? 0.4 + hurt * 0.45 * (0.5 + 0.5 * Math.sin(time * (8 + hurt * 26))) // pulses faster as it nears detonation
+        : 0.4;
       m.visible = e.affix !== 'shielded' || e.shield > 0;
       m.position.set(e.x, e.def.hover + 0.4, e.z);
       m.scale.setScalar(e.r * 2.2 * (e.affix === 'volatile' ? 1 + Math.sin(time * 14) * 0.05 : 1));
