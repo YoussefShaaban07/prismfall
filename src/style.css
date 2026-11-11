@@ -448,3 +448,8 @@ body.cine #hud .top, body.cine #minimap, body.cine .combo { opacity: 0; transiti
 .threat.elite { --tc: #ffd84f; }
 @keyframes thr { to { opacity: .45; } }
 body.cine #threats { display: none; }
+.bosstrack { position: relative; }
+#bossTrail { position: absolute; left: 0; top: 0; bottom: 0; width: 100%; background: rgba(255, 255, 255, .75); }
+#bossFill { position: relative; }
+.floater.w-arc { color: #d7c2ff; } .floater.w-lance { color: #fff1a0; } .floater.w-blades { color: #ffb0f0; }
+.floater.w-nova { color: #b4ffc4; } .floater.w-boom { color: #ffc28a; }

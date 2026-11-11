@@ -446,6 +446,13 @@ export class UI {
     bb.classList.remove('hidden');
     $('#bossName').textContent = name;
     ($('#bossFill') as HTMLElement).style.width = `${Math.max(0, frac * 100)}%`;
+    // white damage trail that catches up after a short delay
+    const now = performance.now();
+    if (frac < this.bossShown) this.bossHitAt = now;
+    if (now - this.bossHitAt > 450) this.bossTrail += (frac - this.bossTrail) * 0.12;
+    if (frac > this.bossTrail) this.bossTrail = frac;
+    this.bossShown = frac;
+    ($('#bossTrail') as HTMLElement).style.width = `${Math.max(0, this.bossTrail * 100)}%`;
   }
 
   banner(title: string, sub: string, color = '#5ef2ff', dur = 2600) {
@@ -735,6 +742,9 @@ export class UI {
     this.hintTimer = window.setTimeout(() => el.classList.remove('on'), dur);
   }
   private hintTimer = 0;
+  private bossShown = 1;
+  private bossTrail = 1;
+  private bossHitAt = 0;
 
   toast(title: string, desc: string) {
     this.toastQ.push({ t: title, d: desc });
@@ -814,7 +824,7 @@ const TEMPLATE = /* html */ `
   <canvas id="minimap" width="150" height="150"></canvas>
   <div id="threats"></div>
   <div id="combo" class="combo"></div>
-  <div id="bossBar" class="bossbar hidden"><div id="bossName" class="bossname"></div><div class="bosstrack"><div id="bossFill"></div></div></div>
+  <div id="bossBar" class="bossbar hidden"><div id="bossName" class="bossname"></div><div class="bosstrack"><div id="bossTrail"></div><div id="bossFill"></div></div></div>
   <div id="banner" class="banner"><div class="b1"></div><div class="b2"></div></div>
   <div id="joy" class="joy"><div class="knob"></div></div>
   <button id="dashBtn" class="dashbtn hidden"><div id="dashRing" class="ring"></div><span>DASH</span></button>

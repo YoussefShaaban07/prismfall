@@ -184,6 +184,7 @@ export class Arena {
   flare: Lensflare;
   sunHolder = new THREE.Object3D();
   windBoost = 1;
+  rotors: { o: THREE.Object3D; speed: number; sweep: boolean }[] = [];
   searchlights: { cone: THREE.Mesh; spot: THREE.Mesh; base: THREE.Vector3; phase: number; speed: number }[] = [];
   night = false;
   private glowMats: { m: THREE.MeshStandardMaterial; base: number }[] = [];
@@ -352,7 +353,11 @@ export class Arena {
       o.position.set(Math.cos(a) * r, 0, Math.sin(a) * r);
       o.position.y = terrainHeight(o.position.x, o.position.z);
       o.rotation.y = rotJitter ? rand(0, TAU) : -a + Math.PI / 2;
-      statics.add(o);
+      // satellite dishes and turrets stay live so they can rotate
+      if (name.startsWith('satelliteDish') || name.startsWith('turret')) {
+        this.group.add(o);
+        this.rotors.push({ o, speed: rand(0.15, 0.45) * (Math.random() < 0.5 ? -1 : 1), sweep: name.startsWith('turret') });
+      } else statics.add(o);
       return o;
     };
     const structures: [ModelName, number][] = [
@@ -632,6 +637,10 @@ export class Arena {
 
   update(dt: number, time: number, px: number, pz: number, danger: number) {
     this.updateSearchlights(time);
+    for (const r of this.rotors) {
+      if (r.sweep) r.o.rotation.y = Math.sin(time * r.speed * 2 + r.speed * 40) * 1.2 + r.speed * 20;
+      else r.o.rotation.y += dt * r.speed;
+    }
     const U = this.groundUniforms;
     U.uTime.value = time;
     U.uPlayer.value.set(px, pz);

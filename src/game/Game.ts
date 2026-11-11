@@ -924,7 +924,7 @@ export class Game {
 
   /* ======================= combat ======================= */
 
-  damage(e: Enemy, amt: number, kx: number, kz: number) {
+  damage(e: Enemy, amt: number, kx: number, kz: number, src = '') {
     if (e.dead) return;
     const crit = chance(0.08);
     if (crit) amt *= 2;
@@ -948,7 +948,7 @@ export class Game {
     e.kx += kx * heavy;
     e.kz += kz * heavy;
     if (this.settings.numbers && (crit || amt >= 40 || chance(0.12)) && this.fx.floaters.filter((f) => f.active).length < 22) {
-      this.fx.text(e.x, 2.2, e.z, String(Math.round(amt)), crit ? 'crit' : '');
+      this.fx.text(e.x, 2.2, e.z, String(Math.round(amt)), crit ? 'crit' : src);
     }
     this.audio.sfx('hit');
     if (e.hp <= 0) this.kill(e);

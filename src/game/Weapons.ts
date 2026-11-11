@@ -132,6 +132,12 @@ export class WeaponSystem {
           g.proj.bolt(P.x + Math.sin(aa) * 0.9, P.z + Math.cos(aa) * 0.9, aa, S.speed, S.dmg[i] * P.dmg, S.pierce[i], col);
         }
         g.particles.emit(P.x + Math.sin(a) * 1.1, 1, P.z + Math.cos(a) * 1.1, Math.sin(a) * 4, 0.5, Math.cos(a) * 4, 0.12, 0.8, g.colors.cyan, 6);
+        // muzzle flash: a hot white core plus a short cone of sparks
+        g.particles.emit(P.x + Math.sin(a) * 1.2, 1, P.z + Math.cos(a) * 1.2, 0, 0, 0, 0.06, 1.3, g.colors.white, 0);
+        for (let k = 0; k < 3; k++) {
+          const sa = a + rand(-0.35, 0.35), ss = rand(8, 14);
+          g.particles.emit(P.x + Math.sin(a) * 1.2, 1, P.z + Math.cos(a) * 1.2, Math.sin(sa) * ss, rand(0, 1), Math.cos(sa) * ss, 0.1, 0.22, g.colors.cyan, 8);
+        }
         g.audio.sfx('shoot');
         return true;
       }
@@ -147,7 +153,7 @@ export class WeaponSystem {
           for (let j = 0; j < S.jumps[i] && cur; j++) {
             visited.add(cur);
             pts.push(new THREE.Vector3(cur.x, 1.1, cur.z));
-            g.damage(cur, S.dmg[i] * P.dmg, 0, 0);
+            g.damage(cur, S.dmg[i] * P.dmg, 0, 0, 'w-arc');
             g.particles.burst(cur.x, 1, cur.z, g.colors.violet, 6, 5, 0.3, 0.4);
             cur.slow = 0.6;
             cur = g.enemies.nearest(cur.x, cur.z, 8, visited);
@@ -242,7 +248,7 @@ export class WeaponSystem {
       if (e.dead) continue;
       const dx = e.x - P.x, dz = e.z - P.z;
       const d = Math.hypot(dx, dz) || 1;
-      if (d < r + e.r) g.damage(e, dmg, (dx / d) * knock, (dz / d) * knock);
+      if (d < r + e.r) g.damage(e, dmg, (dx / d) * knock, (dz / d) * knock, 'w-nova');
     }
     const col = knock < 0 ? 0xc86bff : 0x7dff9b;
     g.fx.ring(P.x, P.z, r, col, 0.45, 3.5);
@@ -271,7 +277,7 @@ export class WeaponSystem {
       const along = ex * dx + ez * dz;
       if (along < 0 || along > len) continue;
       const perp = Math.abs(ex * dz - ez * dx);
-      if (perp < w + e.r) g.damage(e, dmg, dx * 4, dz * 4);
+      if (perp < w + e.r) g.damage(e, dmg, dx * 4, dz * 4, 'w-lance');
     }
     // evolved lance: solar beams cycle through a prismatic spectrum
     const beamCol = evo ? new THREE.Color().setHSL((g.time * 0.35 + a / TAU) % 1, 1, 0.6).getHex() : 0xffe14f;
@@ -420,7 +426,7 @@ export class WeaponSystem {
           e.bladeCD = 0.32;
           const kx = e.x - P.x, kz = e.z - P.z;
           const kd = Math.hypot(kx, kz) || 1;
-          g.damage(e, S.dmg[i] * P.dmg, (kx / kd) * 5, (kz / kd) * 5);
+          g.damage(e, S.dmg[i] * P.dmg, (kx / kd) * 5, (kz / kd) * 5, 'w-blades');
           g.particles.burst(x, 1, z, g.colors.pink, 5, 6, 0.25, 0.4);
         }
       }

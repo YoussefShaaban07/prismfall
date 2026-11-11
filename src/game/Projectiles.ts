@@ -108,7 +108,7 @@ export class Projectiles {
       const d = Math.hypot(dx, dz);
       if (d < radius + e.r) {
         const k = d > 0.01 ? knock / d : 0;
-        g.damage(e, dmg, dx * k, dz * k);
+        g.damage(e, dmg, dx * k, dz * k, 'w-boom');
       }
     }
     g.particles.burst(x, 1, z, color, 10, radius * 4, 0.5, 0.7, 0.6);
