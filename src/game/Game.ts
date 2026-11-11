@@ -593,7 +593,7 @@ export class Game {
       if (this.cineT > 0) {
         this.cineT -= dt;
         document.body.classList.toggle('cine', this.cineT > 0);
-        dt *= 0.2;
+        dt *= 0.62;
       }
       this.update(dt);
     } else if (this.state === 'menu') {
@@ -756,9 +756,10 @@ export class Game {
       return;
     }
     if (this.cineT > 0 && be) {
-      this.camPos.set(be.x + 4, 9, be.z + 13);
+      const by = this.boss.body ? this.boss.body.position.y : 3;
+      this.camPos.set(be.x + 5, 7, be.z + 16);
       cam.position.lerp(this.camPos, 1 - Math.exp(-3 * dt));
-      this.camLook.set(be.x, 3, be.z);
+      this.camLook.set(be.x, Math.max(3, by * 0.8), be.z);
       cam.lookAt(this.camLook);
       return;
     }
@@ -930,7 +931,7 @@ export class Game {
       this.bossWarn -= dt;
       if (this.bossWarn <= 0) {
         this.boss.spawn(this.pendingFinal);
-        this.cineT = 2.4;
+        this.cineT = 3.4;
         this.ui.bossCard(this.boss.name, this.pendingFinal ? 'FINAL BATTLE' : `MOTHERSHIP ${['I', 'II', 'III', 'IV', 'V'][this.bossesKilled] ?? this.bossesKilled + 1}`);
         if (this.endless || this.won) this.nextBoss = T + 100;
         else {

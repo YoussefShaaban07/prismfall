@@ -27,6 +27,7 @@ export class Projectiles {
   missileMesh: THREE.InstancedMesh;
   shotMesh: THREE.InstancedMesh;
   shotCore: THREE.InstancedMesh;
+  shotTail: THREE.InstancedMesh;
   private m = new THREE.Matrix4();
   private q = new THREE.Quaternion();
   private e = new THREE.Euler();
@@ -68,6 +69,15 @@ export class Projectiles {
     (this.shotMesh.material as THREE.MeshBasicMaterial).blending = THREE.AdditiveBlending;
     (this.shotMesh.material as THREE.MeshBasicMaterial).depthWrite = false;
     this.shotCore = instanced(new THREE.IcosahedronGeometry(0.18, 1), 900, scene);
+    const tg = new THREE.ConeGeometry(0.28, 1.6, 10, 1, true);
+    tg.rotateX(-Math.PI / 2);
+    tg.translate(0, 0, -0.8);
+    this.shotTail = instanced(tg, 900, scene);
+    const tm = this.shotTail.material as THREE.MeshBasicMaterial;
+    tm.transparent = true;
+    tm.opacity = 0.35;
+    tm.blending = THREE.AdditiveBlending;
+    tm.depthWrite = false;
   }
 
   bolt(x: number, z: number, angle: number, speed: number, dmg: number, pierce: number, color: THREE.Color) {
@@ -266,7 +276,16 @@ export class Projectiles {
       this.c.copy(s.color).multiplyScalar(0.7).addScalar(0.35);
       this.shotCore.setColorAt(i, this.c);
     }
-    for (const mesh of [this.shotMesh, this.shotCore]) {
+    for (let i = 0; i < this.shots.length; i++) {
+      const s = this.shots[i];
+      this.e.set(0, Math.atan2(s.vx, s.vz), 0);
+      this.q.setFromEuler(this.e);
+      const len = Math.min(1.6, Math.hypot(s.vx, s.vz) / 9);
+      this.m.compose(this.p.set(s.x, 1.0, s.z), this.q, this.s.set(s.size, s.size, s.size * len));
+      this.shotTail.setMatrixAt(i, this.m);
+      this.shotTail.setColorAt(i, s.color);
+    }
+    for (const mesh of [this.shotMesh, this.shotCore, this.shotTail]) {
       mesh.count = this.shots.length;
       mesh.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;

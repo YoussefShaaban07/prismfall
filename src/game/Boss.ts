@@ -37,6 +37,7 @@ export class BossController {
   private smokeT = 0;
   private tendrilT = 0;
   private charge: THREE.Mesh | null = null;
+  private landed = false;
   private sigCount = 0;
 
   constructor(scene: THREE.Scene, private assets: Assets, private g: Game) {
@@ -195,8 +196,9 @@ export class BossController {
     e.dmg = EDEFS.boss.damage * (1 + g.T / 600);
     e.phase = 0;
     e.timer = 2.5;
-    e.spawnT = 1.2;
+    e.spawnT = 2.2;
     this.e = e;
+    this.landed = false;
     this.name = final ? 'THE PRISM CORE' : BOSS_NAMES[idx % BOSS_NAMES.length];
     this.group.visible = true;
     this.group.position.set(e.x, 0, e.z);
@@ -385,8 +387,23 @@ export class BossController {
     const e = this.e;
     if (!e || !this.body) return;
     this.group.position.set(e.x, 0, e.z);
-    const spawnK = e.spawnT > 0 ? 1 - e.spawnT / 1.2 : 1;
-    const y = 1.2 + Math.sin(time * 1.4) * 0.3 + (1 - spawnK) * 12;
+    const spawnK = e.spawnT > 0 ? 1 - e.spawnT / 2.2 : 1;
+    const fall = 1 - spawnK;
+    const y = 1.2 + Math.sin(time * 1.4) * 0.3 + fall * fall * 70;
+    if (e.spawnT > 0) {
+      // atmospheric entry: heat glow and a smoke column trailing above
+      this.g.particles.fireball(e.x + rand(-1.5, 1.5), y + 1, e.z + rand(-1.5, 1.5), 1.2, 2);
+      this.g.smoke.trail(e.x + rand(-2, 2), y + 3, e.z + rand(-2, 2), 2.5, 2.4);
+      if (!this.landed && e.spawnT < 0.12) {
+        this.landed = true;
+        this.g.fx.shock(e.x, e.z, 30, 1.8, 0.9);
+        this.g.fx.ring(e.x, e.z, 20, this.color, 0.8, 1.6);
+        this.g.smoke.puff(e.x, 0.5, e.z, 26, 5, 2.4);
+        this.g.lighting.flash(e.x, e.z, this.color, 80, 40, 0.9);
+        this.g.shake = Math.max(this.g.shake, 1.2);
+        this.g.audio.sfx('bomb');
+      }
+    }
     this.body.position.y = y;
     const sp = Math.hypot(e.vx, e.vz);
     if (!this.final) {

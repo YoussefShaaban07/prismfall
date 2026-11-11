@@ -335,6 +335,9 @@ export class WeaponSystem {
             const a = face + (s - (S.shots[i] - 1) / 2) * 0.1;
             g.proj.bolt(w.x + Math.sin(a) * 0.6, w.z + Math.cos(a) * 0.6, a, 28, S.dmg[i] * P.dmg, i >= 4 ? 1 : 0, this.wingColor);
           }
+          // wingman muzzle flash
+          g.particles.emit(w.x + Math.sin(face) * 0.8, 1.3, w.z + Math.cos(face) * 0.8, 0, 0, 0, 0.06, 0.9, g.colors.white, 0);
+          g.particles.emit(w.x + Math.sin(face) * 0.8, 1.3, w.z + Math.cos(face) * 0.8, Math.sin(face) * 6, 0, Math.cos(face) * 6, 0.1, 0.5, g.colors.pink, 8);
         }
       }
       w.ang += Math.atan2(Math.sin(face - w.ang), Math.cos(face - w.ang)) * Math.min(1, dt * 10);
