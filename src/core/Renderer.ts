@@ -81,6 +81,34 @@ const DistortShader = {
     }`,
 };
 
+/** Screen-space light shafts: radial blur of bright sky pixels toward the sun. */
+const ShaftShader = {
+  uniforms: {
+    tDiffuse: { value: null as THREE.Texture | null },
+    uSun: { value: new THREE.Vector2(0.5, 0.5) },
+    uStrength: { value: 0 },
+    uTint: { value: new THREE.Color(1.0, 0.7, 0.45) },
+  },
+  vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tDiffuse; uniform vec2 uSun; uniform float uStrength; uniform vec3 uTint; varying vec2 vUv;
+    void main(){
+      vec3 base = texture2D(tDiffuse, vUv).rgb;
+      if (uStrength <= 0.0) { gl_FragColor = vec4(base, 1.0); return; }
+      vec2 dir = (uSun - vUv) / 28.0;
+      vec2 p = vUv;
+      float decay = 1.0, acc = 0.0;
+      for (int i = 0; i < 28; i++) {
+        p += dir;
+        vec3 s = texture2D(tDiffuse, clamp(p, 0.0, 1.0)).rgb;
+        float l = max(0.0, dot(s, vec3(0.3, 0.5, 0.2)) - 0.55);
+        acc += l * decay;
+        decay *= 0.94;
+      }
+      gl_FragColor = vec4(base + uTint * acc * uStrength * 0.09, 1.0);
+    }`,
+};
+
 export class Renderer {
   renderer: THREE.WebGLRenderer;
   scene = new THREE.Scene();
@@ -91,6 +119,7 @@ export class Renderer {
   distort: ShaderPass;
   gtao: GTAOPass | null = null;
   bokeh: BokehPass;
+  shafts: ShaderPass;
   smaa: SMAAPass | null = null;
   quality: Quality = 'high';
   sun: THREE.DirectionalLight;
@@ -160,6 +189,8 @@ export class Renderer {
     this.composer.addPass(this.distort);
     this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.6, 0.45, 1.0);
     this.composer.addPass(this.bloom);
+    this.shafts = new ShaderPass(ShaftShader);
+    this.composer.addPass(this.shafts);
     this.composer.addPass(new OutputPass());
     this.grade = new ShaderPass(GradeShader);
     this.composer.addPass(this.grade);

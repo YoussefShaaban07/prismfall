@@ -540,6 +540,7 @@ export class Game {
 
     this.updateCamera(dt);
     this.arena.placeSun(this.r.camera, this.night);
+    this.updateShafts(dt);
     this.arena.update(dt, this.time, this.player.x, this.player.z, this.boss.e ? 1 : this.bossWarn > 0 ? 0.6 : 0);
     if (this.state !== 'menu') {
       this.enemies.sync(this.time);
@@ -578,6 +579,20 @@ export class Game {
       this.settings.quality = 'ultra';
       this.applySettings(this.settings);
     }
+  }
+
+  private shaftK = 0;
+  /** God rays only where they read well: menus and low camera angles, when the sun is on screen. */
+  private updateShafts(dt: number) {
+    const u = this.r.shafts.uniforms;
+    const sp = this.arena.sunHolder.getWorldPosition(new THREE.Vector3()).project(this.r.camera);
+    const onScreen = sp.z < 1 && Math.abs(sp.x) < 1.3 && Math.abs(sp.y) < 1.3;
+    const want = this.state === 'menu' && onScreen && this.r.quality !== 'low' ? (this.night ? 0.6 : 1) : 0;
+    this.shaftK += (want - this.shaftK) * Math.min(1, dt * 3);
+    (u.uSun.value as THREE.Vector2).set(sp.x * 0.5 + 0.5, sp.y * 0.5 + 0.5);
+    u.uStrength.value = this.shaftK < 0.01 ? 0 : this.shaftK * (1 - Math.min(1, Math.hypot(sp.x, sp.y) * 0.45));
+    (u.uTint.value as THREE.Color).set(this.night ? 0x9fc0ff : 0xffb070);
+    this.r.shafts.enabled = this.shaftK >= 0.01;
   }
 
   private updateMenu(dt: number) {

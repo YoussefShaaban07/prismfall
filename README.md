@@ -4,12 +4,15 @@ A 3D neon survival shooter set on a Mars colony. A crystal swarm has fallen from
 
 ![Gameplay](docs/gameplay.jpg)
 
+![Menu](docs/menu.jpg)
+
 **Play:** https://youssefshaaban07.github.io/prismfall/ (works in any modern browser on PC and phone; installable as an offline app)
 
 ## Features
 
-- **Real-time 3D** with Three.js: PBR materials, HDR environment lighting, soft shadows, bloom, SMAA and a custom color-grade pass
-- **Mars colony arena**: procedural terrain shader, energy force-field, colony buildings, rockets, twin moons and drifting dust
+- **Real-time 3D** with Three.js: PBR materials, HDR environment lighting, shadows, GTAO ambient occlusion, bloom, SMAA, depth of field, screen-space shockwave distortion, god rays and a cinematic colour grade
+- **Combat VFX**: dissolve deaths, fireballs, lit smoke, glowing-hot shrapnel, ribbon engine trails, ground light pools and pooled explosion lights
+- **Mars colony arena**: displaced terrain with dunes, mesas and a mountain range, energy force-field with impact ripples, colony buildings, rockets, prism crystals, clouds, lens flare, twin moons and dust/ion storms
 - **9 enemy types**, each with its own behavior: dashing lancers, gunships, splitting meteors, blinking phantoms, sentry pods and seeker mines, plus golden elites
 - **6 weapons with evolutions**: Prism Blaster, Halo Blades, Chain Arc, Seeker Swarm, Pulse Nova and Ion Lance. Max a weapon and pair it with the right module to evolve it
 - **8 passive modules** and level-up cards with rerolls

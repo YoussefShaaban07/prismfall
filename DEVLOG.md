@@ -57,7 +57,9 @@ Three-day build. Each session picks up the next unchecked items, playtests with 
 - [x] Weather: dust storms (day) and ion storms with lightning (night)
 - [x] Player hull damage sparks + smoke at critical hull
 - [x] Shield shimmer shader (fresnel hex + scan sweep)
-- [ ] Volumetric-looking god rays from the sun in menus
+- [x] Screen-space god rays from the sun in menus
+- [x] Ground light pools under glowing objects + pooled explosion point lights
+- [x] Faceted, lit crystal pickups
 - [ ] Screen-space reflections or wet sheen on landing pads
 - [x] Debris shrapnel that glows hot then cools
 
@@ -76,6 +78,7 @@ Three-day build. Each session picks up the next unchecked items, playtests with 
 - [ ] Full QA pass (desktop + phone sizes), README with screenshots, GitHub Pages deploy
 
 ## Session log
+- **S4 (Nov 10 late)**: ground glow pools, explosion lights, crystal material, god rays, big brightness rebalance for heavy fights, terrain perf, README screenshots refreshed.
 - **S3b (Nov 10 night)**: graphics push: dissolve, fire/smoke, distortion, terrain + mountains, clouds, flare, GTAO, DOF, grade, trails.
 - **S3 (Nov 10 night)**: adaptive music themes + victory sting, Codex with 3D previews, share card, first-launch briefing.
 - **S2d (Nov 10 night)**: Night Shift sector, mutators + daily challenge, main menu redesigned as a left column so the 3D showroom stays visible.
