@@ -105,7 +105,15 @@ export class Lighting {
     const k = g.night ? 1.6 : 1;
     // enemies: a pool of their accent colour
     for (const e of g.enemies.list) {
-      if (e.spawnT > 0.35) continue;
+      if (e.spawnT > 0) {
+        // spawn rift: a hot portal that opens on the ground before the enemy drops in
+        const p = 1 - e.spawnT / 0.5;
+        this.c.setHex(e.def.color);
+        const k2 = Math.sin(p * Math.PI) * 0.9 * k;
+        this.add(e.x, e.z, e.r * (3 + p * 5), this.c.r * k2, this.c.g * k2, this.c.b * k2);
+        this.add(e.x, e.z, e.r * 2.2, 0.5 * k2, 0.5 * k2, 0.5 * k2);
+        if (e.spawnT > 0.35) continue;
+      }
       this.c.setHex(e.elite ? 0xffc83a : e.def.color);
       const s = e.type === 'boss' ? 16 : e.r * (e.elite ? 9 + Math.sin(g.time * 4) * 1.2 : 5.5);
       const a = (e.type === 'boss' ? 0.2 : e.elite ? 0.3 : 0.1) * k;

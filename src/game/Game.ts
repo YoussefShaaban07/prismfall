@@ -687,6 +687,16 @@ export class Game {
     }
     const P = this.player;
     const be = this.boss.e;
+    if (P.dead && this.deathT > 0 && this.state === 'play') {
+      // death cam: low, slow push around the wreck
+      const a = this.time * 0.35;
+      this.camPos.set(P.x + Math.sin(a) * 11, 5, P.z + Math.cos(a) * 11);
+      cam.position.lerp(this.camPos, 1 - Math.exp(-2.5 * dt));
+      this.camLook.set(P.x, 1, P.z);
+      cam.lookAt(this.camLook);
+      document.body.classList.add('cine');
+      return;
+    }
     if (this.victoryT > 0) {
       document.body.classList.add('cine');
       const a = this.time * 0.5;

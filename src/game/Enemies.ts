@@ -210,7 +210,10 @@ export class EnemyManager {
     for (let i = 0; i < this.list.length; i++) {
       const e = this.list[i];
       if (e.dead) continue;
-      if (e.spawnT > 0) e.spawnT -= dt;
+      if (e.spawnT > 0) {
+        e.spawnT -= dt;
+        if (Math.random() < 0.5) g.particles.emit(e.x + rand(-e.r, e.r), 0.1, e.z + rand(-e.r, e.r), 0, rand(3, 7), 0, 0.35, 0.35, g.colors.violet, 1, 0);
+      }
       e.flash = Math.max(0, e.flash - dt);
       e.bladeCD -= dt;
       e.slow = Math.max(0, e.slow - dt);

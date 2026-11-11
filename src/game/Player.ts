@@ -57,6 +57,7 @@ export class Player {
   private ghostMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.3, 0.9, 1).multiplyScalar(1.5), transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false });
   private ghostT = 0;
   trails: Trail[] = [];
+  private trailW = 0.32;
   navLights: THREE.Mesh[] = [];
   private tv = new THREE.Vector3();
 
@@ -173,6 +174,8 @@ export class Player {
     this.light.color.set(def.accent);
     ((this.shield.material as THREE.ShaderMaterial).uniforms.uColor.value as THREE.Color).set(def.accent);
     for (const t of this.trails) t.setColor(def.accent);
+    // each hull leaves its own wake: thin racing streaks, heavy gunboat plumes
+    this.trailW = ({ comet: 0.32, wasp: 0.2, viper: 0.26, bastion: 0.55, phoenix: 0.42, prospector: 0.38 } as Record<string, number>)[def.id] ?? 0.32;
     for (const f of this.flames) (f.material as THREE.MeshBasicMaterial).color.set(def.accent).multiplyScalar(3);
     this.buildGhosts();
     for (const gh of this.ghosts) gh.g.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) (m.material as THREE.MeshBasicMaterial).color.set(def.accent).multiplyScalar(1.5); });
@@ -307,7 +310,7 @@ export class Player {
     this.trails.forEach((t, i) => {
       this.flames[i].getWorldPosition(this.tv);
       t.intensity = this.dashing ? 1.1 : 0.3 + Math.min(1, sp / this.speed) * 0.6;
-      t.width = this.dashing ? 0.7 : 0.32;
+      t.width = this.dashing ? this.trailW * 2.2 : this.trailW;
       t.visible = this.root.visible;
       t.update(dt, this.tv);
     });

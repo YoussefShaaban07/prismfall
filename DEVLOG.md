@@ -84,6 +84,7 @@ Three-day build. Each session picks up the next unchecked items, playtests with 
 - [ ] Full QA pass (desktop + phone sizes), README with screenshots, GitHub Pages deploy
 
 ## Session log
+- **S11 (Nov 11 morning)**: enemy spawn rifts (ground portal glow + rising sparks), death camera orbit around the wreck, per-ship trail widths.
 - **S10 (Nov 11 morning)**: hangar black-chrome pad with orbiting cyan/pink rim lights (planar Reflector dropped: breaks under view offset), level-up card light sweep + floating icons.
 - **S9 (Nov 11 morning)**: saturated crystals + crowd merging; unique boss deaths (carrier chain explosions, hive swarm burst + acid, warden glass shatter + cracks, Core implosion → prismatic supernova); toned-down generic boss death.
 - **S8 (Nov 11 morning)**: rotating colony dishes + sweeping turrets, boss-bar damage trail, blaster muzzle flash, damage numbers tinted per weapon; phone QA clean.
