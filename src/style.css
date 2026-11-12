@@ -269,8 +269,14 @@ input[type='range'] { width: 180px; accent-color: var(--cyan); }
 input[type='checkbox'] { width: 20px; height: 20px; accent-color: var(--cyan); }
 
 /* ---------- game over ---------- */
-#over { background: radial-gradient(ellipse at center, rgba(40, 6, 16, .6), rgba(8, 4, 14, .92)); backdrop-filter: blur(6px); z-index: 4; }
-#over.win { background: radial-gradient(ellipse at center, rgba(6, 30, 40, .6), rgba(8, 4, 14, .92)); }
+/* results: the live battlefield orbits behind a vignette; no full-screen blur (cheap on laptop GPUs) */
+#over { background: radial-gradient(ellipse at center, rgba(40, 6, 16, .35), rgba(8, 4, 14, .8) 75%); z-index: 4; }
+#over.win { background: radial-gradient(ellipse at center, rgba(6, 30, 40, .35), rgba(8, 4, 14, .8) 75%); }
+#over .panel { background: rgba(14, 8, 24, .78); backdrop-filter: none; }
+#over .st, #over .loadout { opacity: 0; transform: translateY(12px); animation: stIn .45s cubic-bezier(.2, 1.2, .4, 1) forwards; animation-delay: var(--sd, 0ms); }
+@keyframes stIn { to { opacity: 1; transform: none; } }
+#over .overtitle { animation: titleIn .7s cubic-bezier(.2, 1, .3, 1) both; }
+@keyframes titleIn { from { opacity: 0; letter-spacing: .55em; filter: blur(6px); } to { opacity: 1; letter-spacing: .2em; filter: none; } }
 .overtitle { font-family: var(--display); font-weight: 900; font-size: clamp(32px, 6vw, 60px); letter-spacing: .2em; color: #ff8aa0; text-shadow: 0 0 30px #ff2050; text-align: center; }
 #over.win .overtitle { color: #bff8ff; text-shadow: 0 0 30px var(--cyan); }
 .oversub { font-size: 18px; color: rgba(255, 255, 255, .7); text-align: center; }
@@ -280,7 +286,8 @@ input[type='checkbox'] { width: 20px; height: 20px; accent-color: var(--cyan); }
 .st b { font-family: var(--display); font-size: 20px; }
 .st.big { grid-column: 1 / -1; }
 .st.big b { font-size: 36px; color: var(--gold); text-shadow: 0 0 18px rgba(255, 216, 79, .5); }
-.st em { display: block; font-style: normal; font-family: var(--display); font-size: 10px; letter-spacing: .3em; color: var(--cyan); margin-top: 4px; animation: lowPulse .5s infinite alternate; }
+.st em { display: block; font-style: normal; font-family: var(--display); font-size: 10px; letter-spacing: .3em; color: var(--cyan); margin-top: 4px; animation: bestPulse .6s infinite alternate; }
+@keyframes bestPulse { from { opacity: .55; text-shadow: none; } to { opacity: 1; text-shadow: 0 0 12px var(--cyan); } }
 .loadout { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 14px; justify-content: center; font-weight: 600; font-size: 15px; }
 
 /* ---------- responsive ---------- */
@@ -488,8 +495,11 @@ body.cine #threats { display: none; }
 @keyframes cardSweep { 0% { left: -60%; } 35%, 100% { left: 130%; } }
 .card .ic span { display: inline-block; animation: icFloat 2.4s ease-in-out infinite; }
 @keyframes icFloat { 50% { transform: translateY(-3px) scale(1.06); } }
-#over::before { content: ''; position: fixed; inset: 0; background: var(--bg) center / cover no-repeat; filter: blur(3px) saturate(1.2); transform: scale(1.04); opacity: .55; z-index: -1; }
-body:has(#over:not(.hidden)) .toast { top: auto; bottom: calc(var(--sb) + 20px); }
+/* on the results screen, achievement toasts stack in a corner instead of over the buttons */
+body:has(#over:not(.hidden)) .toast { left: auto; right: calc(var(--sr) + 16px); top: calc(var(--st) + 16px); transform: translateX(20px); min-width: 0; }
+body:has(#over:not(.hidden)) .toast.on { transform: none; }
+@media (max-width: 1100px) { body:has(#over:not(.hidden)) .toast { top: auto; bottom: calc(var(--sb) + 12px); right: 50%; transform: translate(50%, 20px); }
+  body:has(#over:not(.hidden)) .toast.on { transform: translate(50%, 0); } }
 body.photo #hud > *:not(#hint):not(.top), body.photo #hud .top .left, body.photo #hud .top .center, body.photo #hud .scorebox, body.photo #floaters, body.photo #threats { visibility: hidden !important; }
 .card .ic img { width: 120%; height: 120%; object-fit: contain; filter: drop-shadow(0 0 10px var(--c)); animation: icFloat 2.4s ease-in-out infinite; }
 .slot span img { width: 26px; height: 26px; object-fit: contain; display: block; filter: drop-shadow(0 0 4px var(--c)); }

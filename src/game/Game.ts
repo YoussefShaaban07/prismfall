@@ -1132,6 +1132,18 @@ export class Game {
     }
     const P = this.player;
     const be = this.boss.e;
+    if (this.state === 'over') {
+      // results backdrop: a slow, high orbit over the battlefield, centred on where the run ended
+      const a = this.time * 0.07;
+      this.camPos.set(P.x + Math.sin(a) * 30, 17, P.z + Math.cos(a) * 30);
+      cam.position.lerp(this.camPos, 1 - Math.exp(-0.8 * dt));
+      this.camLook.set(P.x, 1.5, P.z);
+      this.lookSmooth.lerp(this.camLook, 1 - Math.exp(-1.5 * dt));
+      cam.lookAt(this.lookSmooth);
+      cam.clearViewOffset();
+      document.body.classList.remove('cine');
+      return;
+    }
     if (P.dead && this.deathT > 0 && this.state === 'play') {
       // death cam: low, slow push around the wreck
       const a = this.time * 0.35;
@@ -2089,6 +2101,7 @@ export class Game {
     if (this.state === 'over') return;
     document.body.classList.remove('cine');
     this.captureSnap();
+    this.lookSmooth.copy(this.camLook);
     this.state = 'over';
     this.input.enabled = false;
     this.input.releaseAll();

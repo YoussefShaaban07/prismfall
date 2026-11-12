@@ -841,6 +841,18 @@ export class UI {
       <div class="st big shards"><label>${t('PRISM SHARDS EARNED')}</label><b>◆ ${fmtNum(st.shards)}</b></div>
       ${st.achievements.length ? `<div class="loadout ach-new">${st.achievements.map((a) => `<span>★ ${a}</span>`).join('')}</div>` : ''}`;
     $('#endlessBtn').classList.toggle('hidden', !st.victory);
+    // stagger the tiles in, then count the score up
+    $('#stats').querySelectorAll<HTMLElement>('.st, .loadout').forEach((el, i) => el.style.setProperty('--sd', `${120 + i * 70}ms`));
+    const sb = $('#stats .st.big b');
+    const target = Math.round(st.score);
+    const t0 = performance.now() + 250;
+    const tick = (now: number) => {
+      const k = Math.min(1, Math.max(0, (now - t0) / 1100));
+      sb.textContent = fmtNum(Math.round(target * (1 - (1 - k) ** 3)));
+      if (k < 1 && document.body.contains(sb)) requestAnimationFrame(tick);
+    };
+    sb.textContent = '0';
+    requestAnimationFrame(tick);
     this.show('#over');
   }
 }
