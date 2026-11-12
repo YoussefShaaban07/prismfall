@@ -333,7 +333,7 @@ export class BossController {
         const lead = 0.45 + e.st * 0.04;
         const x = P.x + P.vx * lead + rand(-3, 3);
         const z = P.z + P.vz * lead + rand(-3, 3);
-        H.blast(x, z, 2.6, 1.0, 20 * dmgK, this.color.getHex());
+        H.blast(x, z, 2.6, 1.0, 20 * dmgK, this.color.getHex(), true);
       }
     } else if (kind === 1) {
       // acid rain: lingering pools around the player

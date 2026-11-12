@@ -22,6 +22,9 @@ interface Zone {
   ring: THREE.Mesh;
   fill: THREE.Mesh;
   active: boolean;
+  /** a falling bomb that lands as the warning runs out (carpet bombing) */
+  shell: THREE.Group | null;
+  shellTrail: number;
 }
 
 interface Beam {
@@ -53,6 +56,58 @@ export class Hazards {
     this.beamGeo.translate(0, 0, 0.5);
   }
 
+  /** Zone interior: blast warnings pulse inward toward the impact; acid pools bubble and churn. */
+  private fillMat() {
+    return new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+      uniforms: { uColor: { value: new THREE.Color() }, uOp: { value: 0.3 }, uTime: { value: 0 }, uKind: { value: 0 }, uSeed: { value: 0 }, uP: { value: 0 } },
+      vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+      fragmentShader: `uniform vec3 uColor; uniform float uOp; uniform float uTime; uniform float uKind; uniform float uSeed; uniform float uP; varying vec2 vUv;
+        vec2 h22(vec2 p){ p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3))); return fract(sin(p) * 43758.5453); }
+        float cells(vec2 p, float t){
+          vec2 i = floor(p), f = fract(p); float d1 = 8.0, d2 = 8.0;
+          for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+            vec2 o = vec2(x, y); vec2 h = h22(i + o);
+            vec2 q = o + 0.5 + 0.4 * sin(t + 6.2831 * h) - f; float d = dot(q, q);
+            if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) d2 = d;
+          }
+          return sqrt(d2) - sqrt(d1);
+        }
+        void main(){
+          vec2 p = (vUv - 0.5) * 2.0; float r = length(p);
+          if (r > 1.0) discard;
+          float a;
+          if (uKind < 0.5) {
+            // blast warning: rings sweep in toward the impact point, faster as it nears
+            float w = fract(r * 3.0 + uTime * (1.5 + uP * 4.0));
+            a = 0.35 + smoothstep(0.75, 1.0, w) * 0.9 + (1.0 - r) * uP * 0.6;
+          } else {
+            // acid: churning caustic cells, bright bubble rims, a toxic edge
+            vec2 q = p * 3.2 + uSeed;
+            float c = cells(q, uTime * 1.3);
+            float caustic = 1.0 - smoothstep(0.0, 0.12, c);
+            float b = cells(q * 2.3 + 11.0, uTime * 2.6);
+            float bub = smoothstep(0.03, 0.0, abs(b - 0.18)) * step(0.6, fract(sin(dot(floor(q * 2.3), vec2(7.1, 3.3))) * 91.7 + uTime * 0.4));
+            a = 0.45 + caustic * 0.9 + bub * 1.2 + smoothstep(0.75, 1.0, r) * 0.8;
+          }
+          gl_FragColor = vec4(uColor * a * uOp, 1.0);
+        }`,
+    });
+  }
+
+  private shellPool: THREE.Group[] = [];
+  private getShell() {
+    const s = this.shellPool.pop();
+    if (s) return s;
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 1.0, 4, 10), new THREE.MeshStandardMaterial({ color: 0x23202a, metalness: 0.6, roughness: 0.4, emissive: new THREE.Color(1, 0.35, 0.1), emissiveIntensity: 0.4 }));
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.34, 10, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.55, 0.2).multiplyScalar(4), toneMapped: false }));
+    tip.position.y = -0.7;
+    g.add(body, tip);
+    this.scene.add(g);
+    return g;
+  }
+
   private mat(c: THREE.Color, k: number) {
     return new THREE.MeshBasicMaterial({ color: c.clone().multiplyScalar(k), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
   }
@@ -62,20 +117,32 @@ export class Hazards {
     if (!z) {
       const c = new THREE.Color(1, 0.2, 0.2);
       const ring = new THREE.Mesh(this.ringGeo, this.mat(c, 2));
-      const fill = new THREE.Mesh(this.discGeo, this.mat(c, 1));
+      const fill = new THREE.Mesh(this.discGeo, this.fillMat());
       ring.renderOrder = 3;
       fill.renderOrder = 3;
       this.scene.add(ring, fill);
-      z = { kind: 'blast', x: 0, z: 0, r: 1, warn: 0, warnMax: 1, life: 0, dmg: 0, tick: 0, color: c, ring, fill, active: false };
+      z = { kind: 'blast', x: 0, z: 0, r: 1, warn: 0, warnMax: 1, life: 0, dmg: 0, tick: 0, color: c, ring, fill, active: false, shell: null, shellTrail: 0 };
       this.zones.push(z);
     }
     return z;
   }
 
-  blast(x: number, z: number, r: number, warn: number, dmg: number, color = 0xff3a2a) {
+  blast(x: number, z: number, r: number, warn: number, dmg: number, color = 0xff3a2a, shell = false) {
     const q = this.getZone();
     Object.assign(q, { kind: 'blast', x, z, r, warn, warnMax: warn, life: 0.01, dmg, tick: 0, active: true });
     this.paint(q, color);
+    if (shell) {
+      q.shell = this.getShell();
+      q.shell.visible = false;
+      q.shell.rotation.set(rand(-0.15, 0.15), 0, rand(-0.15, 0.15));
+    }
+  }
+
+  private dropShell(q: Zone) {
+    if (!q.shell) return;
+    q.shell.visible = false;
+    this.shellPool.push(q.shell);
+    q.shell = null;
   }
 
   pool(x: number, z: number, r: number, warn: number, life: number, dmg: number, color = 0x5dff3a) {
@@ -87,7 +154,10 @@ export class Hazards {
   private paint(q: Zone, color: number) {
     q.color.set(color);
     (q.ring.material as THREE.MeshBasicMaterial).color.copy(q.color).multiplyScalar(1.5);
-    (q.fill.material as THREE.MeshBasicMaterial).color.copy(q.color).multiplyScalar(0.7);
+    const fu = (q.fill.material as THREE.ShaderMaterial).uniforms;
+    fu.uColor.value.copy(q.color).multiplyScalar(0.7);
+    fu.uKind.value = q.kind === 'pool' ? 1 : 0;
+    fu.uSeed.value = rand(0, 50);
     q.ring.position.set(q.x, 0.14, q.z);
     q.fill.position.set(q.x, 0.13, q.z);
     q.ring.scale.setScalar(q.r);
@@ -116,6 +186,7 @@ export class Hazards {
     for (const z of this.zones) {
       z.active = false;
       z.ring.visible = z.fill.visible = false;
+      this.dropShell(z);
     }
     for (const b of this.beams) {
       b.active = false;
@@ -129,12 +200,25 @@ export class Hazards {
     for (const q of this.zones) {
       if (!q.active) continue;
       const rm = q.ring.material as THREE.MeshBasicMaterial;
-      const fm = q.fill.material as THREE.MeshBasicMaterial;
+      const fu = (q.fill.material as THREE.ShaderMaterial).uniforms;
+      fu.uTime.value = time;
       if (q.warn > 0) {
         q.warn -= dt;
         const p = 1 - q.warn / q.warnMax;
         q.fill.scale.setScalar(Math.max(0.01, q.r * p));
-        fm.opacity = 0.18 + p * 0.2;
+        fu.uOp.value = 0.18 + p * 0.2;
+        fu.uP.value = p;
+        if (q.shell) {
+          // the shell drops in over the last 0.8 s, trailing smoke, and lands as the warning ends
+          const fall = Math.min(1, q.warn / 0.8);
+          q.shell.visible = q.warn < 0.8;
+          q.shell.position.set(q.x + fall * 2.5, 0.7 + fall * fall * 30, q.z - fall * 1.2);
+          q.shellTrail -= dt;
+          if (q.shell.visible && q.shellTrail <= 0) {
+            q.shellTrail = 0.03;
+            g.smoke.trail(q.shell.position.x, q.shell.position.y + 0.8, q.shell.position.z, 0.7, 0.7);
+          }
+        }
         rm.opacity = 0.5 + 0.5 * Math.abs(Math.sin(time * (8 + p * 14)));
         if (q.warn <= 0) {
           if (q.kind === 'blast') {
@@ -149,6 +233,7 @@ export class Hazards {
             if (!P.dead && Math.hypot(P.x - q.x, P.z - q.z) < q.r + P.r * 0.5) g.hurtPlayer(q.dmg, null);
             q.active = false;
             q.ring.visible = q.fill.visible = false;
+            this.dropShell(q);
           } else {
             q.fill.scale.setScalar(q.r);
           }
@@ -157,7 +242,7 @@ export class Hazards {
       }
       // lingering pool
       q.life -= dt;
-      fm.opacity = 0.32 + Math.sin(time * 5 + q.x) * 0.08;
+      fu.uOp.value = 0.46 + Math.sin(time * 5 + q.x) * 0.06;
       rm.opacity = 0.8;
       if (Math.random() < 0.5) {
         const a = rand(0, Math.PI * 2), d = Math.sqrt(Math.random()) * q.r;
