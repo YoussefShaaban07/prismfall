@@ -775,6 +775,7 @@ export class Game {
     this.hurtT = Math.max(0, this.hurtT - dt);
     this.updateCamera(dt);
     this.updateHullLook();
+    this.updateWash();
     this.arena.update(dt, this.time, this.player.x, this.player.z, 0);
     this.enemies.sync(this.time);
     this.boss.sync(this.time, dt);
@@ -808,6 +809,25 @@ export class Game {
     }
     u.uTime.value = this.time % 1000;
     R.distort.enabled = live > 0 || haze.w > 0;
+  }
+
+  private evoWash = { t: 0, dur: 1.6, col: new THREE.Color() };
+  private updateWash() {
+    const w = this.evoWash;
+    if (w.t <= 0) return;
+    w.t = Math.max(0, w.t - this.realDt);
+    if (this.state === 'photo' || this.settings.calm) return;
+    const p = 1 - w.t / w.dur;
+    const k = Math.sin(Math.min(1, p * 1.15) * Math.PI) ** 0.7; // fast in, slow out
+    const u = this.r.grade.uniforms;
+    u.uSat.value = 1.12 + (0.25 - 1.12) * k;
+    const c = w.col;
+    const m = Math.max(c.r, c.g, c.b, 0.001);
+    (u.uTint.value as THREE.Vector3).set(1 + (c.r / m - 0.45) * 0.55 * k, 1 + (c.g / m - 0.45) * 0.55 * k, 1 + (c.b / m - 0.45) * 0.55 * k);
+    if (w.t <= 0) {
+      u.uSat.value = 1.12;
+      (u.uTint.value as THREE.Vector3).set(1, 1, 1);
+    }
   }
 
   /** The ship shows its wounds: cracks open below half hull and widen toward zero; hits flash it. */
@@ -858,6 +878,7 @@ export class Game {
 
     this.updateCamera(dt);
     this.updateHullLook();
+    this.updateWash();
     this.arena.placeSun(this.r.camera, this.night);
     this.updateShafts(dt);
     this.arena.update(dt, this.time, this.player.x, this.player.z, this.boss.e ? 1 : this.bossWarn > 0 ? 0.6 : 0);
@@ -1808,9 +1829,13 @@ export class Game {
       this.ui.flash('rgba(255,250,235,0.85)');
       for (let i = 0; i < 3; i++) this.fx.ring(P.x, P.z, 8 + i * 6, [0xffd84f, 0xff4fd8, 0x5ef2ff][i], 0.7 + i * 0.2, 2);
       this.fx.shock(P.x, P.z, 22, 1.6, 0.9);
+      this.fx.ring(P.x, P.z, 34, col, 1.7, 2.6); // a slow, wide ring in the weapon's own colour
       this.particles.burst(P.x, 1, P.z, col.clone().multiplyScalar(2.5), 70, 14, 1, 0.7, 1);
       this.lighting.flash(P.x, P.z, col, 90, 30, 1.0);
       this.shake = Math.max(this.shake, 0.6);
+      // the world drains to monochrome and floods with the weapon's colour while time crawls
+      this.evoWash.t = this.evoWash.dur;
+      this.evoWash.col.copy(col);
     }
     this.pendingLevels--;
     this.player.inv = Math.max(this.player.inv, 0.8);
