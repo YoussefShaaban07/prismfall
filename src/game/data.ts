@@ -91,7 +91,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     evoNeeds: 'vitality',
   },
   wingmen: {
-    id: 'wingmen', name: 'Wingman Drones', evoName: 'Squadron', icon: '✈', color: '#ff8ad8',
+    id: 'wingmen', name: 'Wingman Drones', evoName: 'Squadron', icon: '✈', color: '#8fe0ff',
     blurb: 'Escort fighters that fly in formation and shoot.',
     levels: ['A wingman joins your formation.', '+1 wingman.', '+Damage, faster fire.', '+1 wingman.', '+Damage, faster fire.', 'EVOLVED: four wingmen firing twin bolts.'],
     evoNeeds: 'thrust',

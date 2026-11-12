@@ -6,16 +6,55 @@ import type { Enemy } from './Enemies';
 import type { Game } from './Game';
 import { Trail } from './Trails';
 
+let _glow: THREE.CanvasTexture | null = null;
+/** soft round glow for engine sprites */
+function glowTex() {
+  if (_glow) return _glow;
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const x = c.getContext('2d')!;
+  const gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, 'rgba(255,255,255,1)');
+  gr.addColorStop(0.25, 'rgba(255,255,255,0.55)');
+  gr.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = gr;
+  x.fillRect(0, 0, 64, 64);
+  _glow = new THREE.CanvasTexture(c);
+  return _glow;
+}
+
 export class WeaponSystem {
   timers = new Map<WeaponId, number>();
   blades: THREE.Mesh[] = [];
+  private bladeArcs: THREE.Mesh[] = [];
+  /** unit-radius ring sector (0.9 rad) lying on XZ; uv.x runs head (1) → tail (0) */
+  private arcGeo = (() => {
+    const g = new THREE.RingGeometry(0.86, 1.14, 24, 1, 0, 0.9);
+    g.rotateX(-Math.PI / 2);
+    return g;
+  })();
+  private arcMat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+    uniforms: { uColor: { value: new THREE.Color(1, 0.4, 0.9) } },
+    vertexShader: `varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `uniform vec3 uColor; varying vec3 vP;
+      void main(){
+        float a = atan(-vP.z, vP.x) / 0.9;           // 0 at the leading edge, 1 at the tail
+        float r = length(vP.xz);
+        float across = 1.0 - abs(r - 1.0) / 0.14;
+        float k = pow(clamp(1.0 - a, 0.0, 1.0), 2.2) * smoothstep(0.0, 0.6, across);
+        gl_FragColor = vec4(uColor * k * 1.1, 1.0);
+      }`,
+  });
   bladeAng = 0;
   bladePos: { x: number; z: number }[] = [];
   private novaPending: { t: number; r: number; dmg: number } | null = null;
   private lanceSweep = 0;
   private hue = 0;
   private boltColor = new THREE.Color(0.35, 0.95, 1).multiplyScalar(4);
-  private wingColor = new THREE.Color(1, 0.5, 0.85).multiplyScalar(3.5);
+  // wingmen fly in the player's team colour so they never read as the (magenta) swarm
+  private wingColor = new THREE.Color(0.55, 0.9, 1).multiplyScalar(3.5);
+  private wingC = new THREE.Color(0x8fe0ff);
   wingmen: { obj: THREE.Group; x: number; z: number; ang: number; t: number; trail: Trail }[] = [];
   private tv = new THREE.Vector3();
   mines: { x: number; z: number; t: number; arm: number; life: number; r: number; dmg: number; pull: number; obj: THREE.Group }[] = [];
@@ -35,15 +74,32 @@ export class WeaponSystem {
       m.castShadow = true;
       scene.add(m);
       this.blades.push(m);
+      // a motion arc sweeping behind each blade along its orbit
+      const arc = new THREE.Mesh(this.arcGeo, this.arcMat);
+      arc.visible = false;
+      arc.renderOrder = 2;
+      scene.add(arc);
+      this.bladeArcs.push(arc);
     }
+    const engineMat = new THREE.SpriteMaterial({ map: glowTex(), color: new THREE.Color(0.55, 0.9, 1).multiplyScalar(2.2), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true });
+    const markMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.4, 0.85, 1).multiplyScalar(0.9), transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false });
+    const markGeo = new THREE.RingGeometry(0.75, 0.9, 3, 1, Math.PI / 2 - 0.0, TAU).rotateX(-Math.PI / 2);
     for (let i = 0; i < 4; i++) {
-      const obj = g.assets.object('craft_speederB', 1.2, heroMapper(0xff8ad8, 0.9));
+      const obj = g.assets.object('craft_speederB', 1.5, heroMapper(0x8fe0ff, 1.1));
       const inner = new THREE.Group();
       obj.rotation.y = Math.PI;
       inner.add(obj);
+      // engine glow and a friendly chevron on the ground under each escort
+      const eng = new THREE.Sprite(engineMat);
+      eng.scale.setScalar(1.3);
+      eng.position.set(0, 0.05, -0.75);
+      inner.add(eng);
+      const mark = new THREE.Mesh(markGeo, markMat);
+      mark.position.y = -1.18;
+      inner.add(mark);
       inner.visible = false;
       scene.add(inner);
-      const trail = new Trail(scene, 0xff8ad8, 0.25, 18, 0.02);
+      const trail = new Trail(scene, 0x8fe0ff, 0.3, 20, 0.02);
       trail.visible = false;
       this.wingmen.push({ obj: inner, x: 0, z: 0, ang: 0, t: rand(0, 0.5), trail });
     }
@@ -61,7 +117,31 @@ export class WeaponSystem {
     const ring = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.05, 6, 40), ringMat);
     ring.position.y = 0.6;
     gr.add(ring);
-    gr.userData = { core, ring };
+    // the gravity well: spiral arms on the ground sized to the pull radius, tightening as it charges
+    const disc = new THREE.Mesh(
+      new THREE.CircleGeometry(1, 48).rotateX(-Math.PI / 2),
+      new THREE.ShaderMaterial({
+        transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+        uniforms: { uT: { value: 0 }, uTime: { value: 0 }, uEvo: { value: 0 } },
+        vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+        fragmentShader: `uniform float uT; uniform float uTime; uniform float uEvo; varying vec2 vUv;
+          void main(){
+            vec2 p = (vUv - 0.5) * 2.0; float r = length(p); if (r > 1.0) discard;
+            float a = atan(p.y, p.x);
+            float spiral = 0.5 + 0.5 * sin(a * 3.0 + log(r + 0.02) * 6.0 + uTime * (5.0 + uT * 9.0));
+            float arms = pow(spiral, 7.0) * smoothstep(1.0, 0.3, r) * smoothstep(0.0, 0.2, r);
+            float rim = exp(-pow((r - 0.97) * 22.0, 2.0));
+            float core = exp(-r * r * 30.0);
+            vec3 col = mix(vec3(0.55, 0.35, 1.0), vec3(0.8, 0.45, 1.0), uEvo);
+            float k = (0.16 + uT * 0.5) * (1.0 - uEvo * 0.45); // evolved mines drop in fours; keep the overlap from washing out
+            gl_FragColor = vec4(col * (arms * 0.9 + rim * 0.5 + core * 1.6) * k, 1.0);
+          }`,
+      }),
+    );
+    disc.position.y = 0.06;
+    disc.renderOrder = 1;
+    gr.add(disc);
+    gr.userData = { core, ring, disc };
     this.g.r.scene.add(gr);
     return gr;
   }
@@ -312,7 +392,7 @@ export class WeaponSystem {
         w.obj.visible = true;
         w.x = P.x;
         w.z = P.z;
-        g.particles.burst(P.x, 1, P.z, g.colors.pink, 14, 5, 0.4, 0.5);
+        g.particles.burst(P.x, 1, P.z, this.wingC, 14, 5, 0.4, 0.5);
       }
       // V formation behind the player
       const side = k % 2 ? 1 : -1;
@@ -337,7 +417,7 @@ export class WeaponSystem {
           }
           // wingman muzzle flash
           g.particles.emit(w.x + Math.sin(face) * 0.8, 1.3, w.z + Math.cos(face) * 0.8, 0, 0, 0, 0.06, 0.9, g.colors.white, 0);
-          g.particles.emit(w.x + Math.sin(face) * 0.8, 1.3, w.z + Math.cos(face) * 0.8, Math.sin(face) * 6, 0, Math.cos(face) * 6, 0.1, 0.5, g.colors.pink, 8);
+          g.particles.emit(w.x + Math.sin(face) * 0.8, 1.3, w.z + Math.cos(face) * 0.8, Math.sin(face) * 6, 0, Math.cos(face) * 6, 0.1, 0.5, this.wingC, 8);
         }
       }
       w.ang += Math.atan2(Math.sin(face - w.ang), Math.cos(face - w.ang)) * Math.min(1, dt * 10);
@@ -352,9 +432,18 @@ export class WeaponSystem {
     for (let k = this.mines.length - 1; k >= 0; k--) {
       const m = this.mines[k];
       m.t += dt;
-      const { core, ring } = m.obj.userData as { core: THREE.Mesh; ring: THREE.Mesh };
+      const { core, ring, disc } = m.obj.userData as { core: THREE.Mesh; ring: THREE.Mesh; disc: THREE.Mesh };
       core.rotation.y += dt * 4;
       core.rotation.x += dt * 3;
+      const prog = Math.min(1, m.t / m.life);
+      const du = (disc.material as THREE.ShaderMaterial).uniforms;
+      du.uT.value = m.t > m.arm ? prog : 0;
+      du.uTime.value = g.time;
+      du.uEvo.value = this.idx('mines') === 5 ? 1 : 0;
+      disc.scale.setScalar(m.t > m.arm ? m.r * 1.25 * (1 - prog * 0.3) : m.r * 0.4 * (m.t / m.arm));
+      // the core swells and flickers as it reaches critical mass
+      core.scale.setScalar(1 + prog * 0.6 + (prog > 0.8 ? Math.sin(m.t * 60) * 0.12 : 0));
+      ((core.material as THREE.MeshStandardMaterial).emissiveIntensity) = 0.6 + prog * 3;
       ring.rotation.x = Math.PI / 2;
       const armed = m.t > m.arm;
       ring.scale.setScalar(armed ? m.r * (1 - ((m.t * 2) % 1)) : 0.6);
@@ -391,6 +480,7 @@ export class WeaponSystem {
     const lv = P.weapons.get('blades');
     if (!lv) {
       for (const b of this.blades) b.visible = false;
+      for (const a of this.bladeArcs) a.visible = false;
       this.bladePos.length = 0;
       return;
     }
@@ -402,8 +492,10 @@ export class WeaponSystem {
     this.bladePos.length = 0;
     for (let k = 0; k < this.blades.length; k++) {
       const b = this.blades[k];
+      const arcM = this.bladeArcs[k];
       if (k >= n) {
         b.visible = false;
+        arcM.visible = false;
         continue;
       }
       b.visible = true;
@@ -419,6 +511,13 @@ export class WeaponSystem {
       b.position.set(x, 1.0 + Math.sin(this.bladeAng * 2 + k) * 0.15, z);
       b.rotation.set(0, a + Math.PI / 2 * dir, this.bladeAng * 6);
       b.scale.setScalar(evo ? 1.35 : 1);
+      // the ring sector starts at angle 0 on +X and grows toward -Z; rotate it so its leading edge sits on
+      // the blade and the tail trails back along the direction of travel
+      arcM.visible = true;
+      arcM.position.set(P.x, b.position.y - 0.05, P.z);
+      arcM.scale.set(rr, 1, rr);
+      arcM.rotation.set(0, a - Math.PI / 2, 0);
+      arcM.scale.z = dir > 0 ? -rr : rr; // mirror so the tail always points against the spin
       this.bladePos.push({ x, z });
       const hits = g.enemies.query(x, z, 2);
       for (const e of hits) {
