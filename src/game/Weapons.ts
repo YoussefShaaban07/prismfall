@@ -212,6 +212,7 @@ export class WeaponSystem {
           g.proj.bolt(P.x + Math.sin(aa) * 0.9, P.z + Math.cos(aa) * 0.9, aa, S.speed, S.dmg[i] * P.dmg, S.pierce[i], col);
         }
         g.particles.emit(P.x + Math.sin(a) * 1.1, 1, P.z + Math.cos(a) * 1.1, Math.sin(a) * 4, 0.5, Math.cos(a) * 4, 0.12, 0.8, g.colors.cyan, 6);
+        P.flashMuzzle(a, evo ? 1.3 : 1);
         // muzzle flash: a hot white core plus a short cone of sparks
         g.particles.emit(P.x + Math.sin(a) * 1.2, 1, P.z + Math.cos(a) * 1.2, 0, 0, 0, 0.06, 1.3, g.colors.white, 0);
         for (let k = 0; k < 3; k++) {
@@ -312,6 +313,7 @@ export class WeaponSystem {
           const a = i === 5 ? base + this.lanceSweep + k * spread : base + (k - (n - 1) / 2) * spread;
           this.lanceBeam(a, S.length, S.width[i] * P.area, S.dmg[i] * P.dmg, i === 5);
         }
+        if (i < 5) P.flashMuzzle(base, 1.1);
         g.audio.sfx('lance');
         g.shake = Math.max(g.shake, 0.2);
         return true;

@@ -54,7 +54,21 @@ export class Player {
   revives = 0;
   private assets: Assets;
   private scene: THREE.Scene;
-  private ghostMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.3, 0.9, 1).multiplyScalar(1.5), transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false });
+  /** holographic afterimage: bright fresnel edges, nearly clear faces, warming to white as it fades */
+  private ghostMat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: { uColor: { value: new THREE.Color(0.3, 0.9, 1) }, uOp: { value: 0.5 }, uAge: { value: 0 } },
+    vertexShader: `varying vec3 vN; varying vec3 vV;
+      void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = -mv.xyz; gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: `uniform vec3 uColor; uniform float uOp; uniform float uAge; varying vec3 vN; varying vec3 vV;
+      void main(){
+        float f = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), 1.6);
+        vec3 c = mix(uColor * 1.6, vec3(1.4), uAge * 0.5);
+        gl_FragColor = vec4(c * (0.06 + f * 1.15) * uOp, 1.0);
+      }`,
+  });
+  private muzzle: THREE.Sprite;
+  private muzzleT = 0;
   private ghostT = 0;
   trails: Trail[] = [];
   private trailW = 0.32;
@@ -64,6 +78,25 @@ export class Player {
   constructor(scene: THREE.Scene, assets: Assets) {
     this.assets = assets;
     this.scene = scene;
+    {
+      const c = document.createElement('canvas');
+      c.width = c.height = 64;
+      const x = c.getContext('2d')!;
+      const gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+      gr.addColorStop(0, 'rgba(255,255,255,1)');
+      gr.addColorStop(0.18, 'rgba(255,255,255,.6)');
+      gr.addColorStop(1, 'rgba(255,255,255,0)');
+      x.fillStyle = gr;
+      x.fillRect(0, 0, 64, 64);
+      x.globalCompositeOperation = 'lighter';
+      x.fillStyle = 'rgba(255,255,255,.9)';
+      x.beginPath(); x.moveTo(0, 32); x.lineTo(32, 29); x.lineTo(64, 32); x.lineTo(32, 35); x.fill();
+      x.beginPath(); x.moveTo(32, 0); x.lineTo(34, 32); x.lineTo(32, 64); x.lineTo(30, 32); x.fill();
+      this.muzzle = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, color: new THREE.Color(0.7, 1, 1).multiplyScalar(1.6) }));
+      this.muzzle.visible = false;
+      this.muzzle.renderOrder = 6;
+      scene.add(this.muzzle);
+    }
     this.ship = assets.object('craft_speederA', 2.4, heroMapper(0x37e8ff, 0.9));
     this.hookHull();
     this.ship.rotation.y = SHIP_YAW;
@@ -201,8 +234,19 @@ export class Player {
     this.trailW = ({ comet: 0.32, wasp: 0.2, viper: 0.26, bastion: 0.55, phoenix: 0.42, prospector: 0.38 } as Record<string, number>)[def.id] ?? 0.32;
     for (const f of this.flames) (f.material as THREE.MeshBasicMaterial).color.set(def.accent).multiplyScalar(3);
     this.buildGhosts();
-    for (const gh of this.ghosts) gh.g.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) (m.material as THREE.MeshBasicMaterial).color.set(def.accent).multiplyScalar(1.5); });
+    for (const gh of this.ghosts) gh.g.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) ((m.material as THREE.ShaderMaterial).uniforms.uColor.value as THREE.Color).set(def.accent); });
+    (this.muzzle.material as THREE.SpriteMaterial).color.set(def.accent).lerp(new THREE.Color(1, 1, 1), 0.55).multiplyScalar(1.6);
   }
+
+  /** Star-shaped flash at the gun port, pointed along the shot. */
+  flashMuzzle(a: number, size = 1) {
+    const holder = this.root.userData.holder as THREE.Group;
+    this.muzzle.position.set(this.x + Math.sin(a) * 1.25, holder.position.y + 0.05, this.z + Math.cos(a) * 1.25);
+    this.muzzle.material.rotation = Math.random() * Math.PI;
+    this.muzzleT = 0.07;
+    this.muzzleS = size;
+  }
+  private muzzleS = 1;
 
   private spawnGhost() {
     const gh = this.ghosts.find((q) => q.t <= 0) ?? this.ghosts[0];
@@ -218,8 +262,15 @@ export class Player {
       if (gh.t <= 0) continue;
       gh.t -= dt;
       if (gh.t <= 0) { gh.g.visible = false; continue; }
-      const op = (gh.t / 0.3) * 0.45;
-      gh.g.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) (m.material as THREE.MeshBasicMaterial).opacity = op; });
+      const life = gh.t / 0.3;
+      gh.g.scale.setScalar(1 + (1 - life) * 0.14);
+      gh.g.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh) return;
+        const u = (m.material as THREE.ShaderMaterial).uniforms;
+        u.uOp.value = life * 0.5;
+        u.uAge.value = 1 - life;
+      });
     }
   }
 
@@ -274,6 +325,13 @@ export class Player {
     }
 
     this.updateGhosts(dt);
+    if (this.muzzleT > 0) {
+      this.muzzleT -= dt;
+      const k = Math.max(0, this.muzzleT / 0.07);
+      this.muzzle.visible = k > 0;
+      this.muzzle.scale.setScalar((1.2 + (1 - k) * 0.9) * this.muzzleS);
+      this.muzzle.material.opacity = k;
+    }
     if (this.dashT > 0) {
       this.dashT -= dt;
       this.ghostT -= dt;
