@@ -23,12 +23,14 @@ const GradeShader = {
     uShadowTint: { value: new THREE.Vector3(-0.02, 0.03, 0.06) },
     uHighTint: { value: new THREE.Vector3(0.05, 0.02, -0.03) },
     uContrast: { value: 1.08 },
+    uGrain: { value: 0.025 },
+    uTint: { value: new THREE.Vector3(1, 1, 1) },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
     void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
   fragmentShader: /* glsl */ `
-    uniform sampler2D tDiffuse; uniform float uTime; uniform float uHurt; uniform float uAberr; uniform float uVignette; uniform float uSat; uniform vec3 uShadowTint; uniform vec3 uHighTint; uniform float uContrast;
+    uniform sampler2D tDiffuse; uniform float uTime; uniform float uHurt; uniform float uAberr; uniform float uVignette; uniform float uSat; uniform vec3 uShadowTint; uniform vec3 uHighTint; uniform float uContrast; uniform float uGrain; uniform vec3 uTint;
     varying vec2 vUv;
     float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453); }
     void main(){
@@ -47,7 +49,8 @@ const GradeShader = {
       float vig = smoothstep(0.95, 0.25, d * uVignette);
       col *= mix(0.55, 1.0, vig);
       col = mix(col, col * vec3(1.4,0.5,0.5) + vec3(0.1,0.0,0.0), uHurt * (1.0 - vig*0.85));
-      col += (hash(vUv * 900.0 + uTime) - 0.5) * 0.025;
+      col *= uTint;
+      col += (hash(vUv * 900.0 + uTime) - 0.5) * uGrain;
       gl_FragColor = vec4(col, 1.0);
     }`,
 };

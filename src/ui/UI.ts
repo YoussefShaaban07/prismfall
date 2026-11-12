@@ -66,6 +66,7 @@ export class UI {
   onMapToggle: () => void = () => {};
   onDaily: () => void = () => {};
   onPhoto: () => void = () => {};
+  onPhotoKey: (code: string) => void = () => {};
   icons = new Map<string, string>();
   onShareCard: () => CardData | null = () => null;
   onCodex: (open: boolean, kind: 'enemy' | 'boss' | 'ship', id: string) => void = () => {};
@@ -110,6 +111,8 @@ export class UI {
     $('#mapBtn').addEventListener('click', () => this.onMapToggle());
     $('#dailyBtn').addEventListener('click', () => this.onDaily());
     $('#photoBtn').addEventListener('click', () => this.onPhoto());
+    document.querySelectorAll<HTMLButtonElement>('#photoBar .pb[data-k]').forEach((b) => b.addEventListener('click', () => this.onPhotoKey(b.dataset.k!)));
+    $('#pbExit').addEventListener('click', () => this.onPhoto());
     $('#shareBtn').addEventListener('click', () => this.openShare());
     $('#shareClose').addEventListener('click', () => this.hide('#shareScreen'));
     $('#codexBtn').addEventListener('click', () => this.openCodex());
@@ -519,6 +522,12 @@ export class UI {
     f.classList.add('go');
   }
 
+  setPhotoBar(look: string, dof: boolean, blur: number) {
+    $('#pbLook').textContent = t(look);
+    $('#pbDof').classList.toggle('on', dof);
+    $('#pbAp').innerHTML = Array.from({ length: 9 }, (_, i) => `<i class="${dof && i <= blur ? 'on' : ''}"></i>`).join('');
+  }
+
   /* ---------- level up ---------- */
   showLevelUp(level: number, cards: CardView[], rerolls: number, onPick: (i: number) => void, onReroll: () => void) {
     this.onPick = onPick;
@@ -851,6 +860,20 @@ const TEMPLATE = /* html */ `
 <div id="bossCard" class="bosscard"><div class="bc1"></div><div class="bc2"></div></div>
 <div id="floaters"></div>
 
+<div id="photoBar" class="photobar">
+  <button class="pb" data-k="BracketLeft" aria-label="Previous look">‹</button>
+  <div class="pblook"><small>LOOK</small><b id="pbLook">NATURAL</b></div>
+  <button class="pb" data-k="BracketRight" aria-label="Next look">›</button>
+  <span class="pbsep"></span>
+  <button class="pb wide" id="pbDof" data-k="KeyF">FOCUS</button>
+  <button class="pb" data-k="Minus" aria-label="Less blur">−</button>
+  <div class="pbap" id="pbAp"></div>
+  <button class="pb" data-k="Equal" aria-label="More blur">+</button>
+  <span class="pbsep"></span>
+  <button class="pb wide" data-k="KeyH">HIDE UI</button>
+  <button class="pb wide hot" data-k="KeyP">SAVE PNG</button>
+  <button class="pb wide" id="pbExit">EXIT</button>
+</div>
 <div id="hud" class="hidden">
   <div class="xpbar"><div id="xpFill"></div></div>
   <div class="top">

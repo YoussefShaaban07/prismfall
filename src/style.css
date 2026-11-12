@@ -509,3 +509,24 @@ html[lang='ar'] .tagline, html[lang='ar'] .sblurb, html[lang='ar'] .ctip, html[l
 /* the logo and numbers stay Latin */
 html[lang='ar'] .logo, html[lang='ar'] .prelogo, html[lang='ar'] .score, html[lang='ar'] .timer { direction: ltr; }
 
+
+/* ---------- photo mode bar ---------- */
+.photobar { position: fixed; left: 0; right: 0; margin: 0 auto; width: fit-content; bottom: max(14px, env(safe-area-inset-bottom)); z-index: 5;
+  display: none; align-items: center; gap: 6px; padding: 8px 10px; border-radius: 14px;
+  background: rgba(10, 8, 20, .72); border: 1px solid var(--line); backdrop-filter: blur(10px); max-width: calc(100vw - 16px); flex-wrap: wrap; justify-content: center; }
+body.photo .photobar { display: flex; }
+body.photo-clean .photobar, body.photo-clean #hint { opacity: 0; pointer-events: none; }
+body.photo-clean .photobar:hover { opacity: .9; pointer-events: auto; }
+.photobar .pb { font: 700 12px/1 var(--display); letter-spacing: .12em; color: #dfe9ff; background: rgba(255, 255, 255, .05);
+  border: 1px solid var(--line); border-radius: 9px; height: 34px; min-width: 34px; padding: 0 10px; cursor: pointer; }
+.photobar .pb:hover { background: rgba(94, 242, 255, .12); }
+.photobar .pb.on { border-color: rgba(94, 242, 255, .7); color: #5ef2ff; box-shadow: 0 0 14px rgba(94, 242, 255, .25) inset; }
+.photobar .pb.hot { border-color: rgba(255, 79, 216, .6); color: #ffd1f4; }
+.pblook { display: flex; flex-direction: column; align-items: center; min-width: 108px; }
+.pblook small { font: 600 9px/1 var(--body); letter-spacing: .2em; color: var(--dim); }
+.pblook b { font: 700 13px/1.3 var(--display); letter-spacing: .12em; color: #fff; }
+.pbsep { width: 1px; height: 24px; background: var(--line); margin: 0 4px; }
+.pbap { display: flex; gap: 3px; }
+.pbap i { width: 5px; height: 14px; border-radius: 2px; background: rgba(255, 255, 255, .12); }
+.pbap i.on { background: #5ef2ff; box-shadow: 0 0 6px rgba(94, 242, 255, .6); }
+body.photo #hud .top, body.photo .toast { visibility: hidden !important; }

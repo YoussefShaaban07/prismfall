@@ -128,7 +128,7 @@ export class Game {
     true, 'centripetal',
   );
   cineT = 0;
-  photo = { yaw: 0.6, pitch: 0.5, dist: 22, drag: null as null | { x: number; y: number } };
+  photo = { yaw: 0.6, pitch: 0.5, dist: 22, drag: null as null | { x: number; y: number }, look: 0, dof: true, aperture: 0.0016, clean: false };
   private timed: { t: number; fn: () => void }[] = [];
   after(t: number, fn: () => void) { this.timed.push({ t, fn }); }
   storm = { k: 0, t: 0, dur: 0, next: 200, flashT: 0 };
@@ -238,6 +238,7 @@ export class Game {
     };
     ui.onDaily = () => this.startRun(true);
     ui.onPhoto = () => this.togglePhoto();
+    ui.onPhotoKey = (c) => this.photoKey(c);
     ui.onShareCard = () => ({
       snap: this.snap, victory: this.won, score: Math.round(this.score), time: this.T, level: this.player.level, kills: this.kills,
       bosses: this.bossesKilled, ship: this.player.shipDef.name, sector: this.night ? 'NIGHT SHIFT' : 'DUSK OUTPOST',
@@ -317,6 +318,7 @@ export class Game {
       if (this.state === 'over' && code === 'Enter') this.startRun();
       if (code === 'KeyM') this.audio.toggleMute();
       if (code === 'F2') this.togglePhoto();
+      else if (this.state === 'photo') this.photoKey(code);
       if (code === 'F3') this.togglePerf();
     };
     this.input.onPadButton = (i) => {
@@ -460,8 +462,14 @@ export class Game {
     this.audio.theme = night ? 'night' : 'dusk';
     this.arena.setNight(night);
     r.bloom.strength = (this.settings.quality === 'low' ? 0.5 : 0.6) * (night ? 0.75 : 1);
-    (r.grade.uniforms.uShadowTint.value as THREE.Vector3).set(night ? -0.03 : -0.02, night ? 0.01 : 0.03, night ? 0.08 : 0.06);
-    (r.grade.uniforms.uHighTint.value as THREE.Vector3).set(night ? 0.0 : 0.05, night ? 0.03 : 0.02, night ? 0.05 : -0.03);
+    this.applyThemeGrade();
+  }
+
+  /** The theme's own split-tone (cool shadows / warm highlights at dusk, bluer at night). */
+  private applyThemeGrade() {
+    const g = this.r.grade.uniforms, night = this.night;
+    (g.uShadowTint.value as THREE.Vector3).set(night ? -0.03 : -0.02, night ? 0.01 : 0.03, night ? 0.08 : 0.06);
+    (g.uHighTint.value as THREE.Vector3).set(night ? 0.0 : 0.05, night ? 0.03 : 0.02, night ? 0.05 : -0.03);
   }
 
   nightUnlocked() {
@@ -568,12 +576,83 @@ export class Game {
       this.state = 'photo';
       this.input.releaseAll();
       document.body.classList.add('photo');
+      this.applyLook(this.photo.look);
+      this.syncPhotoBar();
       this.ui.hint('PHOTO MODE · drag or arrows to orbit · wheel to zoom · F2 to exit', 3000);
     } else if (this.state === 'photo') {
-      document.body.classList.remove('photo');
+      document.body.classList.remove('photo', 'photo-clean');
+      this.photo.clean = false;
+      this.applyLook(0);
+      this.r.bokeh.enabled = false;
       this.state = 'play';
       this.last = performance.now();
     }
+  }
+
+  /** Colour looks for photo mode, applied through the grade pass. Look 0 is the game's own grade. */
+  static LOOKS = [
+    { name: 'NATURAL' },
+    { name: 'NOIR', sat: 0, contrast: 1.42, grain: 0.065, tint: [1.0, 0.98, 0.93], sh: [0, 0, 0], hi: [0.02, 0.02, 0.02], vig: 1.4 },
+    { name: 'WARM FILM', sat: 0.9, contrast: 1.14, grain: 0.05, tint: [1.1, 0.98, 0.82], sh: [0.0, 0.02, 0.05], hi: [0.07, 0.03, -0.04], vig: 1.28 },
+    { name: 'NEON', sat: 1.6, contrast: 1.2, grain: 0.018, tint: [1.0, 0.96, 1.05], sh: [0.06, -0.03, 0.12], hi: [-0.03, 0.05, 0.07], vig: 1.15 },
+    { name: 'FROST', sat: 0.72, contrast: 1.06, grain: 0.03, tint: [0.86, 1.0, 1.14], sh: [-0.02, 0.03, 0.09], hi: [0.03, 0.05, 0.07], vig: 1.1 },
+  ] as { name: string; sat?: number; contrast?: number; grain?: number; tint?: number[]; sh?: number[]; hi?: number[]; vig?: number }[];
+
+  applyLook(i: number) {
+    const u = this.r.grade.uniforms;
+    const L = Game.LOOKS[i] ?? Game.LOOKS[0];
+    if (i === 0 || !L.sat && L.sat !== 0) {
+      u.uSat.value = 1.12;
+      u.uContrast.value = 1.08;
+      u.uGrain.value = 0.025;
+      (u.uTint.value as THREE.Vector3).set(1, 1, 1);
+      u.uVignette.value = 1;
+      this.applyThemeGrade();
+      return;
+    }
+    u.uSat.value = L.sat!;
+    u.uContrast.value = L.contrast!;
+    u.uGrain.value = L.grain!;
+    (u.uTint.value as THREE.Vector3).fromArray(L.tint!);
+    (u.uShadowTint.value as THREE.Vector3).fromArray(L.sh!);
+    (u.uHighTint.value as THREE.Vector3).fromArray(L.hi!);
+    u.uVignette.value = L.vig!;
+  }
+
+  photoKey(code: string) {
+    const ph = this.photo;
+    if (code === 'KeyL' || code === 'BracketRight') ph.look = (ph.look + 1) % Game.LOOKS.length;
+    else if (code === 'BracketLeft') ph.look = (ph.look + Game.LOOKS.length - 1) % Game.LOOKS.length;
+    else if (code === 'KeyF') ph.dof = !ph.dof;
+    else if (code === 'Minus') ph.aperture = Math.max(0.0004, ph.aperture / 1.4);
+    else if (code === 'Equal') ph.aperture = Math.min(0.006, ph.aperture * 1.4);
+    else if (code === 'KeyH') {
+      ph.clean = !ph.clean;
+      document.body.classList.toggle('photo-clean', ph.clean);
+    } else if (code === 'KeyP' || code === 'Enter') return void this.savePhoto();
+    else return;
+    this.applyLook(ph.look);
+    this.syncPhotoBar();
+  }
+
+  private syncPhotoBar() {
+    const ph = this.photo;
+    this.ui.setPhotoBar(Game.LOOKS[ph.look].name, ph.dof, Math.round(Math.log(ph.aperture / 0.0004) / Math.log(1.4)));
+  }
+
+  /** Render one clean frame and download it as a PNG. */
+  savePhoto() {
+    this.r.render(this.time);
+    this.r.renderer.domElement.toBlob((b) => {
+      if (!b) return;
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(b);
+      a.download = `prismfall-${Date.now()}.png`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    }, 'image/png');
+    this.ui.flash('rgba(255,255,255,0.5)');
+    this.audio.sfx('click');
   }
 
   togglePause() {
@@ -883,6 +962,12 @@ export class Game {
       cam.position.set(P.x + Math.sin(ph.yaw) * cp * ph.dist, 0.6 + Math.sin(ph.pitch) * ph.dist, P.z + Math.cos(ph.yaw) * cp * ph.dist);
       cam.lookAt(P.x, 1, P.z);
       cam.clearViewOffset();
+      // depth of field pulled onto the ship
+      this.r.bokeh.enabled = ph.dof && this.r.quality !== 'low';
+      const bu = this.r.bokeh.uniforms as Record<string, { value: number }>;
+      bu.focus.value = cam.position.distanceTo(this.hazeV.set(P.x, 1, P.z));
+      bu.aperture.value = ph.aperture;
+      bu.maxblur.value = 0.012;
       return;
     }
     if (this.state === 'menu' && this.hangarOpen) {
@@ -892,7 +977,10 @@ export class Game {
       cam.position.lerp(this.camPos, 1 - Math.exp(-3 * dt));
       this.camLook.set(0, 2.2, 0);
       cam.lookAt(this.camLook);
-      ((this.r.bokeh.uniforms as Record<string, { value: number }>).focus).value = cam.position.distanceTo(this.camLook);
+      const bu = this.r.bokeh.uniforms as Record<string, { value: number }>;
+      bu.focus.value = cam.position.distanceTo(this.camLook);
+      bu.aperture.value = 0.0005;
+      bu.maxblur.value = 0.006;
       const W = this.r.width, H = this.r.height;
       if (W > H) cam.setViewOffset(W, H, W * 0.2, 0, W, H);
       else cam.setViewOffset(W, H, 0, H * 0.27, W, H);
