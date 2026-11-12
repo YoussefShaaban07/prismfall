@@ -237,7 +237,7 @@ export class Projectiles {
         const rr = 0.3 * s.size + P.r * 0.7;
         if ((s.x - P.x) ** 2 + (s.z - P.z) ** 2 < rr * rr) {
           if (!P.dashing) {
-            g.hurtPlayer(s.dmg, null);
+            g.hurtPlayer(s.dmg, null, s);
             dead = true;
           }
         }

@@ -1562,6 +1562,34 @@ export class Game {
     }
   }
 
+  private hitV = new THREE.Vector3();
+  private hitV2 = new THREE.Vector3();
+  /** Edge flash on the side of the screen the hit came from. */
+  private hitFrom(x: number, z: number) {
+    const P = this.player;
+    if (Math.hypot(x - P.x, z - P.z) < 0.3) return;
+    const cam = this.r.camera;
+    const a = this.hitV.set(P.x, 1, P.z).project(cam);
+    const b = this.hitV2.set(x, 1, z).project(cam);
+    const ang = Math.atan2(-(b.y - a.y), (b.x - a.x) * (this.r.width / this.r.height));
+    this.ui.hitDir(ang);
+  }
+
+  /** A mothership crosses a hull threshold: it flares, sheds a shockwave and fights harder. */
+  bossEscalate(e: Enemy, stage: number) {
+    const col = this.boss.color;
+    this.fx.shock(e.x, e.z, 16, 1.2, 0.7);
+    this.fx.ring(e.x, e.z, 18, col, 0.8, 4);
+    this.particles.burst(e.x, 2, e.z, col.clone().multiplyScalar(2), 36, 16, 0.8, 0.8, 1);
+    this.lighting.flash(e.x, e.z, col, 30, 22, 0.5);
+    this.shake = Math.max(this.shake, 0.6);
+    this.freezeT = Math.max(this.freezeT, 0.08);
+    this.punchAt(e.x, e.z, 0.7);
+    this.audio.sfx('boom');
+    this.ui.bossStage(stage);
+    this.ui.banner(stage === 1 ? 'HULL BREACHED' : 'CRITICAL', stage === 1 ? 'The mothership is enraged' : 'It is throwing everything at you', '#ff5ea8', 1600);
+  }
+
   /** Each species breaks apart in its own way, so a kill reads at a glance even in a crowd. */
   private deathFlourish(e: Enemy, col: THREE.Color) {
     const P = this.particles, y = e.def.hover + 0.3;
@@ -1690,7 +1718,7 @@ export class Game {
     this.fx.scorch(e.x, e.z, 2.2);
     this.audio.sfx('boom');
     this.shake = Math.max(this.shake, 0.45);
-    if (!P.dead && Math.hypot(P.x - e.x, P.z - e.z) < r + P.r) this.hurtPlayer(e.dmg, null);
+    if (!P.dead && Math.hypot(P.x - e.x, P.z - e.z) < r + P.r) this.hurtPlayer(e.dmg, null, e);
   }
 
   /** Each mothership dies in its own way. */
@@ -1750,9 +1778,11 @@ export class Game {
     void col;
   }
 
-  hurtPlayer(dmg: number, src: Enemy | null) {
+  hurtPlayer(dmg: number, src: Enemy | null, from?: { x: number; z: number } | null) {
     const P = this.player;
     if (P.inv > 0 || P.dead || this.victoryT > 0) return;
+    const o = from ?? src;
+    if (o) this.hitFrom(o.x, o.z);
     const amt = Math.max(1, dmg - P.armor);
     this.untouchedT = -1e9;
     const key = src ? src.type : 'bullet';

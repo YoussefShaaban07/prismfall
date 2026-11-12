@@ -473,10 +473,40 @@ export class UI {
     });
   }
 
+  private hitIdx = 0;
+  /** angle in screen space (0 = right, +π/2 = down) toward whatever just hit the ship */
+  hitDir(ang: number) {
+    const els = document.querySelectorAll<HTMLElement>('#hitdirs i');
+    const el = els[this.hitIdx++ % els.length];
+    // park the crescent where the ray from screen centre meets the screen edge
+    const w = innerWidth / 2, h = innerHeight / 2, dx = Math.cos(ang), dy = Math.sin(ang);
+    const k = Math.min(Math.abs(dx) > 1e-4 ? w / Math.abs(dx) : 1e9, Math.abs(dy) > 1e-4 ? h / Math.abs(dy) : 1e9);
+    el.style.left = `${w + dx * k}px`;
+    el.style.top = `${h + dy * k}px`;
+    el.style.setProperty('--a', `${ang}rad`);
+    el.classList.remove('go');
+    void el.offsetWidth;
+    el.classList.add('go');
+  }
+
+  /** A hull threshold was crossed: the bar cracks and flares. */
+  bossStage(stage: number) {
+    const bb = $('#bossBar');
+    bb.classList.remove('crack');
+    void bb.offsetWidth;
+    bb.classList.add('crack');
+    bb.dataset.stage = String(stage);
+    bb.querySelectorAll('.btick').forEach((tk, i) => tk.classList.toggle('gone', i >= 2 - stage));
+  }
+
   setBoss(name: string | null, frac: number) {
     const bb = $('#bossBar');
     if (!name) {
       bb.classList.add('hidden');
+      if (bb.dataset.stage) {
+        delete bb.dataset.stage;
+        bb.querySelectorAll('.btick').forEach((tk) => tk.classList.remove('gone'));
+      }
       return;
     }
     bb.classList.remove('hidden');
@@ -886,6 +916,7 @@ const TEMPLATE = /* html */ `
   <button class="pb wide hot" data-k="KeyP">SAVE PNG</button>
   <button class="pb wide" id="pbExit">EXIT</button>
 </div>
+<div id="hitdirs"><i></i><i></i><i></i><i></i></div>
 <div id="hud" class="hidden">
   <div class="xpbar"><div id="xpFill"></div></div>
   <div class="top">
@@ -903,7 +934,7 @@ const TEMPLATE = /* html */ `
   <canvas id="minimap" width="150" height="150"></canvas>
   <div id="threats"></div>
   <div id="combo" class="combo"></div>
-  <div id="bossBar" class="bossbar hidden"><div id="bossName" class="bossname"></div><div class="bosstrack"><div id="bossTrail"></div><div id="bossFill"></div></div></div>
+  <div id="bossBar" class="bossbar hidden"><div id="bossName" class="bossname"></div><div class="bosstrack"><div id="bossTrail"></div><div id="bossFill"></div><i class="btick" style="left:33.333%"></i><i class="btick" style="left:66.667%"></i></div></div>
   <div id="banner" class="banner"><div class="b1"></div><div class="b2"></div></div>
   <div id="joy" class="joy"><div class="knob"></div></div>
   <button id="dashBtn" class="dashbtn hidden"><div id="dashRing" class="ring"></div><span>DASH</span></button>

@@ -230,7 +230,7 @@ export class Hazards {
             g.fx.scorch(q.x, q.z, q.r * 0.8);
             g.audio.sfx('boom');
             g.shake = Math.max(g.shake, 0.3);
-            if (!P.dead && Math.hypot(P.x - q.x, P.z - q.z) < q.r + P.r * 0.5) g.hurtPlayer(q.dmg, null);
+            if (!P.dead && Math.hypot(P.x - q.x, P.z - q.z) < q.r + P.r * 0.5) g.hurtPlayer(q.dmg, null, q);
             q.active = false;
             q.ring.visible = q.fill.visible = false;
             this.dropShell(q);
@@ -251,7 +251,7 @@ export class Hazards {
       q.tick -= dt;
       if (q.tick <= 0 && !P.dead && Math.hypot(P.x - q.x, P.z - q.z) < q.r) {
         q.tick = 0.5;
-        g.hurtPlayer(q.dmg, null);
+        g.hurtPlayer(q.dmg, null, q);
       }
       if (q.life <= 0) {
         q.active = false;
@@ -295,7 +295,7 @@ export class Hazards {
         const dx = Math.sin(b.angle), dz = Math.cos(b.angle);
         const px = P.x - a.x, pz = P.z - a.z;
         const along = px * dx + pz * dz;
-        if (along > 0 && along < b.len && Math.abs(px * dz - pz * dx) < b.width * 0.5 + P.r * 0.6) g.hurtPlayer(b.dmg, null);
+        if (along > 0 && along < b.len && Math.abs(px * dz - pz * dx) < b.width * 0.5 + P.r * 0.6) g.hurtPlayer(b.dmg, null, a);
       }
       if (b.life <= 0) {
         b.active = false;

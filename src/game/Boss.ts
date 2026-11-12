@@ -27,6 +27,8 @@ export class BossController {
   body: THREE.Group | null = null;
   rings: THREE.Mesh[] = [];
   mats: THREE.MeshStandardMaterial[] = [];
+  /** escalation stage reached this fight (0, 1 at 2/3 hull, 2 at 1/3) */
+  stage = 0;
   /** shared clocks for the Core's crystal veins */
   private coreTime = { value: 0 };
   private coreRage = { value: 0 };
@@ -222,6 +224,7 @@ export class BossController {
     const e = g.enemies.spawn('boss', p.x, p.z)!;
     const hp = (final ? 2600 : 850 + 550 * idx) * hpScale(g.T) * (g.endless ? 1.5 : 1);
     e.hp = e.maxHp = hp;
+    this.stage = 0;
     e.r = final ? 4.2 : 3.4;
     e.spd = final ? 2.6 : 2.3 + idx * 0.2;
     e.dmg = EDEFS.boss.damage * (1 + g.T / 600);
@@ -247,7 +250,13 @@ export class BossController {
   /** Called from EnemyManager.update for the boss entity. Writes e.vx/e.vz directly. */
   update(e: Enemy, dt: number, ux: number, uz: number, d: number) {
     const g = this.g;
-    const fast = this.final ? 1.35 : 1 + this.index * 0.1;
+    // escalation: at two thirds and one third hull the mothership pushes harder
+    const stage = e.hp < e.maxHp / 3 ? 2 : e.hp < (e.maxHp * 2) / 3 ? 1 : 0;
+    if (stage > this.stage) {
+      this.stage = stage;
+      g.bossEscalate(e, stage);
+    }
+    const fast = (this.final ? 1.35 : 1 + this.index * 0.1) * (1 + this.stage * 0.12);
     e.timer -= dt;
     e.sub -= dt;
     const aim = Math.atan2(ux, uz);
