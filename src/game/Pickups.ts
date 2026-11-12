@@ -1,3 +1,4 @@
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import * as THREE from 'three';
 import type { Assets, ModelName } from '../core/Assets';
 import { heroMapper } from '../core/Assets';
@@ -12,7 +13,7 @@ const GEM_COLORS = [
   new THREE.Color(0.05, 0.75, 1),
   new THREE.Color(0.15, 1, 0.3),
   new THREE.Color(0.7, 0.2, 1),
-  new THREE.Color(1, 0.65, 0.05),
+  new THREE.Color(1, 0.62, 0.08),
 ];
 const POWER_DEF: Record<PowerKind, { model: ModelName; color: number; size: number }> = {
   heal: { model: 'barrel', color: 0xff4f6a, size: 1.6 },
@@ -23,7 +24,9 @@ const POWER_DEF: Record<PowerKind, { model: ModelName; color: number; size: numb
 export class Pickups {
   gems: Gem[] = [];
   powers: Power[] = [];
-  gemMesh: THREE.InstancedMesh;
+  gemMeshes: THREE.InstancedMesh[];
+  private flares: THREE.InstancedMesh;
+  private gemTime = { value: 0 };
   max = 600;
   pickStreak = 0;
   pickStreakT = 0;
@@ -37,26 +40,84 @@ export class Pickups {
   streaks: THREE.InstancedMesh;
 
   constructor(private scene: THREE.Scene, private assets: Assets, private g: Game) {
-    const geo = new THREE.OctahedronGeometry(0.28, 0);
-    geo.scale(1, 1.6, 1);
-    // faceted crystals: lit, glossy, glowing from inside with a fresnel rim
+    // faceted crystals: lit, glossy, glowing from inside with a fresnel rim; individual facets
+    // catch the light and twinkle, and each value tier has its own silhouette
     const gemMat = new THREE.MeshStandardMaterial({ color: 0x7a7a7a, roughness: 0.12, metalness: 0.15, flatShading: true, envMapIntensity: 0.6 });
     gemMat.onBeforeCompile = (sh) => {
-      sh.fragmentShader = sh.fragmentShader.replace(
-        '#include <emissivemap_fragment>',
-        `#include <emissivemap_fragment>
-        float gF = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 2.0);
-        #ifdef USE_COLOR
-          totalEmissiveRadiance += vColor.rgb * (0.45 + gF * 1.1);
-        #endif`,
-      );
+      sh.uniforms.uTime = this.gemTime;
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', '#include <common>\nuniform float uTime;')
+        .replace(
+          '#include <emissivemap_fragment>',
+          `#include <emissivemap_fragment>
+          float gF = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 2.0);
+          // per-facet twinkle: each flat face gets its own phase from its (view-space) normal
+          float fid = dot(floor(normal * 6.0 + 0.5), vec3(12.9898, 78.233, 37.719));
+          float tw = pow(fract(sin(fid) * 43758.5453 + uTime * 0.55), 22.0);
+          #ifdef USE_COLOR
+            // a little less flat glow lets the facet shading read; the fresnel rim and twinkles carry the shine
+            totalEmissiveRadiance += vColor.rgb * (0.32 + gF * 1.2) + mix(vColor.rgb, vec3(1.0), 0.6) * tw * 2.6;
+          #endif`,
+        );
     };
-    this.gemMesh = new THREE.InstancedMesh(geo, gemMat, this.max);
-    this.gemMesh.count = 0;
-    this.gemMesh.frustumCulled = false;
-    this.gemMesh.castShadow = true;
-    for (let i = 0; i < this.max; i++) this.gemMesh.setColorAt(i, GEM_COLORS[0]);
-    scene.add(this.gemMesh);
+    gemMat.customProgramCacheKey = () => 'gem-v2';
+    const tiers = [
+      (() => { const g = new THREE.OctahedronGeometry(0.28, 0); g.scale(1, 1.6, 1); return g; })(),
+      // a hexagonal prism crystal with pointed ends
+      new THREE.LatheGeometry([new THREE.Vector2(0, -0.46), new THREE.Vector2(0.2, -0.2), new THREE.Vector2(0.21, 0.18), new THREE.Vector2(0, 0.52)], 6),
+      // a cluster of three shards
+      (() => {
+        const shard = (h: number, r: number) => new THREE.LatheGeometry([new THREE.Vector2(0, -0.1), new THREE.Vector2(r, 0.05), new THREE.Vector2(r * 0.9, h * 0.7), new THREE.Vector2(0, h)], 6);
+        const a = shard(0.75, 0.17);
+        const b = shard(0.5, 0.13); b.rotateZ(0.55); b.translate(0.17, -0.08, 0.05);
+        const c = shard(0.45, 0.12); c.rotateZ(-0.5); c.rotateX(0.35); c.translate(-0.15, -0.1, -0.07);
+        const m = mergeGeometries([a, b, c], false)!;
+        m.translate(0, -0.25, 0);
+        return m;
+      })(),
+      // a brilliant-cut jewel: wide girdle, shallow crown, deep pavilion
+      new THREE.LatheGeometry([new THREE.Vector2(0, -0.4), new THREE.Vector2(0.4, 0.02), new THREE.Vector2(0.4, 0.07), new THREE.Vector2(0.26, 0.2), new THREE.Vector2(0, 0.22)], 8),
+    ];
+    this.gemMeshes = tiers.map((geo) => {
+      const m = new THREE.InstancedMesh(geo, gemMat, this.max);
+      m.count = 0;
+      m.frustumCulled = false;
+      m.castShadow = true;
+      for (let i = 0; i < this.max; i++) m.setColorAt(i, GEM_COLORS[0]);
+      scene.add(m);
+      return m;
+    });
+    // star glints over precious crystals
+    {
+      const fm = new THREE.ShaderMaterial({
+        transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
+        vertexShader: /* glsl */ `
+          varying vec2 vUv; varying vec3 vCol;
+          void main(){
+            vUv = uv; vCol = instanceColor;
+            vec4 c = viewMatrix * modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+            float s = length(instanceMatrix[0].xyz);
+            c.xy += position.xy * s;
+            gl_Position = projectionMatrix * c;
+          }`,
+        fragmentShader: /* glsl */ `
+          varying vec2 vUv; varying vec3 vCol;
+          void main(){
+            vec2 p = (vUv - 0.5) * 2.0;
+            float ax = exp(-abs(p.y) * 26.0) * (1.0 - abs(p.x));
+            float ay = exp(-abs(p.x) * 26.0) * (1.0 - abs(p.y));
+            float core = exp(-dot(p, p) * 18.0);
+            float a = ax + ay + core;
+            gl_FragColor = vec4((vCol * 0.8 + 0.6) * a, 1.0);
+          }`,
+      });
+      this.flares = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), fm, 64);
+      this.flares.count = 0;
+      this.flares.frustumCulled = false;
+      this.flares.renderOrder = 3;
+      for (let i = 0; i < 64; i++) this.flares.setColorAt(i, GEM_COLORS[3]);
+      scene.add(this.flares);
+    }
     {
       const sg = new THREE.PlaneGeometry(1, 1);
       sg.rotateX(-Math.PI / 2); // lie on XZ; uv.y runs along local -z
@@ -226,18 +287,44 @@ export class Pickups {
   }
 
   sync(time: number) {
+    this.gemTime.value = time % 1000;
+    const nt = [0, 0, 0, 0];
+    let nf = 0;
     for (let i = 0; i < this.gems.length; i++) {
       const gm = this.gems[i];
-      const sc = gm.v >= 20 ? 2 : gm.v >= 5 ? 1.5 : gm.v >= 2 ? 1.2 : 1;
-      this.e.set(0, time * 2.5 + i, 0);
+      const tier = gm.v >= 20 ? 3 : gm.v >= 5 ? 2 : gm.v >= 2 ? 1 : 0;
+      const sc = [1, 1.15, 1.3, 1.55][tier];
+      const y = gm.y + Math.sin(time * 4 + i) * 0.12 + (tier === 3 ? 0.25 : 0);
+      // precious jewels tilt and spin slower so their facets roll through the light
+      this.e.set(tier === 3 ? 0.75 : 0, time * (tier === 3 ? 1.4 : 2.5) + i, tier === 3 ? Math.sin(time * 1.3 + i) * 0.3 : 0);
       this.q.setFromEuler(this.e);
-      this.m.compose(this.p.set(gm.x, gm.y + Math.sin(time * 4 + i) * 0.12, gm.z), this.q, this.s.set(sc, sc, sc));
-      this.gemMesh.setMatrixAt(i, this.m);
-      this.gemMesh.setColorAt(i, this.gemColor(gm.v));
+      this.m.compose(this.p.set(gm.x, y, gm.z), this.q, this.s.set(sc, sc, sc));
+      const mesh = this.gemMeshes[tier];
+      mesh.setMatrixAt(nt[tier], this.m);
+      mesh.setColorAt(nt[tier], GEM_COLORS[tier]);
+      nt[tier]++;
+      if (tier >= 2 && nf < 64) {
+        // a cross-star glint that blooms and fades on its own rhythm
+        const ph = (time * 0.7 + i * 0.37) % 1;
+        const k = tier === 3 ? 1 : 0.5;
+        const fs = Math.max(0, Math.sin(ph * Math.PI)) ** 6 * (1.6 + tier * 0.5) * k + (tier === 3 ? 0.45 : 0);
+        if (fs > 0.02) {
+          this.m.compose(this.p.set(gm.x, y + 0.15, gm.z), this.q.identity(), this.s.set(fs, fs, fs));
+          this.flares.setMatrixAt(nf, this.m);
+          this.flares.setColorAt(nf, GEM_COLORS[tier]);
+          nf++;
+        }
+      }
     }
-    this.gemMesh.count = this.gems.length;
-    this.gemMesh.instanceMatrix.needsUpdate = true;
-    if (this.gemMesh.instanceColor) this.gemMesh.instanceColor.needsUpdate = true;
+    for (let t = 0; t < 4; t++) {
+      const mesh = this.gemMeshes[t];
+      mesh.count = nt[t];
+      mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    }
+    this.flares.count = nf;
+    this.flares.instanceMatrix.needsUpdate = true;
+    if (this.flares.instanceColor) this.flares.instanceColor.needsUpdate = true;
 
     // streaks: only for crystals in flight toward the ship, length follows speed
     let n = 0;
