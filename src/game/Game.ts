@@ -1030,7 +1030,8 @@ export class Game {
         const bx = P.x - Math.sin(P.ang) * 1.2, bz = P.z - Math.cos(P.ang) * 1.2;
         this.particles.emit(bx, 0.9, bz, -P.vx * 0.1 + rand(-0.4, 0.4), rand(0, 0.4), -P.vz * 0.1 + rand(-0.4, 0.4), 0.45, 0.45, this.colors.cyan, 3);
       }
-      this.director(dt);
+      // the swarm stays broken while the victory fireworks play
+      if (this.victoryT <= 0) this.director(dt);
       this.weapons.update(dt);
     } else {
       this.deathT -= dt;
