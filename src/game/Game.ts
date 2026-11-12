@@ -365,6 +365,7 @@ export class Game {
     this.showroom.add(spot, spot.target);
     // polished black-chrome pad top: reflects the HDR sky and the orbiting rim lights
     const padTop = (pad.userData.height as number) + 0.02;
+    this.padTop = padTop;
     const chrome = new THREE.Mesh(
       new THREE.CircleGeometry(3.25, 64).rotateX(-Math.PI / 2),
       new THREE.MeshStandardMaterial({ color: 0x0b0d14, metalness: 1, roughness: 0.12, envMapIntensity: 1.4 }),
@@ -421,6 +422,8 @@ export class Game {
       this.showFlames.push(f);
     }
     this.showY = 1.45;
+    this.showLookY = 1.35;
+    this.showFit = 4.2;
     holder.position.y = this.showY;
     holder.rotation.order = 'YXZ'; // yaw outermost so the pose's pitch and bank stay in the ship's frame
     this.showShip = holder;
@@ -454,12 +457,23 @@ export class Game {
   private setShowModel(model: ModelName, size: number, mapper: ReturnType<typeof heroMapper>) {
     if (this.showShip) this.showroom.remove(this.showShip);
     this.showShip = this.assets.object(model, size, mapper);
-    // hover low over the pad so it reads as sitting on it (big models get a little more clearance)
-    this.showY = Math.max(1.45, size * 0.42 + 0.5);
+    // measure the model so it hovers just above the pad and the camera backs off to fit it whole
+    this.showShip.position.set(0, 0, 0);
+    this.showShip.updateMatrixWorld(true);
+    const box = this.showBox.setFromObject(this.showShip);
+    const sz = box.getSize(this.hazeV2);
+    this.showY = this.padTop + 0.45 - box.min.y;
+    this.showLookY = this.showY + (box.min.y + box.max.y) * 0.5 - 0.1;
+    this.showFit = Math.max(sz.x, sz.y * 1.3, sz.z);
     this.showShip.position.y = this.showY;
     this.showroom.add(this.showShip);
     this.showPose = false;
   }
+  private showBox = new THREE.Box3();
+  private padTop = 0.4;
+  /** largest dimension of what's on the pad (drives the hangar camera distance) */
+  private showFit = 4.2;
+  private showLookY = 1.35;
 
   /** Codex preview: show an enemy or boss model on the showroom pad. */
   showCodexModel(kind: 'enemy' | 'boss' | 'ship', id: string) {
@@ -1085,10 +1099,12 @@ export class Game {
     if (this.state === 'menu' && this.hangarOpen) {
       const a = this.time * 0.25;
       // a low, close hero angle so the ship (not the pad's near rim) owns the frame
-      const dist = this.r.width > this.r.height ? 8.8 : 16.5;
-      this.camPos.set(Math.sin(a) * dist, 4.6 + (dist - 8.8) * 0.3, Math.cos(a) * dist);
+      const fit = Math.max(1, this.showFit / 4.2);
+      const dist = (this.r.width > this.r.height ? 8.8 : 16.5) * fit;
+      this.camPos.set(Math.sin(a) * dist, (4.6 + (dist / fit - 8.8) * 0.3) * fit * 0.85 + this.showLookY * 0.15, Math.cos(a) * dist);
       cam.position.lerp(this.camPos, 1 - Math.exp(-3 * dt));
-      this.camLook.set(0, this.showY - 0.1, 0);
+      this.camLook.y += (this.showLookY - this.camLook.y) * Math.min(1, dt * 4);
+      this.camLook.x = this.camLook.z = 0;
       cam.lookAt(this.camLook);
       const bu = this.r.bokeh.uniforms as Record<string, { value: number }>;
       bu.focus.value = cam.position.distanceTo(this.camLook);
