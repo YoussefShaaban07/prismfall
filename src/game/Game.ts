@@ -585,7 +585,7 @@ export class Game {
     if (this.state !== 'play') return;
     this.state = 'paused';
     this.input.releaseAll();
-    this.ui.showPause(this.player.weapons, this.player.passives, this.player.evolved);
+    this.ui.showPause(this.player.weapons, this.player.passives, this.player.evolved, { time: this.T, level: this.player.level, kills: this.kills, score: this.score });
   }
   resume() {
     if (this.state !== 'paused') return;

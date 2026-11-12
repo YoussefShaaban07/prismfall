@@ -575,7 +575,10 @@ export class UI {
   }
 
   /* ---------- pause ---------- */
-  showPause(weapons: Map<WeaponId, number>, passives: Map<PassiveId, number>, evolved: Set<WeaponId>) {
+  showPause(weapons: Map<WeaponId, number>, passives: Map<PassiveId, number>, evolved: Set<WeaponId>, run?: { time: number; level: number; kills: number; score: number }) {
+    $('#pauseStats').innerHTML = run
+      ? `<span><b>${fmtTime(run.time)}</b>${t('TIME')}</span><span><b>${run.level}</b>${t('LEVEL')}</span><span><b>${fmtNum(run.kills)}</b>${t('KILLS')}</span><span><b>${fmtNum(run.score)}</b>${t('SCORE')}</span>`
+      : '';
     const w = [...weapons].map(([id, lv]) => `<div class="bi" style="--c:${WEAPONS[id].color}"><span>${WEAPONS[id].icon}</span><b>${evolved.has(id) ? WEAPONS[id].evoName : WEAPONS[id].name}</b><em>${evolved.has(id) ? t('EVO') : tf('LV {0}', lv)}</em></div>`).join('');
     const p = [...passives].map(([id, lv]) => `<div class="bi" style="--c:${PASSIVES[id].color}"><span>${PASSIVES[id].icon}</span><b>${PASSIVES[id].name}</b><em>${tf('LV {0}', lv)}</em></div>`).join('');
     $('#build').innerHTML = w + p;
@@ -960,11 +963,16 @@ const TEMPLATE = /* html */ `
 <div id="pause" class="screen hidden">
   <div class="panel wide">
     <h2>PAUSED</h2>
+    <div id="pauseStats" class="pstats"></div>
     <div id="build" class="build"></div>
-    <button id="pauseSettingsBtn" class="btn ghost">SETTINGS</button>
-    <button id="photoBtn" class="btn ghost">PHOTO MODE (F2)</button>
-    <button id="resumeBtn" class="btn primary">RESUME</button>
-    <button id="quitBtn" class="btn ghost">QUIT TO MENU</button>
+    <div class="pbtns">
+      <button id="resumeBtn" class="btn primary">RESUME</button>
+      <div class="prow">
+        <button id="pauseSettingsBtn" class="btn ghost">SETTINGS</button>
+        <button id="photoBtn" class="btn ghost">PHOTO MODE (F2)</button>
+        <button id="quitBtn" class="btn ghost">QUIT TO MENU</button>
+      </div>
+    </div>
   </div>
 </div>
 

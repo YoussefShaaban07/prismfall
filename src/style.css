@@ -229,7 +229,24 @@ body.lowhp #ui::before {
 @keyframes spinA { to { --a: 360deg; } }
 
 /* ---------- pause ---------- */
-#pause { background: rgba(8, 4, 14, .72); backdrop-filter: blur(8px); z-index: 4; }
+#pause { background: radial-gradient(ellipse at center, rgba(14, 6, 24, .62), rgba(6, 3, 10, .86)); backdrop-filter: blur(8px) saturate(.7); z-index: 4; }
+#pause h2 { text-shadow: 0 0 22px rgba(94, 242, 255, .35); }
+.pstats { display: flex; justify-content: center; gap: 10px; margin: -4px 0 14px; flex-wrap: wrap; }
+.pstats span { display: flex; flex-direction: column; align-items: center; min-width: 84px; padding: 8px 12px; border-radius: 10px;
+  background: rgba(255, 255, 255, .04); border: 1px solid var(--line); font: 600 11px/1.2 var(--body); color: var(--dim); letter-spacing: .14em; text-transform: uppercase; }
+.pstats b { font: 700 20px/1.1 var(--display); color: #fff; letter-spacing: .04em; margin-bottom: 3px; }
+.pbtns { display: flex; flex-direction: column; gap: 10px; align-items: stretch; width: min(520px, 100%); margin: 16px auto 0; }
+.pbtns > .btn { width: 100%; }
+.prow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.prow .btn { width: 100%; min-width: 0; font-size: 12px; padding-left: 6px; padding-right: 6px; white-space: nowrap; }
+@media (max-width: 560px) {
+  .prow { grid-template-columns: 1fr; }
+  .pstats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .pstats span { min-width: 0; padding: 7px 4px; font-size: 9px; letter-spacing: .08em; }
+  .pstats b { font-size: 15px; }
+}
+/* tutorial hints step aside while a menu covers the run */
+body:has(#pause:not(.hidden)) #hint, body:has(#levelup:not(.hidden)) #hint { opacity: 0 !important; }
 .build { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; width: 100%; }
 .bi { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 10px; background: rgba(255, 255, 255, .04); border: 1px solid color-mix(in srgb, var(--c) 35%, transparent); }
 .bi span { color: var(--c); font-size: 18px; width: 22px; text-align: center; }
