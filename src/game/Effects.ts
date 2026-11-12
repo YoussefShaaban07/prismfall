@@ -231,7 +231,8 @@ export class Effects {
   }
 
   /** Project active shockwaves into the distortion pass uniforms. */
-  writeShocks(dt: number, waves: THREE.Vector4[], aspect: number) {
+  /** Returns how many shockwaves are live, so the distortion pass can switch off when idle. */
+  writeShocks(dt: number, waves: THREE.Vector4[], aspect: number): number {
     const v = this.v;
     const v2 = new THREE.Vector3();
     for (let i = this.shocks.length - 1; i >= 0; i--) {
@@ -249,6 +250,7 @@ export class Effects {
       const rx = (v2.x * 0.5 + 0.5 - cx) * aspect, ry = v2.y * 0.5 + 0.5 - cy;
       waves[i].set(cx, cy, Math.hypot(rx, ry), s.k * (1 - p));
     }
+    return Math.min(8, this.shocks.length);
   }
 
   text(x: number, y: number, z: number, txt: string, cls = '') {

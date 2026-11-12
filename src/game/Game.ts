@@ -622,11 +622,34 @@ export class Game {
     this.boss.sync(this.time, dt);
     this.proj.sync(this.time);
     this.pickups.sync(this.time);
-    this.fx.writeShocks(dt, this.r.distort.uniforms.uWaves.value as THREE.Vector4[], this.r.width / this.r.height);
+    this.updateDistort(dt);
     const ps = this.r.pointScale();
     this.particles.mat.uniforms.uScale.value = ps;
     this.smoke.mat.uniforms.uScale.value = ps;
     if (render) this.r.render(this.time);
+  }
+
+  private hazeV = new THREE.Vector3();
+  private hazeV2 = new THREE.Vector3();
+  /** Shockwaves plus engine heat haze in the hangar; the full-screen pass only runs when either is live. */
+  private updateDistort(dt: number) {
+    const R = this.r;
+    const u = R.distort.uniforms;
+    const live = this.fx.writeShocks(dt, u.uWaves.value as THREE.Vector4[], R.width / R.height);
+    const haze = u.uHaze.value as THREE.Vector4;
+    haze.w = 0;
+    if (this.state === 'menu' && this.hangarOpen && this.showShip && this.showFlames.length && this.showroom.visible) {
+      const c = this.hazeV.set(0, 0, 0);
+      for (const f of this.showFlames) c.add(f.getWorldPosition(this.hazeV2));
+      c.multiplyScalar(1 / this.showFlames.length);
+      const top = this.hazeV2.copy(c);
+      top.y += 1.6;
+      top.project(R.camera);
+      c.project(R.camera);
+      if (c.z < 1) haze.set(c.x * 0.5 + 0.5, c.y * 0.5 + 0.5, Math.max(0.03, Math.abs(top.y - c.y) * 0.5), this.settings.calm ? 0.4 : 1);
+    }
+    u.uTime.value = this.time % 1000;
+    R.distort.enabled = live > 0 || haze.w > 0;
   }
 
   /** The ship shows its wounds: cracks open below half hull and widen toward zero; hits flash it. */
@@ -687,7 +710,7 @@ export class Game {
       this.pickups.sync(this.time);
     }
     this.lighting.update(this.state === 'play' ? dt : 0.016);
-    this.fx.writeShocks(this.state === 'play' ? dt : 0.016, this.r.distort.uniforms.uWaves.value as THREE.Vector4[], this.r.width / this.r.height);
+    this.updateDistort(this.state === 'play' ? dt : 0.016);
     const ps = this.r.pointScale();
     this.particles.mat.uniforms.uScale.value = ps;
     this.smoke.mat.uniforms.uScale.value = ps;

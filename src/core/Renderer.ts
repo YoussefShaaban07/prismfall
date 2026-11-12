@@ -58,13 +58,26 @@ const DistortShader = {
     tDiffuse: { value: null as THREE.Texture | null },
     uWaves: { value: Array.from({ length: 8 }, () => new THREE.Vector4(0, 0, 0, 0)) },
     uAspect: { value: 1 },
+    /** heat haze: xy screen uv of the heat source, z radius (uv height), w strength */
+    uHaze: { value: new THREE.Vector4(0, 0, 0, 0) },
+    uTime: { value: 0 },
   },
   vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
   fragmentShader: /* glsl */ `
-    uniform sampler2D tDiffuse; uniform vec4 uWaves[8]; uniform float uAspect; varying vec2 vUv;
+    uniform sampler2D tDiffuse; uniform vec4 uWaves[8]; uniform float uAspect; uniform vec4 uHaze; uniform float uTime; varying vec2 vUv;
     void main(){
       vec2 off = vec2(0.0);
       float glow = 0.0;
+      if (uHaze.w > 0.0) {
+        // shimmer rising off the heat source: strongest just above it, wobbling upward over time
+        vec2 d = vUv - uHaze.xy;
+        d.x *= uAspect;
+        float up = clamp(d.y / uHaze.z, -0.3, 1.0);
+        float r = length(vec2(d.x, (d.y - uHaze.z * 0.35) * 0.7)) / uHaze.z;
+        float k = (1.0 - smoothstep(0.25, 1.0, r)) * uHaze.w * (0.6 + 0.4 * up);
+        vec2 q = vUv * vec2(uAspect, 1.0) / uHaze.z;
+        off += vec2(sin(q.y * 9.0 - uTime * 7.0 + sin(q.x * 5.0)), cos(q.x * 7.0 + q.y * 4.0 - uTime * 5.5)) * 0.0035 * k;
+      }
       for (int i = 0; i < 8; i++) {
         vec4 w = uWaves[i];
         if (w.w <= 0.0) continue;
