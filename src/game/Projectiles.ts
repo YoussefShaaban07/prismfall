@@ -28,6 +28,8 @@ export class Projectiles {
   shotMesh: THREE.InstancedMesh;
   shotCore: THREE.InstancedMesh;
   shotTail: THREE.InstancedMesh;
+  /** dark outline between halo and core: keeps enemy fire readable over bright explosions */
+  shotRim: THREE.InstancedMesh;
   private m = new THREE.Matrix4();
   private q = new THREE.Quaternion();
   private e = new THREE.Euler();
@@ -78,6 +80,18 @@ export class Projectiles {
     tm.opacity = 0.35;
     tm.blending = THREE.AdditiveBlending;
     tm.depthWrite = false;
+    const rg = new THREE.RingGeometry(0.2, 0.31, 20);
+    rg.rotateX(-Math.PI / 2);
+    this.shotRim = instanced(rg, 900, scene);
+    const rm = this.shotRim.material as THREE.MeshBasicMaterial;
+    rm.transparent = true;
+    rm.opacity = 0.82;
+    rm.depthWrite = false;
+    rm.side = THREE.DoubleSide;
+    // draw order among transparents: additive halo + tail, then the dark rim on top of them
+    this.shotMesh.renderOrder = 4;
+    this.shotTail.renderOrder = 4;
+    this.shotRim.renderOrder = 5;
   }
 
   bolt(x: number, z: number, angle: number, speed: number, dmg: number, pierce: number, color: THREE.Color) {
@@ -275,6 +289,11 @@ export class Projectiles {
       this.shotCore.setMatrixAt(i, this.m);
       this.c.copy(s.color).multiplyScalar(0.7).addScalar(0.35);
       this.shotCore.setColorAt(i, this.c);
+      // the rim takes a deep shade of the shot's own hue so colours stay distinguishable
+      this.m.compose(this.p.set(s.x, 1.02, s.z), this.q, this.s.set(s.size, s.size, s.size));
+      this.shotRim.setMatrixAt(i, this.m);
+      this.c.copy(s.color).multiplyScalar(0.04);
+      this.shotRim.setColorAt(i, this.c);
     }
     for (let i = 0; i < this.shots.length; i++) {
       const s = this.shots[i];
@@ -285,7 +304,7 @@ export class Projectiles {
       this.shotTail.setMatrixAt(i, this.m);
       this.shotTail.setColorAt(i, s.color);
     }
-    for (const mesh of [this.shotMesh, this.shotCore, this.shotTail]) {
+    for (const mesh of [this.shotMesh, this.shotCore, this.shotTail, this.shotRim]) {
       mesh.count = this.shots.length;
       mesh.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
