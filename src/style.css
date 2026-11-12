@@ -36,10 +36,18 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 .prelogo, .logo {
   font-family: var(--display); font-weight: 900; letter-spacing: .14em; line-height: 1;
   font-size: clamp(44px, 11vw, 120px);
-  background: linear-gradient(100deg, #fff 0%, #bff8ff 30%, var(--cyan) 45%, var(--violet) 65%, var(--pink) 85%);
+  /* a glint sweeps across the lettering every few seconds, over the prism gradient */
+  background:
+    linear-gradient(110deg, transparent 42%, rgba(255, 255, 255, .95) 49%, #fff 50%, rgba(255, 255, 255, .95) 51%, transparent 58%) no-repeat,
+    linear-gradient(100deg, #fff 0%, #bff8ff 30%, var(--cyan) 45%, var(--violet) 65%, var(--pink) 85%);
+  background-size: 300% 100%, 100% 100%;
+  background-position: 160% 0, 0 0;
   -webkit-background-clip: text; background-clip: text; color: transparent;
   filter: drop-shadow(0 0 24px rgba(94, 242, 255, .35)) drop-shadow(0 0 60px rgba(255, 79, 216, .25));
+  animation: logoGlint 7s cubic-bezier(.5, 0, .3, 1) 1.2s infinite;
 }
+@keyframes logoGlint { 0% { background-position: 160% 0, 0 0; } 22%, 100% { background-position: -60% 0, 0 0; } }
+@media (prefers-reduced-motion: reduce) { .prelogo, .logo { animation: none; } }
 .prelogo { font-size: clamp(34px, 8vw, 72px); }
 .logo span, .prelogo span { font-weight: 500; }
 .loadbar { width: min(360px, 70vw); height: 4px; background: rgba(255, 255, 255, .1); border-radius: 4px; overflow: hidden; }
