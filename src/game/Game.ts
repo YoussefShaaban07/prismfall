@@ -1769,12 +1769,30 @@ export class Game {
       this.fx.ring(ex, ez, 30, 0xffffff, 0.5, 2);
       this.after(0.6, () => {
         const hues = [0x5ef2ff, 0xff4fd8, 0xffd84f, 0x7dff9b, 0xb48bff];
-        hues.forEach((h, i) => this.fx.ring(ex, ez, 30 + i * 12, h, 1.2 + i * 0.25, 1.2));
+        hues.forEach((h, i) => this.fx.ring(ex, ez, 30 + i * 12, h, 1.2 + i * 0.25, 0.55));
         this.fx.shock(ex, ez, 60, 2.5, 1.6);
         this.ui.flash('rgba(255,255,255,0.9)');
         for (const h of hues) this.particles.burst(ex, 6, ez, new THREE.Color(h).multiplyScalar(2.2), 40, 26, 1.4, 0.9, 1);
         this.lighting.flash(ex, ez, 0xffffff, 250, 80, 2);
         this.audio.sfx('bomb');
+        this.ui.whiteout();
+        // the crystal itself: shards in every hue fly out and tumble down, catching the light as they fall
+        for (const h of hues) this.debris.spawn(ex, 5, ez, new THREE.Color(h).lerp(new THREE.Color(1, 1, 1), 0.35), 14, 20, 1.6);
+        for (let k = 0; k < 8; k++) {
+          this.after(0.25 + k * 0.17, () => {
+            for (let i = 0; i < 6; i++) {
+              const a = rand(0, TAU), r = rand(4, 26);
+              const x = ex + Math.cos(a) * r, z = ez + Math.sin(a) * r;
+              // a glint: a hard white star that pops and dies almost at once, like light off a turning facet
+              this.particles.emit(x, rand(0.5, 7), z, 0, -1, 0, rand(0.12, 0.22), rand(0.5, 0.9), this.wreckC.setRGB(4, 4, 4.4), 0, 0);
+            }
+          });
+        }
+        // a slower second wave, prismatic, rolling out after the flash has burned off
+        this.after(0.9, () => {
+          [0x5ef2ff, 0xff4fd8, 0xffd84f].forEach((h, i) => this.fx.ring(ex, ez, 48 + i * 7, h, 2 + i * 0.25, 0.45));
+          this.fx.shock(ex, ez, 90, 2.4, 0.8);
+        });
       });
     }
     void col;

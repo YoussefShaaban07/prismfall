@@ -166,6 +166,10 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 .banner .b2 { font-family: var(--display); font-size: clamp(11px, 1.5vw, 15px); letter-spacing: .4em; color: var(--c); margin-top: 8px; text-shadow: 0 0 10px var(--c); }
 #flash { position: fixed; inset: 0; opacity: 0; pointer-events: none; z-index: 3; }
 #flash.go { animation: flashGo .6s ease-out; }
+#whiteout { position: fixed; inset: 0; opacity: 0; pointer-events: none; z-index: 3;
+  background: radial-gradient(circle at 50% 50%, #fff 0%, #f4fbff 45%, #dff3ff 100%); mix-blend-mode: screen; }
+#whiteout.go { animation: whiteout 2.6s cubic-bezier(.3, 0, .2, 1); }
+@keyframes whiteout { 0% { opacity: 0; } 12% { opacity: .95; } 30% { opacity: .9; } 100% { opacity: 0; } }
 @keyframes flashGo { 0% { opacity: 1; } 100% { opacity: 0; } }
 body.lowhp #game { animation: none; }
 body.lowhp #ui::before {
@@ -583,3 +587,7 @@ body.photo #hud .top, body.photo .toast { visibility: hidden !important; }
   background: radial-gradient(closest-side, rgba(255, 40, 70, .6), rgba(255, 40, 70, .22) 50%, transparent); mix-blend-mode: screen; }
 #hitdirs i.go { animation: hitdir .7s ease-out; }
 @keyframes hitdir { 0% { opacity: 1; } 100% { opacity: 0; } }
+
+/* long scores shrink to fit the card instead of spilling off a phone screen */
+#over .st.big b { font-size: min(36px, calc(115cqi / var(--len, 8))); }
+#over .st.big { container-type: inline-size; }

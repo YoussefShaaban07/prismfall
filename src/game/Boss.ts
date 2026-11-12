@@ -307,7 +307,7 @@ export class BossController {
     const a = rand(0, TAU);
     const p = g.spawnPoint(18, 22, a);
     const e = g.enemies.spawn('boss', p.x, p.z)!;
-    const hp = (final ? 2600 : 850 + 550 * idx) * hpScale(g.T) * (g.endless ? 1.5 : 1);
+    const hp = (final ? 2200 : 850 + 550 * idx) * hpScale(g.T) * (g.endless ? 1.5 : 1);
     e.hp = e.maxHp = hp;
     this.stage = 0;
     e.r = final ? 4.2 : 3.4;

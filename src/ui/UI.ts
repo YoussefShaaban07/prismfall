@@ -543,6 +543,15 @@ export class UI {
     setTimeout(() => el.classList.remove('on'), 2600);
   }
 
+  /** a slow white-out: swells in, holds, then lets the scene bleed back (used once, when the Core dies) */
+  whiteout() {
+    if (this.settings.calm) return;
+    const f = $('#whiteout');
+    f.classList.remove('go');
+    void f.offsetWidth;
+    f.classList.add('go');
+  }
+
   flash(color = 'rgba(255,255,255,0.7)') {
     if (this.settings.calm) return;
     const f = $('#flash');
@@ -871,7 +880,7 @@ export class UI {
     $('#over').classList.toggle('win', st.victory);
     const ev = [...st.weapons].map(([id, lv]) => `<span style="color:${WEAPONS[id].color}">${WEAPONS[id].icon} ${st.evolved.has(id) ? WEAPONS[id].evoName : WEAPONS[id].name + ' ' + lv}</span>`).join('');
     $('#stats').innerHTML = `
-      <div class="st big"><label>${t('SCORE')}</label><b>${fmtNum(st.score)}</b>${st.newBest ? `<em>${t('NEW BEST')}</em>` : ''}</div>
+      <div class="st big"><label>${t('SCORE')}</label><b style="--len:${fmtNum(st.score).length}">${fmtNum(st.score)}</b>${st.newBest ? `<em>${t('NEW BEST')}</em>` : ''}</div>
       <div class="st"><label>${t('SURVIVED')}</label><b>${fmtTime(st.time)}</b></div>
       <div class="st"><label>${t('LEVEL')}</label><b>${st.level}</b></div>
       <div class="st"><label>${t('KILLS')}</label><b>${fmtNum(st.kills)}</b></div>
@@ -909,6 +918,7 @@ function slot(icon: string, color: string, lv: number, evo: boolean, passive = f
 
 const TEMPLATE = /* html */ `
 <div id="flash"></div>
+<div id="whiteout"></div>
 <div id="letterbox"><i></i><i></i></div>
 <div id="bossCard" class="bosscard"><div class="bc1"></div><div class="bc2"></div></div>
 <div id="floaters"></div>
