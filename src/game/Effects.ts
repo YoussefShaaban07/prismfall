@@ -46,6 +46,33 @@ function scorchMaterial() {
   });
 }
 
+/** Charge warning: thin rails, chevrons streaming toward the target, and a fill that races to the tip. */
+function teleMaterial() {
+  return new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: { uP: { value: 0 }, uTime: { value: 0 }, uLen: { value: 15 }, uW: { value: 1 } },
+    vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: /* glsl */ `
+      uniform float uP; uniform float uTime; uniform float uLen; uniform float uW; varying vec2 vUv;
+      void main(){
+        float along = 1.0 - vUv.y;                       // 0 at the attacker, 1 at the far end
+        float s = along * uLen;                          // metres along the lane
+        float x = abs(vUv.x - 0.5) * uW;                 // metres from the centre line
+        float hw = uW * 0.5;
+        float rail = exp(-pow((x - hw + 0.07) / 0.045, 2.0));
+        float c = fract((s + x * 0.9) / 1.3 - uTime * 3.2); // apex leads, pointing where it will charge
+        float chev = smoothstep(0.0, 0.08, c) * (1.0 - smoothstep(0.18, 0.28, c)) * step(x, hw * 0.62);
+        float fill = step(along, uP) * 0.16;
+        float head = exp(-pow((along - uP) * uLen / 0.35, 2.0)) * step(0.02, uP) * 0.9;
+        float ends = smoothstep(0.0, 0.03, along) * (1.0 - smoothstep(0.88, 1.0, along));
+        float blink = uP > 0.72 ? 0.55 + 0.45 * step(0.5, fract(uTime * 14.0)) : 1.0;
+        float a = (rail * 0.85 + chev * 0.8 + fill + head) * ends * blink;
+        vec3 col = mix(vec3(1.0, 0.18, 0.28), vec3(1.0, 0.7, 0.55), head);
+        gl_FragColor = vec4(col * a * 1.6, 1.0);
+      }`,
+  });
+}
+
 function radialTexture(inner: string, outer: string) {
   const c = document.createElement('canvas');
   c.width = c.height = 128;
@@ -176,10 +203,7 @@ export class Effects {
   telegraph(x: number, z: number, angle: number, length: number, width: number, dur: number) {
     let t = this.teles.find((q) => !q.active);
     if (!t) {
-      const mesh = new THREE.Mesh(
-        this.teleGeo,
-        new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.15, 0.25).multiplyScalar(2), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }),
-      );
+      const mesh = new THREE.Mesh(this.teleGeo, teleMaterial());
       mesh.renderOrder = 3;
       this.scene.add(mesh);
       t = { mesh, t: 0, dur, active: false };
@@ -188,6 +212,10 @@ export class Effects {
     t.mesh.position.set(x, 0.12, z);
     t.mesh.rotation.set(0, angle, 0);
     t.mesh.scale.set(width, 1, length);
+    const u = (t.mesh.material as THREE.ShaderMaterial).uniforms;
+    u.uLen.value = length;
+    u.uW.value = width;
+    u.uP.value = 0;
     t.t = 0;
     t.dur = dur;
     t.active = true;
@@ -322,7 +350,9 @@ export class Effects {
         t.mesh.visible = false;
         continue;
       }
-      (t.mesh.material as THREE.MeshBasicMaterial).opacity = 0.25 + 0.35 * Math.abs(Math.sin(t.t * 18));
+      const u = (t.mesh.material as THREE.ShaderMaterial).uniforms;
+      u.uP.value = t.t / t.dur;
+      u.uTime.value += dt;
     }
     for (const d of this.decals) {
       if (!d.active) continue;
