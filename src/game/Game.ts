@@ -1178,7 +1178,7 @@ export class Game {
     // swarm surges: a closing ring around the player
     if (T >= this.nextSurge) {
       this.nextSurge += 52;
-      if (!this.boss.e) {
+      if (!this.boss.e && this.bossWarn <= 0) {
         const n = Math.min(42, 14 + Math.floor(T / 12));
         const type: EType = T > 200 && chance(0.5) ? 'shard' : 'drone';
         for (let i = 0; i < n; i++) {
@@ -1197,7 +1197,8 @@ export class Game {
     }
 
     // elites: tougher golden variants that always drop supplies
-    if (T >= this.nextElite) {
+    // (held back while a mothership is announcing or making its entrance)
+    if (T >= this.nextElite && this.bossWarn <= 0 && this.cineT <= 0) {
       this.nextElite += this.mods.has('elites') ? 35 : 70;
       const pool: EType[] = T > 240 ? ['brute', 'wraith', 'spitter'] : ['brute', 'spitter', 'meteor'];
       const p = this.spawnPoint(20, 26);

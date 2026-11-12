@@ -393,12 +393,13 @@ export class BossController {
     if (e.spawnT > 0) {
       // atmospheric entry: heat glow and a smoke column trailing above
       this.g.particles.fireball(e.x + rand(-1.5, 1.5), y + 1, e.z + rand(-1.5, 1.5), 1.2, 2);
-      this.g.smoke.trail(e.x + rand(-2, 2), y + 3, e.z + rand(-2, 2), 2.5, 2.4);
+      // the smoke column stays up high so the landing zone isn't left fogged in for the fight
+      if (y > 8) this.g.smoke.trail(e.x + rand(-2, 2), y + 3, e.z + rand(-2, 2), 2.5, 1.8);
       if (!this.landed && e.spawnT < 0.12) {
         this.landed = true;
         this.g.fx.shock(e.x, e.z, 30, 1.8, 0.9);
         this.g.fx.ring(e.x, e.z, 20, this.color, 0.8, 1.6);
-        this.g.smoke.puff(e.x, 0.5, e.z, 26, 5, 2.4);
+        this.g.smoke.puff(e.x, 0.5, e.z, 22, 3.6, 1.7);
         this.g.lighting.flash(e.x, e.z, this.color, 80, 40, 0.9);
         this.g.shake = Math.max(this.g.shake, 1.2);
         this.g.audio.sfx('bomb');
