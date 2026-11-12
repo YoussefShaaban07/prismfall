@@ -39,7 +39,7 @@ A 3D neon survival shooter set on a Mars colony. A crystal swarm has fallen from
 | Pick upgrade | 1 / 2 / 3, R to reroll | X / Y / B, LB to reroll | Tap card |
 | Pause | Esc / P | Start | ❚❚ button |
 | Mute | M | | |
-| Photo mode | F2 (drag / arrows to orbit, wheel to zoom) | | Pause → Photo Mode |
+| Photo mode | F2 (drag / arrows to orbit, wheel to zoom, L look, F focus, −/+ blur, H hide UI, P save PNG) | | Pause → Photo Mode |
 | Performance overlay | F3 (FPS, GPU ms, render scale) | | |
 
 ## Run locally
