@@ -537,7 +537,7 @@ export class UI {
     wrap.innerHTML = cards
       .map(
         (c, i) => `
-      <button class="card ${c.special ?? ''}" style="--c:${c.color};--d:${i * 70}ms" data-i="${i}">
+      <button class="card ${c.special ?? ''}" style="--c:${c.color};--d:${i * 110}ms" data-i="${i}">
         <div class="key">${i + 1}</div>
         <div class="ic">${c.iconId && this.icons.get(c.iconId) ? `<img src="${this.icons.get(c.iconId)}" alt="" />` : `<span>${c.icon}</span>`}</div>
         <div class="txt">
