@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Assets } from '../core/Assets';
-import { heroMapper } from '../core/Assets';
+import { addRim, heroMapper, type RimUniforms } from '../core/Assets';
 import type { Input } from '../core/Input';
 import { angleDiff, clamp, damp } from '../core/util';
 import { ARENA_RADIUS, xpForLevel, type PassiveId, type WeaponId } from './data';
@@ -65,6 +65,7 @@ export class Player {
     this.assets = assets;
     this.scene = scene;
     this.ship = assets.object('craft_speederA', 2.4, heroMapper(0x37e8ff, 0.9));
+    this.hookHull();
     this.ship.rotation.y = SHIP_YAW;
     const holder = new THREE.Group();
     holder.add(this.ship);
@@ -162,12 +163,34 @@ export class Player {
     }
   }
 
+  /** Hull materials share the enemy damage shader (no rim): cracks open below half hull, hits flash. */
+  private hullU: RimUniforms[] = [];
+  private hookHull() {
+    this.hullU = [];
+    this.ship.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      const mat = m.material as THREE.MeshStandardMaterial;
+      if (!mat.isMeshStandardMaterial || mat.userData.rim) return;
+      addRim(mat, 0xff4a1a, 0); // rim colour only tints the cracks (rim strength 0)
+      this.hullU.push(mat.userData.rim as RimUniforms);
+    });
+  }
+  /** dmg: 0 healthy → 1 nearly destroyed; flash: 0..1 hit flash */
+  setHullLook(dmg: number, flash: number) {
+    for (const u of this.hullU) {
+      u.uDamage.value = dmg;
+      u.uFlash.value = flash;
+    }
+  }
+
   setShip(def: ShipDef) {
     if (this.shipDef.id === def.id && this.ship.userData.built) return;
     this.shipDef = def;
     const holder = this.root.userData.holder as THREE.Group;
     holder.remove(this.ship);
     this.ship = this.assets.object(def.model, 2.4, heroMapper(def.accent, 0.9));
+    this.hookHull();
     this.ship.rotation.y = SHIP_YAW;
     this.ship.userData.built = true;
     holder.add(this.ship);

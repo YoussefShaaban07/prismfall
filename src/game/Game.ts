@@ -616,6 +616,7 @@ export class Game {
     this.time += dt;
     if (this.state === 'play') this.update(dt);
     this.updateCamera(dt);
+    this.updateHullLook();
     this.arena.update(dt, this.time, this.player.x, this.player.z, 0);
     this.enemies.sync(this.time);
     this.boss.sync(this.time, dt);
@@ -626,6 +627,14 @@ export class Game {
     this.particles.mat.uniforms.uScale.value = ps;
     this.smoke.mat.uniforms.uScale.value = ps;
     if (render) this.r.render(this.time);
+  }
+
+  /** The ship shows its wounds: cracks open below half hull and widen toward zero; hits flash it. */
+  private updateHullLook() {
+    const P = this.player;
+    const frac = P.maxHp > 0 ? P.hp / P.maxHp : 1;
+    const dmg = this.state === 'menu' ? 0 : frac < 0.5 ? 0.18 + (0.5 - frac) * 1.6 : 0;
+    P.setHullLook(dmg, this.hurtT > 0 ? (this.hurtT / 0.25) * 0.5 : 0);
   }
 
   private loop = (now: number) => {
@@ -667,6 +676,7 @@ export class Game {
     }
 
     this.updateCamera(dt);
+    this.updateHullLook();
     this.arena.placeSun(this.r.camera, this.night);
     this.updateShafts(dt);
     this.arena.update(dt, this.time, this.player.x, this.player.z, this.boss.e ? 1 : this.bossWarn > 0 ? 0.6 : 0);
