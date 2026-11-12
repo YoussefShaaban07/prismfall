@@ -561,6 +561,7 @@ export class UI {
   /* ---------- level up ---------- */
   showLevelUp(level: number, cards: CardView[], rerolls: number, onPick: (i: number) => void, onReroll: () => void) {
     this.onPick = onPick;
+    $('#cards').classList.remove('picked');
     this.onReroll = onReroll;
     $('#lvlNum').textContent = String(level);
     const wrap = $('#cards');
@@ -599,6 +600,16 @@ export class UI {
     const cb = this.onPick;
     this.onPick = null;
     cards[i].classList.add('chosen');
+    $('#cards').classList.add('picked');
+    // a burst of the card's colour that outlives the overlay and fades over the resuming game
+    const r = cards[i].getBoundingClientRect();
+    const b = document.createElement('div');
+    b.className = 'pickburst';
+    b.style.left = `${r.left + r.width / 2}px`;
+    b.style.top = `${r.top + r.height / 2}px`;
+    b.style.setProperty('--c', getComputedStyle(cards[i]).getPropertyValue('--c') || '#5ef2ff');
+    $('#ui').appendChild(b);
+    setTimeout(() => b.remove(), 800);
     setTimeout(() => {
       this.hide('#levelup');
       cb(i);

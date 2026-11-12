@@ -348,6 +348,11 @@ export class Pickups {
 
   sync(time: number) {
     this.gemTime.value = time % 1000;
+    // the death cam orbits low and close: a capsule parked in its path would fill the whole lens
+    if (this.g.player.dead) {
+      const c = this.g.r.camera.position;
+      for (const p of this.powers) if (Math.hypot(c.x - p.x, c.z - p.z) < 7) p.obj.visible = p.beam.visible = false;
+    }
     const nt = [0, 0, 0, 0];
     let nf = 0;
     for (let i = 0; i < this.gems.length; i++) {

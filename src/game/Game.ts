@@ -1259,7 +1259,9 @@ export class Game {
       if (this.victoryT <= 0) this.director(dt);
       this.weapons.update(dt);
     } else {
+      const before = this.deathT;
       this.deathT -= dt;
+      this.burnWreck(dt, before);
       if (this.deathT <= 0) this.endRun(false);
     }
 
@@ -1835,8 +1837,9 @@ export class Game {
     this.shake = 1.4;
     this.ui.flash('rgba(255,80,80,0.6)');
     this.audio.sfx('bossdie');
-    this.particles.burst(P.x, 1, P.z, this.colors.cyan, 90, 18, 1.2, 1.2, 0.8);
-    this.particles.burst(P.x, 1, P.z, this.colors.orange, 60, 12, 1, 1, 0.8);
+    // finer, faster sparks rather than big soft blobs: the death cam sits low, so anything large fills the lens
+    this.particles.burst(P.x, 1, P.z, this.colors.cyan, 80, 20, 1.1, 0.6, 0.8);
+    this.particles.burst(P.x, 1, P.z, this.colors.orange, 60, 13, 1, 0.55, 0.8);
     this.debris.spawn(P.x, 1, P.z, new THREE.Color(0.9, 0.9, 0.95), 24, 12, 1.4);
     this.particles.fireball(P.x, 1, P.z, 2.2, 26);
     this.fx.shock(P.x, P.z, 20, 1.8, 1.0);
@@ -1844,6 +1847,35 @@ export class Game {
     this.smoke.puff(P.x, 1, P.z, 24, 2.5, 3);
     this.fx.ring(P.x, P.z, 14, 0x5ef2ff, 1, 4);
     this.fx.scorch(P.x, P.z, 4);
+  }
+
+  private wreckC = new THREE.Color();
+  /** While the death cam circles, the wreck keeps burning: embers stream up, a sooty column climbs, and
+   *  two late secondary blasts cook off so the moment doesn't go still before the results screen. */
+  private burnWreck(dt: number, before: number) {
+    const P = this.player, t = this.deathT;
+    const heat = Math.max(0, Math.min(1, t / 2.2));
+    for (let i = 0, n = Math.random() < dt * 60 * (0.6 + heat) ? 2 : 0; i < n; i++) {
+      // embers: tiny, hot, rising and drifting, flickering out at different heights
+      this.particles.emit(P.x + rand(-1.2, 1.2), rand(0.3, 1), P.z + rand(-1.2, 1.2), rand(-0.8, 0.8), rand(2.5, 5.5), rand(-0.8, 0.8),
+        rand(0.6, 1.3), rand(0.1, 0.2), this.wreckC.setRGB(3.4, rand(1.2, 1.9), 0.4), 1.4, 1.5);
+    }
+    // the fire itself: a low, flickering glow that sits on the wreck and dies down with the timer
+    if (Math.random() < dt * 30) this.particles.emit(P.x + rand(-0.3, 0.3), 0.45, P.z + rand(-0.3, 0.3), 0, 0.4, 0, 0.16, rand(1.6, 2.4) * (0.5 + heat * 0.5), this.wreckC.setRGB(1.7 * heat + 0.3, 0.6 * heat + 0.1, 0.15), 0, 0);
+    if (Math.random() < dt * 14) this.smoke.trail(P.x + rand(-0.6, 0.6), 1.2, P.z + rand(-0.6, 0.6), rand(1.4, 2.2), rand(2.2, 3), 0.4, 2.6);
+    if (Math.random() < dt * 8) this.particles.emit(P.x + rand(-0.5, 0.5), 0.6, P.z + rand(-0.5, 0.5), rand(-0.4, 0.4), rand(1.5, 3), rand(-0.4, 0.4), rand(0.3, 0.5), rand(0.8, 1.3), this.wreckC.setRGB(3, 1.1, 0.3), 3, 2);
+    for (const at of [1.55, 0.95]) {
+      if (before > at && t <= at) {
+        const a = rand(0, TAU), d = rand(1, 2);
+        const x = P.x + Math.cos(a) * d, z = P.z + Math.sin(a) * d;
+        this.particles.fireball(x, 0.8, z, at > 1 ? 1.2 : 0.9, at > 1 ? 14 : 10);
+        this.debris.spawn(x, 0.8, z, new THREE.Color(0.85, 0.88, 0.95), 8, 9, 1);
+        this.fx.shock(x, z, 7, 0.7, 0.4);
+        this.lighting.flash(x, z, 0xff8a40, 45, 14, 0.4);
+        this.shake = Math.max(this.shake, 0.5);
+        this.audio.sfx('boom');
+      }
+    }
   }
 
   private onDash() {
@@ -1955,6 +1987,18 @@ export class Game {
       // the world drains to monochrome and floods with the weapon's colour while time crawls
       this.evoWash.t = this.evoWash.dur;
       this.evoWash.col.copy(col);
+    } else {
+      // an ordinary pick still lands on the ship: a quick ring and a column of motes in the card's colour
+      const P = this.player;
+      const col = new THREE.Color(describe(c, P).color);
+      this.fx.ring(P.x, P.z, 4, col, 0.4, 1);
+      this.particles.ring(P.x, 0.4, P.z, col.clone().multiplyScalar(2), 28, 6, 0.35, 0.45);
+      const hot = col.clone().multiplyScalar(2.4);
+      for (let k = 0; k < 18; k++) {
+        const a = rand(0, TAU), r = rand(0.6, 1.4);
+        this.particles.emit(P.x + Math.cos(a) * r, rand(0.2, 0.8), P.z + Math.sin(a) * r, 0, rand(3, 6), 0, rand(0.4, 0.7), rand(0.14, 0.24), hot, 2.5, 0);
+      }
+      this.lighting.flash(P.x, P.z, col, 25, 9, 0.3);
     }
     this.pendingLevels--;
     this.player.inv = Math.max(this.player.inv, 0.8);
