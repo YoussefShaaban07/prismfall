@@ -615,6 +615,7 @@ export class Game {
     if (this.r.renderScale < 1) this.r.setRenderScale(1);
     this.time += dt;
     if (this.state === 'play') this.update(dt);
+    this.hurtT = Math.max(0, this.hurtT - dt);
     this.updateCamera(dt);
     this.updateHullLook();
     this.arena.update(dt, this.time, this.player.x, this.player.z, 0);
