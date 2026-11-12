@@ -1520,6 +1520,7 @@ export class Game {
       this.hazards.blast(e.x, e.z, 5.5, 0.7, e.dmg * 1.2, 0xff4a2a);
     }
     this.smoke.puff(e.x, e.def.hover, e.z, big ? 7 : 2, big ? 1.4 : 0.6, big ? 1.8 : 1.0);
+    this.deathFlourish(e, col);
     if (big) this.particles.fireball(e.x, e.def.hover, e.z, 1.2, 12);
     if (big) {
       this.fx.shock(e.x, e.z, 6, 0.8, 0.45);
@@ -1558,6 +1559,70 @@ export class Game {
       this.ui.banner(tiers[this.combo], `${this.combo} combo · +${(this.combo * 25).toLocaleString()}`, '#ffd84f', 1500);
       this.score += this.combo * 25;
       this.audio.sfx('level');
+    }
+  }
+
+  /** Each species breaks apart in its own way, so a kill reads at a glance even in a crowd. */
+  private deathFlourish(e: Enemy, col: THREE.Color) {
+    const P = this.particles, y = e.def.hover + 0.3;
+    switch (e.type) {
+      case 'dart': {
+        // momentum carries it: a spray of sparks along its last heading
+        const sp = Math.hypot(e.vx, e.vz) || 1;
+        const ux = e.vx / sp, uz = e.vz / sp;
+        for (let i = 0; i < 10; i++) {
+          const v = rand(8, 20), j = rand(-0.25, 0.25);
+          P.emit(e.x, y, e.z, (ux + uz * j) * v, rand(0.5, 2), (uz - ux * j) * v, rand(0.25, 0.45), rand(0.18, 0.3), this.colors.yellow, 3, -6);
+        }
+        break;
+      }
+      case 'spitter': {
+        // ruptured plasma tanks: green droplets arc out and splash
+        for (let i = 0; i < 12; i++) {
+          const a = rand(0, TAU), v = rand(2, 6);
+          P.emit(e.x, y, e.z, Math.cos(a) * v, rand(4, 8), Math.sin(a) * v, rand(0.5, 0.8), rand(0.22, 0.34), this.colors.green, 0.5, -18);
+        }
+        this.fx.ring(e.x, e.z, 2.2, 0x4dff8a, 0.35, 2);
+        break;
+      }
+      case 'meteor':
+        // the shell cracks open: heavy rock chunks and a dust bloom
+        this.debris.spawn(e.x, e.def.hover, e.z, this.colors.debris, 6, 7, 1.3);
+        this.smoke.puff(e.x, 0.6, e.z, 4, 1.2, 1.6, 0.8);
+        break;
+      case 'shard':
+        // glass: a tinkle of white glints
+        for (let i = 0; i < 8; i++) {
+          const a = rand(0, TAU), v = rand(3, 9);
+          P.emit(e.x, y, e.z, Math.cos(a) * v, rand(1, 4), Math.sin(a) * v, rand(0.3, 0.6), rand(0.1, 0.18), this.colors.white, 2.5, -10);
+        }
+        break;
+      case 'wraith': {
+        // folds in on itself, then pops
+        for (let i = 0; i < 16; i++) {
+          const a = rand(0, TAU), r = rand(1.6, 2.6);
+          P.emit(e.x + Math.cos(a) * r, y + rand(-0.4, 0.6), e.z + Math.sin(a) * r, -Math.cos(a) * r * 5, 0, -Math.sin(a) * r * 5, 0.2, 0.3, this.colors.violet, 0);
+        }
+        this.fx.ring(e.x, e.z, 3, 0xb48cff, 0.3, 4);
+        break;
+      }
+      case 'turret':
+        // dug-in emplacement: a burning stump and a column of smoke
+        this.particles.fireball(e.x, 0.6, e.z, 0.8, 8);
+        this.smoke.puff(e.x, 1.2, e.z, 5, 0.5, 2.4, 0.9);
+        break;
+      case 'bomber':
+        // its own payload goes up
+        this.particles.fireball(e.x, y, e.z, 1, 10);
+        this.fx.ring(e.x, e.z, 3.2, 0xff8a2a, 0.35, 3);
+        break;
+      case 'drone':
+        // crystal drones shatter into a few spinning flakes of their own colour
+        for (let i = 0; i < 5; i++) {
+          const a = rand(0, TAU), v = rand(4, 8);
+          P.emit(e.x, y, e.z, Math.cos(a) * v, rand(2, 5), Math.sin(a) * v, rand(0.35, 0.55), rand(0.2, 0.3), col, 1.5, -12);
+        }
+        break;
     }
   }
 
