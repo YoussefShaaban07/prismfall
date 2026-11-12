@@ -114,6 +114,12 @@ export class Game {
   private last = performance.now();
   snapCam = false;
   private rimLights: THREE.PointLight[] = [];
+  private showRingMat!: THREE.MeshBasicMaterial;
+  private underGlow!: THREE.Mesh;
+  /** accent of whatever is on the showroom pad; lights and rings ease toward it */
+  private showAccent = new THREE.Color(0x5ef2ff);
+  private showAccentNow = new THREE.Color(0x5ef2ff);
+  private tmpC = new THREE.Color();
   private lookSmooth = new THREE.Vector3(0, 4, 0);
   private menuPath = new THREE.CatmullRomCurve3(
     [
@@ -346,6 +352,7 @@ export class Game {
     const pad = this.assets.object('platform_large', 7, heroMapper(0x5ef2ff, 0.3));
     this.showroom.add(pad);
     const ringMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.35, 0.95, 1).multiplyScalar(0.8), transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false });
+    this.showRingMat = ringMat;
     for (let i = 0; i < 2; i++) {
       const r = new THREE.Mesh(new THREE.TorusGeometry(3.3 + i * 0.5, 0.04, 8, 96), ringMat);
       r.rotation.x = Math.PI / 2;
@@ -365,6 +372,20 @@ export class Game {
     chrome.position.y = padTop;
     chrome.receiveShadow = true;
     this.showroom.add(chrome);
+    // hover under-glow pooled on the chrome, tinted by whatever sits on the pad
+    this.underGlow = new THREE.Mesh(
+      new THREE.CircleGeometry(3.1, 48).rotateX(-Math.PI / 2),
+      new THREE.ShaderMaterial({
+        transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+        uniforms: { uColor: { value: new THREE.Color(0x5ef2ff) }, uK: { value: 1 } },
+        vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+        fragmentShader: `uniform vec3 uColor; uniform float uK; varying vec2 vUv;
+          void main(){ float r = length(vUv - 0.5) * 2.0; float a = exp(-r * r * 14.0) * 0.7 + exp(-pow((r - 0.95) * 18.0, 2.0)) * 0.25;
+            gl_FragColor = vec4(uColor * a * uK, 1.0); }`,
+      }),
+    );
+    this.underGlow.position.y = padTop + 0.015;
+    this.showroom.add(this.underGlow);
     // turntable rim lights orbit the ship
     for (const c of [0x5ef2ff, 0xff4fd8]) {
       const l = new THREE.PointLight(c, 0, 12, 1.5);
@@ -399,10 +420,17 @@ export class Game {
       holder.add(f);
       this.showFlames.push(f);
     }
-    holder.position.y = 2.2;
+    this.showY = 1.45;
+    holder.position.y = this.showY;
+    holder.rotation.order = 'YXZ'; // yaw outermost so the pose's pitch and bank stay in the ship's frame
     this.showShip = holder;
     this.showroom.add(holder);
+    this.showAccent.set(def.accent);
+    this.showPose = true;
   }
+  /** ships strike a flying pose (nose up, gentle bank); codex creatures just turn */
+  private showPose = true;
+  private showY = 1.45;
   private showFlames: THREE.Mesh[] = [];
   private flameGeo = (() => {
     const g = new THREE.ConeGeometry(0.16, 1, 12, 1, true);
@@ -426,8 +454,11 @@ export class Game {
   private setShowModel(model: ModelName, size: number, mapper: ReturnType<typeof heroMapper>) {
     if (this.showShip) this.showroom.remove(this.showShip);
     this.showShip = this.assets.object(model, size, mapper);
-    this.showShip.position.y = 2.2;
+    // hover low over the pad so it reads as sitting on it (big models get a little more clearance)
+    this.showY = Math.max(1.45, size * 0.42 + 0.5);
+    this.showShip.position.y = this.showY;
     this.showroom.add(this.showShip);
+    this.showPose = false;
   }
 
   /** Codex preview: show an enemy or boss model on the showroom pad. */
@@ -435,10 +466,12 @@ export class Game {
     if (kind === 'enemy') {
       const d = ED[id as EType];
       this.setShowModel(d.model, Math.min(5, d.size * 2.4), alienMapper(d.color, 1.2, 1));
+      this.showAccent.set(d.color);
     } else if (kind === 'boss') {
       const i = Number(id);
       if (i === 3) this.setShowModel('rock_crystalsLargeA', 5, alienMapper(0x7ff6ff, 1.6, 0.7));
       else this.setShowModel(LOOKS[i].model, 5.2, alienMapper(LOOKS[i].color, 0.6, 0.7));
+      this.showAccent.set(i === 3 ? 0x7ff6ff : LOOKS[i].color);
     } else this.setShowShip(this.meta.ship);
   }
 
@@ -966,14 +999,27 @@ export class Game {
     this.updateDevils(dt);
     this.smoke.update(dt);
     const showcase = this.hangarOpen;
+    // the showroom takes on the colour of what's on the pad: one rim light in its accent, the other
+    // in a complementary hue, rings and under-glow following along
+    const acc = this.showAccentNow.lerp(this.showAccent, Math.min(1, dt * 4));
+    const comp = this.tmpC.copy(acc).offsetHSL(0.42, 0, 0);
     this.rimLights.forEach((l, i) => {
       const a = this.time * 0.8 + i * Math.PI;
-      l.position.set(Math.cos(a) * 5, 3.5, Math.sin(a) * 5);
+      l.position.set(Math.cos(a) * 5, 3.5 + Math.sin(this.time * 0.6 + i) * 0.8, Math.sin(a) * 5);
       l.intensity = showcase ? 25 : 0;
+      l.color.copy(i === 0 ? acc : comp);
     });
+    this.showRingMat.color.copy(acc).multiplyScalar(0.8);
+    const hover = Math.sin(this.time * 1.5);
+    (this.underGlow.material as THREE.ShaderMaterial).uniforms.uColor.value.copy(acc);
+    (this.underGlow.material as THREE.ShaderMaterial).uniforms.uK.value = showcase ? 0.32 - hover * 0.1 : 0.12;
     if (this.showShip) {
       this.showShip.rotation.y = this.time * 0.5;
-      this.showShip.position.y = 2.2 + Math.sin(this.time * 1.5) * 0.2;
+      this.showShip.position.y = this.showY + hover * 0.14;
+      if (this.showPose) {
+        this.showShip.rotation.x = -0.07 + Math.sin(this.time * 0.9) * 0.03;
+        this.showShip.rotation.z = Math.sin(this.time * 0.7) * 0.09;
+      }
       this.flickerShowFlames();
     }
     this.arena.groundUniforms.uPulse.value = 0.3;
@@ -1017,10 +1063,11 @@ export class Game {
     }
     if (this.state === 'menu' && this.hangarOpen) {
       const a = this.time * 0.25;
-      const dist = this.r.width > this.r.height ? 10 : 15;
-      this.camPos.set(Math.sin(a) * dist, 4.5 + (dist - 10) * 0.3, Math.cos(a) * dist);
+      // a low, close hero angle so the ship (not the pad's near rim) owns the frame
+      const dist = this.r.width > this.r.height ? 8.8 : 13;
+      this.camPos.set(Math.sin(a) * dist, 4.6 + (dist - 8.8) * 0.3, Math.cos(a) * dist);
       cam.position.lerp(this.camPos, 1 - Math.exp(-3 * dt));
-      this.camLook.set(0, 2.2, 0);
+      this.camLook.set(0, this.showY - 0.1, 0);
       cam.lookAt(this.camLook);
       const bu = this.r.bokeh.uniforms as Record<string, { value: number }>;
       bu.focus.value = cam.position.distanceTo(this.camLook);
