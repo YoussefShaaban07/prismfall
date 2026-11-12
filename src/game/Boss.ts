@@ -27,6 +27,9 @@ export class BossController {
   body: THREE.Group | null = null;
   rings: THREE.Mesh[] = [];
   mats: THREE.MeshStandardMaterial[] = [];
+  /** shared clocks for the Core's crystal veins */
+  private coreTime = { value: 0 };
+  private coreRage = { value: 0 };
   light: THREE.PointLight;
   color = new THREE.Color();
   index = 0;
@@ -87,12 +90,40 @@ export class BossController {
     if (final) {
       // replace the rock with a custom prism cluster on an obsidian base
       ship.visible = false;
-      const glass = (col: number, em: number, k: number) =>
-        new THREE.MeshPhysicalMaterial({
-          color: col, emissive: em, emissiveIntensity: k, roughness: 0.06, metalness: 0,
-          transmission: this.g.r.quality === 'low' ? 0 : 0.75, thickness: 3, ior: 1.6,
+      // real transmission costs a second scene render every frame, so only ULTRA gets it; the energy
+      // veins below carry the "lit from within" look on every tier
+      const ultra = this.g.r.quality === 'ultra';
+      const glass = (col: number, em: number, k: number) => {
+        const m = new THREE.MeshPhysicalMaterial({
+          color: ultra ? col : new THREE.Color(col).multiplyScalar(0.55), emissive: em, emissiveIntensity: ultra ? k : k * 0.8, roughness: 0.06, metalness: 0,
+          transmission: ultra ? 0.75 : 0, thickness: 3, ior: 1.6,
           iridescence: 1, iridescenceIOR: 1.35, clearcoat: 1, clearcoatRoughness: 0.04, flatShading: true,
         });
+        m.onBeforeCompile = (sh) => {
+          sh.uniforms.uTime = this.coreTime;
+          sh.uniforms.uRage = this.coreRage;
+          sh.vertexShader = sh.vertexShader
+            .replace('#include <common>', '#include <common>\nvarying vec3 vCoreP;')
+            .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCoreP = position;');
+          sh.fragmentShader = sh.fragmentShader
+            .replace('#include <common>', '#include <common>\nuniform float uTime; uniform float uRage; varying vec3 vCoreP;')
+            .replace(
+              '#include <emissivemap_fragment>',
+              `#include <emissivemap_fragment>
+              {
+                // energy veins: thin wandering filaments that flow up each prism, pulsing faster as the Core weakens
+                float speed = 1.6 + uRage * 3.0;
+                float w = vCoreP.y * 1.4 - uTime * speed + sin(vCoreP.x * 2.3 + vCoreP.z * 1.7) * 1.2;
+                float v1 = pow(1.0 - abs(sin(w)), 26.0);
+                float v2 = pow(1.0 - abs(sin(vCoreP.x * 3.1 - vCoreP.z * 2.6 + vCoreP.y * 0.4 + uTime * 0.7)), 40.0);
+                float beat = 0.6 + 0.4 * pow(0.5 + 0.5 * sin(uTime * (2.4 + uRage * 4.0)), 3.0);
+                totalEmissiveRadiance += emissive * (v1 * 4.0 + v2 * 2.0) * beat;
+              }`,
+            );
+        };
+        m.customProgramCacheKey = () => 'core-glass-' + (ultra ? 'u' : 'h');
+        return m;
+      };
       const prism = (h: number, w: number) => {
         const gm = new THREE.CylinderGeometry(0, w, h * 0.25, 6, 1).translate(0, h * 0.875, 0);
         const body2 = new THREE.CylinderGeometry(w, w * 0.8, h * 0.75, 6, 1).translate(0, h * 0.375, 0);
@@ -387,6 +418,8 @@ export class BossController {
     const e = this.e;
     if (!e || !this.body) return;
     this.group.position.set(e.x, 0, e.z);
+    this.coreTime.value = time % 1000;
+    this.coreRage.value = Math.min(1, Math.max(0, 1 - e.hp / e.maxHp));
     const spawnK = e.spawnT > 0 ? 1 - e.spawnT / 2.2 : 1;
     const fall = 1 - spawnK;
     const y = 1.2 + Math.sin(time * 1.4) * 0.3 + fall * fall * 70;
