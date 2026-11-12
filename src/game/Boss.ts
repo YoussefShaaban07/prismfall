@@ -459,7 +459,7 @@ export class BossController {
       const u = m.userData.rim as { uFlash: { value: number }; uDamage: { value: number } } | undefined;
       if (u) {
         u.uFlash.value = flash * 0.15;
-        u.uDamage.value = Math.max(0, 1 - e.hp / e.maxHp) * 0.9;
+        u.uDamage.value = Math.min(1, Math.max(0, 1 - e.hp / e.maxHp)) * 0.9;
       }
     }
     this.light.intensity = 10 + flash * 20;

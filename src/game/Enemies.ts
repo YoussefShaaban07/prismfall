@@ -152,7 +152,7 @@ export class EnemyManager {
       }
     } else if (e.affix === 'volatile') {
       // embers and smoke that get angrier as it nears death (and its blast)
-      const dmg = 1 - e.hp / e.maxHp;
+      const dmg = Math.min(1, Math.max(0, 1 - e.hp / e.maxHp));
       for (let k = 0, n = (14 + dmg * 44) * dt; k < 3 && Math.random() < n - k; k++) {
         const a = rand(0, TAU);
         g.particles.emit(e.x + Math.cos(a) * e.r * 0.6, y, e.z + Math.sin(a) * e.r * 0.6, Math.cos(a) * rand(1, 3), rand(2, 5), Math.sin(a) * rand(1, 3), rand(0.4, 0.7), rand(0.22, 0.34), Math.random() < 0.3 ? g.colors.yellow : g.colors.orange, 2.5, -6);
@@ -531,7 +531,7 @@ export class EnemyManager {
       this.m.compose(this.p, this.q, this.s);
       r.flash.array[idx] = e.flash > 0 ? Math.min(1, e.flash * 14) : 0;
       r.dissolve.array[idx] = e.spawnT > 0 ? Math.max(0, e.spawnT / 0.5 - 0.15) : 0;
-      r.damage.array[idx] = e.maxHp > 0 ? Math.max(0, 1 - e.hp / e.maxHp) : 0;
+      r.damage.array[idx] = e.maxHp > 0 ? Math.min(1, Math.max(0, 1 - e.hp / e.maxHp)) : 0;
       const el = e.elite ? 1 : 0;
       const recolor = r.eliteAt[idx] !== el;
       if (recolor) {
@@ -584,7 +584,7 @@ export class EnemyManager {
       u.uTime.value = time;
       u.uMode.value = e.affix === 'shielded' ? 0 : e.affix === 'regen' ? 1 : 2;
       (u.uColor.value as THREE.Color).set(e.affix === 'shielded' ? 0x6fd8ff : e.affix === 'regen' ? 0x6dff8a : 0xff4a2a);
-      const hurt = 1 - e.hp / e.maxHp;
+      const hurt = Math.min(1, Math.max(0, 1 - e.hp / e.maxHp));
       u.uK.value = e.affix === 'shielded' ? (e.shield > 0 ? 0.8 : 0)
         : e.affix === 'volatile' ? 0.4 + hurt * 0.45 * (0.5 + 0.5 * Math.sin(time * (8 + hurt * 26))) // pulses faster as it nears detonation
         : 0.4;

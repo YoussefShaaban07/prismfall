@@ -633,7 +633,7 @@ export class Game {
   private updateHullLook() {
     const P = this.player;
     const frac = P.maxHp > 0 ? P.hp / P.maxHp : 1;
-    const dmg = this.state === 'menu' ? 0 : frac < 0.5 ? 0.18 + (0.5 - frac) * 1.6 : 0;
+    const dmg = this.state === 'menu' ? 0 : frac < 0.5 ? Math.min(1, 0.18 + (0.5 - Math.max(0, frac)) * 1.6) : 0;
     P.setHullLook(dmg, this.hurtT > 0 ? (this.hurtT / 0.25) * 0.5 : 0);
   }
 
