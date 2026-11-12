@@ -24,13 +24,17 @@ const GradeShader = {
     uHighTint: { value: new THREE.Vector3(0.05, 0.02, -0.03) },
     uContrast: { value: 1.08 },
     uGrain: { value: 0.025 },
+    /** dust-storm wind streaks: strength (0 off) and the storm's tint */
+    uStorm: { value: 0 },
+    uStormCol: { value: new THREE.Vector3(1, 0.8, 0.6) },
+    uAspect: { value: 1.78 },
     uTint: { value: new THREE.Vector3(1, 1, 1) },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
     void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
   fragmentShader: /* glsl */ `
-    uniform sampler2D tDiffuse; uniform float uTime; uniform float uHurt; uniform float uAberr; uniform float uVignette; uniform float uSat; uniform vec3 uShadowTint; uniform vec3 uHighTint; uniform float uContrast; uniform float uGrain; uniform vec3 uTint;
+    uniform sampler2D tDiffuse; uniform float uTime; uniform float uHurt; uniform float uAberr; uniform float uVignette; uniform float uSat; uniform vec3 uShadowTint; uniform vec3 uHighTint; uniform float uContrast; uniform float uGrain; uniform vec3 uTint; uniform float uStorm; uniform vec3 uStormCol; uniform float uAspect;
     varying vec2 vUv;
     float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453); }
     void main(){
@@ -50,6 +54,20 @@ const GradeShader = {
       col *= mix(0.55, 1.0, vig);
       col = mix(col, col * vec3(1.4,0.5,0.5) + vec3(0.1,0.0,0.0), uHurt * (1.0 - vig*0.85));
       col *= uTint;
+      if (uStorm > 0.0) {
+        // wind-driven grit: long thin streaks racing diagonally across the lens, in sparse lanes
+        vec2 q = vec2(vUv.x * uAspect, vUv.y);
+        vec2 dir = normalize(vec2(1.0, -0.28));
+        float along = dot(q, dir), across = dot(q, vec2(-dir.y, dir.x));
+        float lane = floor(across * 140.0);
+        float h = hash(vec2(lane, 3.7));
+        float seg = fract(along * (0.6 + h * 0.8) - uTime * (1.1 + h * 1.4) + h * 7.0);
+        float streak = smoothstep(0.0, 0.05, seg) * (1.0 - smoothstep(0.05, 0.32, seg));
+        float laneOn = step(0.82, h) * (1.0 - abs(fract(across * 140.0) - 0.5) * 2.0);
+        col += uStormCol * streak * laneOn * uStorm * 0.22;
+        // fine grit and a dusty lift of the blacks
+        col = mix(col, uStormCol * 0.55, uStorm * 0.08);
+      }
       col += (hash(vUv * 900.0 + uTime) - 0.5) * uGrain;
       gl_FragColor = vec4(col, 1.0);
     }`,

@@ -2005,6 +2005,10 @@ export class Game {
     dm.size = 0.12 + k * 0.18;
     dm.opacity = 0.55 + k * 0.35;
     this.arena.windBoost = 1 + k * 9;
+    const gu = this.r.grade.uniforms;
+    gu.uStorm.value = this.settings.calm ? k * 0.4 : k;
+    (gu.uStormCol.value as THREE.Vector3).set(this.night ? 0.55 : 1.0, this.night ? 0.6 : 0.72, this.night ? 0.9 : 0.5);
+    gu.uAspect.value = this.r.width / Math.max(1, this.r.height);
   }
 
   /* ======================= first-run tutorial ======================= */
