@@ -357,16 +357,17 @@ export class Smoke {
     }
   }
 
-  trail(x: number, y: number, z: number, size = 0.6, life = 0.9) {
+  /** one puff left behind by something moving; `shade` < 1 for sooty smoke, `rise` for plumes that climb */
+  trail(x: number, y: number, z: number, size = 0.6, life = 0.9, shade = 0, rise = 0) {
     if (this.count >= this.limit) return;
     const i = this.count++;
     const i3 = i * 3;
     this.pos[i3] = x; this.pos[i3 + 1] = y; this.pos[i3 + 2] = z;
-    this.vel[i3] = rand(-0.3, 0.3); this.vel[i3 + 1] = rand(0.3, 0.8); this.vel[i3 + 2] = rand(-0.3, 0.3);
+    this.vel[i3] = rand(-0.3, 0.3); this.vel[i3 + 1] = rise ? rise * rand(0.8, 1.2) : rand(0.3, 0.8); this.vel[i3 + 2] = rand(-0.3, 0.3);
     this.life[i] = this.maxLife[i] = life;
     this.base[i] = size;
     this.seed[i] = Math.random();
-    this.shade[i] = rand(0.9, 1.3);
+    this.shade[i] = shade ? shade * rand(0.85, 1.15) : rand(0.9, 1.3);
   }
 
   update(dt: number) {

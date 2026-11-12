@@ -7,6 +7,10 @@ import type { Enemy } from './Enemies';
 import type { Game } from './Game';
 import { SHIP_YAW } from './Player';
 import { Trail } from './Trails';
+import { glowTex } from './Weapons';
+
+/** a torn-open spot in the hull: glows, smokes and spits sparks once the fight escalates */
+interface Breach { p: THREE.Vector3; n: THREE.Vector3; glow: THREE.Sprite; t: number; ph: number; }
 
 interface BossLook {
   model: ModelName;
@@ -44,6 +48,12 @@ export class BossController {
   private charge: THREE.Mesh | null = null;
   private landed = false;
   private sigCount = 0;
+  private breaches: Breach[] = [];
+  private hullMeshes: THREE.Mesh[] = [];
+  private bw = new THREE.Vector3();
+  private bn = new THREE.Vector3();
+  private sparkC = new THREE.Color();
+  private ray = new THREE.Raycaster();
 
   constructor(scene: THREE.Scene, private assets: Assets, private g: Game) {
     scene.add(this.group);
@@ -211,6 +221,81 @@ export class BossController {
     }
     this.group.add(body);
     this.body = body;
+    for (const b of this.breaches) b.glow.removeFromParent();
+    this.breaches = [];
+    this.hullMeshes = [];
+    (final ? (body.userData.cluster as THREE.Object3D) : ship).traverse((o) => { if ((o as THREE.Mesh).isMesh) this.hullMeshes.push(o as THREE.Mesh); });
+  }
+
+  /** Tear new holes in the hull (two per escalation stage). Points are found by dropping rays onto the model. */
+  addBreaches(want: number) {
+    const body = this.body;
+    if (!body || !this.hullMeshes.length) return;
+    body.updateWorldMatrix(true, true);
+    const box = new THREE.Box3();
+    for (const m of this.hullMeshes) box.expandByObject(m);
+    const inv = body.matrixWorld.clone().invert();
+    let made = 0;
+    for (let tries = 0; tries < 24 && made < want; tries++) {
+      // aim at the hull from outside: from above and slightly to the side, so the holes land on the top and flanks
+      const tx = rand(box.min.x, box.max.x), tz = rand(box.min.z, box.max.z);
+      const from = new THREE.Vector3(tx + rand(-3, 3), box.max.y + 4, tz + rand(-3, 3));
+      const to = new THREE.Vector3(tx, rand(box.min.y, box.max.y), tz);
+      this.ray.set(from, to.sub(from).normalize());
+      const hit = this.ray.intersectObjects(this.hullMeshes, false)[0];
+      if (!hit || !hit.face) continue;
+      const lp = hit.point.clone().applyMatrix4(inv);
+      if (this.breaches.some((b) => b.p.distanceTo(lp) < 1.6)) continue;
+      const nm = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
+      const wn = hit.face.normal.clone().applyMatrix3(nm).normalize();
+      const ln = wn.transformDirection(inv);
+      const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: glowTex(), color: (this.final ? new THREE.Color(0.6, 1, 1) : new THREE.Color(1, 0.45, 0.12)).multiplyScalar(2.6),
+        blending: THREE.AdditiveBlending, depthWrite: false, transparent: true,
+      }));
+      glow.position.copy(lp).addScaledVector(ln, 0.15);
+      glow.scale.setScalar(0.01);
+      glow.renderOrder = 5;
+      body.add(glow);
+      this.breaches.push({ p: lp, n: ln, glow, t: 0, ph: rand(0, TAU) });
+      made++;
+      // the moment it tears open: a spray of debris out along the normal
+      body.localToWorld(this.bw.copy(lp));
+      this.g.particles.fireball(this.bw.x, this.bw.y, this.bw.z, this.final ? 0.4 : 0.9, this.final ? 4 : 10);
+    }
+  }
+
+  private updateBreaches(dt: number, time: number) {
+    if (!this.breaches.length || !this.body) return;
+    const g = this.g;
+    this.body.updateWorldMatrix(true, false);
+    const rot = this.body.matrixWorld;
+    const hot = this.stage >= 2 ? 1 : 0.6;
+    for (const b of this.breaches) {
+      b.t += dt;
+      // swell open over half a second, then gutter like a fire
+      const open = Math.min(1, b.t * 2);
+      const fl = 0.75 + 0.25 * Math.sin(time * 17 + b.ph) * Math.sin(time * 6.3 + b.ph * 2);
+      b.glow.scale.setScalar((this.final ? 1.4 : 1.9) * open * fl * (0.8 + hot * 0.3));
+      (b.glow.material as THREE.SpriteMaterial).opacity = 0.65 + 0.35 * fl;
+      this.bw.copy(b.p).applyMatrix4(rot);
+      this.bn.copy(b.n).transformDirection(rot);
+      const { x, y, z } = this.bw;
+      if (!this.final) {
+        // thick smoke that leans away as it rises, plus a lick of flame at stage 2
+        if (Math.random() < dt * (6 + hot * 8)) g.smoke.trail(x + this.bn.x * 0.4, y + 0.4, z + this.bn.z * 0.4, 1.2 + hot * 1.0, 1.8 + hot * 0.6, 0.42, 2.2);
+        if (this.stage >= 2 && Math.random() < dt * 5) g.particles.emit(x, y + 0.2, z, this.bn.x * 1.5 + rand(-0.5, 0.5), rand(1.5, 3), this.bn.z * 1.5 + rand(-0.5, 0.5), rand(0.25, 0.45), rand(0.6, 1.1), this.sparkC.setRGB(3, 1.3, 0.35), 3, 2);
+      }
+      // sparks: bright, fast, falling, sprayed along the hull normal in short bursts
+      if (Math.random() < dt * (1.6 + hot * 2)) {
+        const n = this.final ? 5 : 7;
+        const c = this.final ? this.sparkC.setRGB(1.2, 3, 3.2) : this.sparkC.setRGB(3.2, 2, 0.8);
+        for (let i = 0; i < n; i++) {
+          const s = rand(4, 9);
+          g.particles.emit(x, y, z, (this.bn.x + rand(-0.6, 0.6)) * s, (Math.max(0.2, this.bn.y) + rand(0, 0.6)) * s, (this.bn.z + rand(-0.6, 0.6)) * s, rand(0.35, 0.7), rand(0.12, 0.22), c, 1.2, -16);
+        }
+      }
+    }
   }
 
   spawn(final: boolean) {
@@ -243,6 +328,8 @@ export class BossController {
 
   clear() {
     this.e = null;
+    for (const b of this.breaches) b.glow.removeFromParent();
+    this.breaches = [];
     this.group.visible = false;
     for (const t of this.trails) t.visible = false;
   }
@@ -253,8 +340,10 @@ export class BossController {
     // escalation: at two thirds and one third hull the mothership pushes harder
     const stage = e.hp < e.maxHp / 3 ? 2 : e.hp < (e.maxHp * 2) / 3 ? 1 : 0;
     if (stage > this.stage) {
+      const jumped = stage - this.stage;
       this.stage = stage;
       g.bossEscalate(e, stage);
+      this.addBreaches(jumped * 2);
     }
     const fast = (this.final ? 1.35 : 1 + this.index * 0.1) * (1 + this.stage * 0.12);
     e.timer -= dt;
@@ -544,18 +633,6 @@ export class BossController {
       t.update(dt, this.tv.set(e.x + bx, y + 1.2, e.z + bz));
     }
 
-    // battle damage: smoke and sparks pour out as hull drops
-    const dmg = 1 - e.hp / e.maxHp;
-    if (dmg > 0.35) {
-      this.smokeT -= dt;
-      if (this.smokeT <= 0) {
-        this.smokeT = 0.12 / dmg;
-        const a = Math.random() * Math.PI * 2;
-        const px = e.x + Math.cos(a) * 2, pz = e.z + Math.sin(a) * 2;
-        this.g.smoke.trail(px, y + 2.5, pz, 1.4 + dmg * 1.5, 1.8);
-        if (dmg > 0.6 && Math.random() < 0.5) this.g.particles.fireball(px, y + 2, pz, 0.5, 3);
-        if (Math.random() < 0.3) this.g.particles.burst(px, y + 2, pz, this.g.colors.orange, 6, 6, 0.4, 0.3, 0.8);
-      }
-    }
+    this.updateBreaches(dt, time);
   }
 }

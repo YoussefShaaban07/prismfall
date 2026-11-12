@@ -8,7 +8,7 @@ import { Trail } from './Trails';
 
 let _glow: THREE.CanvasTexture | null = null;
 /** soft round glow for engine sprites */
-function glowTex() {
+export function glowTex() {
   if (_glow) return _glow;
   const c = document.createElement('canvas');
   c.width = c.height = 64;
@@ -25,8 +25,10 @@ function glowTex() {
 
 export class WeaponSystem {
   timers = new Map<WeaponId, number>();
-  blades: THREE.Mesh[] = [];
-  private bladeArcs: THREE.Mesh[] = [];
+  /** all orbiting blades in one instanced draw, and their motion arcs in another */
+  private bladeMesh: THREE.InstancedMesh;
+  private arcMesh: THREE.InstancedMesh;
+  private dummy = new THREE.Object3D();
   /** unit-radius ring sector (0.9 rad) lying on XZ; uv.x runs head (1) → tail (0) */
   private arcGeo = (() => {
     const g = new THREE.RingGeometry(0.86, 1.14, 24, 1, 0, 0.9);
@@ -36,7 +38,7 @@ export class WeaponSystem {
   private arcMat = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
     uniforms: { uColor: { value: new THREE.Color(1, 0.4, 0.9) } },
-    vertexShader: `varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    vertexShader: `varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }`,
     fragmentShader: `uniform vec3 uColor; varying vec3 vP;
       void main(){
         float a = atan(-vP.z, vP.x) / 0.9;           // 0 at the leading edge, 1 at the tail
@@ -63,24 +65,22 @@ export class WeaponSystem {
   constructor(scene: THREE.Scene, private g: Game) {
     const geo = new THREE.OctahedronGeometry(0.5, 0);
     geo.scale(0.45, 0.35, 1.5);
-    for (let i = 0; i < 8; i++) {
-      const mat = addRim(
-        new THREE.MeshStandardMaterial({ color: 0xff4fd8, emissive: 0xff4fd8, emissiveIntensity: 2.2, roughness: 0.2, metalness: 0.4, flatShading: true }),
-        0xffb0f0,
-        1.5,
-      );
-      const m = new THREE.Mesh(geo, mat);
-      m.visible = false;
-      m.castShadow = true;
-      scene.add(m);
-      this.blades.push(m);
-      // a motion arc sweeping behind each blade along its orbit
-      const arc = new THREE.Mesh(this.arcGeo, this.arcMat);
-      arc.visible = false;
-      arc.renderOrder = 2;
-      scene.add(arc);
-      this.bladeArcs.push(arc);
-    }
+    const bladeMat = addRim(
+      new THREE.MeshStandardMaterial({ color: 0xff4fd8, emissive: 0xff4fd8, emissiveIntensity: 2.2, roughness: 0.2, metalness: 0.4, flatShading: true }),
+      0xffb0f0,
+      1.5,
+    );
+    this.bladeMesh = new THREE.InstancedMesh(geo, bladeMat, 8);
+    this.bladeMesh.count = 0;
+    this.bladeMesh.castShadow = true;
+    this.bladeMesh.frustumCulled = false;
+    scene.add(this.bladeMesh);
+    // a motion arc sweeping behind each blade along its orbit
+    this.arcMesh = new THREE.InstancedMesh(this.arcGeo, this.arcMat, 8);
+    this.arcMesh.count = 0;
+    this.arcMesh.renderOrder = 2;
+    this.arcMesh.frustumCulled = false;
+    scene.add(this.arcMesh);
     const engineMat = new THREE.SpriteMaterial({ map: glowTex(), color: new THREE.Color(0.55, 0.9, 1).multiplyScalar(2.2), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true });
     const markMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.4, 0.85, 1).multiplyScalar(0.9), transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false });
     const markGeo = new THREE.RingGeometry(0.75, 0.9, 3, 1, Math.PI / 2 - 0.0, TAU).rotateX(-Math.PI / 2);
@@ -152,7 +152,7 @@ export class WeaponSystem {
     this.mines.length = 0;
     this.timers.clear();
     this.novaPending = null;
-    for (const b of this.blades) b.visible = false;
+    this.bladeMesh.count = this.arcMesh.count = 0;
     this.bladePos.length = 0;
   }
 
@@ -481,8 +481,7 @@ export class WeaponSystem {
     const P = g.player;
     const lv = P.weapons.get('blades');
     if (!lv) {
-      for (const b of this.blades) b.visible = false;
-      for (const a of this.bladeArcs) a.visible = false;
+      this.bladeMesh.count = this.arcMesh.count = 0;
       this.bladePos.length = 0;
       return;
     }
@@ -492,15 +491,11 @@ export class WeaponSystem {
     const R = S.radius[i] * P.area;
     this.bladeAng += dt * S.spin[i];
     this.bladePos.length = 0;
-    for (let k = 0; k < this.blades.length; k++) {
-      const b = this.blades[k];
-      const arcM = this.bladeArcs[k];
-      if (k >= n) {
-        b.visible = false;
-        arcM.visible = false;
-        continue;
-      }
-      b.visible = true;
+    const cnt = Math.min(n, 8);
+    const d = this.dummy;
+    this.bladeMesh.count = this.arcMesh.count = cnt;
+    this.bladeMesh.instanceMatrix.needsUpdate = this.arcMesh.instanceMatrix.needsUpdate = true;
+    for (let k = 0; k < cnt; k++) {
       const evo = i === 5;
       const ring = evo && k >= n / 2 ? 1 : 0;
       const per = evo ? n / 2 : n;
@@ -510,16 +505,19 @@ export class WeaponSystem {
       const a = this.bladeAng * dir + (kk / per) * TAU + ring * 0.4;
       const x = P.x + Math.sin(a) * rr;
       const z = P.z + Math.cos(a) * rr;
-      b.position.set(x, 1.0 + Math.sin(this.bladeAng * 2 + k) * 0.15, z);
-      b.rotation.set(0, a + Math.PI / 2 * dir, this.bladeAng * 6);
-      b.scale.setScalar(evo ? 1.35 : 1);
+      const by = 1.0 + Math.sin(this.bladeAng * 2 + k) * 0.15;
+      d.position.set(x, by, z);
+      d.rotation.set(0, a + Math.PI / 2 * dir, this.bladeAng * 6);
+      d.scale.setScalar(evo ? 1.35 : 1);
+      d.updateMatrix();
+      this.bladeMesh.setMatrixAt(k, d.matrix);
       // the ring sector starts at angle 0 on +X and grows toward -Z; rotate it so its leading edge sits on
       // the blade and the tail trails back along the direction of travel
-      arcM.visible = true;
-      arcM.position.set(P.x, b.position.y - 0.05, P.z);
-      arcM.scale.set(rr, 1, rr);
-      arcM.rotation.set(0, a - Math.PI / 2, 0);
-      arcM.scale.z = dir > 0 ? -rr : rr; // mirror so the tail always points against the spin
+      d.position.set(P.x, by - 0.05, P.z);
+      d.rotation.set(0, a - Math.PI / 2, 0);
+      d.scale.set(rr, 1, dir > 0 ? -rr : rr); // mirror so the tail always points against the spin
+      d.updateMatrix();
+      this.arcMesh.setMatrixAt(k, d.matrix);
       this.bladePos.push({ x, z });
       const hits = g.enemies.query(x, z, 2);
       for (const e of hits) {

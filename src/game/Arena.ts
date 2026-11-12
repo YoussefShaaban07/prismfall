@@ -182,6 +182,7 @@ export class Arena {
   beacons: THREE.Mesh[] = [];
   spinners: THREE.Object3D[] = [];
   flare: Lensflare;
+  private flareEls: { el: LensflareElement; size: number; day: THREE.Color; night: THREE.Color }[] = [];
   sunHolder = new THREE.Object3D();
   windBoost = 1;
   rotors: { o: THREE.Object3D; speed: number; sweep: boolean }[] = [];
@@ -566,14 +567,17 @@ export class Arena {
     });
     const spotTex = (() => {
       const c = document.createElement('canvas');
-      c.width = c.height = 64;
+      c.width = c.height = 128;
       const x = c.getContext('2d')!;
-      const gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
-      gr.addColorStop(0, 'rgba(255,255,255,0.9)');
-      gr.addColorStop(0.6, 'rgba(255,255,255,0.35)');
+      const gr = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+      // a lit disc with a crisp, slightly brighter rim reads as a beam hitting the ground, not as fog
+      gr.addColorStop(0, 'rgba(255,255,255,0.55)');
+      gr.addColorStop(0.62, 'rgba(255,255,255,0.42)');
+      gr.addColorStop(0.82, 'rgba(255,255,255,0.62)');
+      gr.addColorStop(0.92, 'rgba(255,255,255,0.18)');
       gr.addColorStop(1, 'rgba(255,255,255,0)');
       x.fillStyle = gr;
-      x.fillRect(0, 0, 64, 64);
+      x.fillRect(0, 0, 128, 128);
       return new THREE.CanvasTexture(c);
     })();
     for (let i = 0; i < 4; i++) {
@@ -585,7 +589,7 @@ export class Arena {
       cone.renderOrder = 6;
       const spotGeo = new THREE.PlaneGeometry(1, 1);
       spotGeo.rotateX(-Math.PI / 2);
-      const spot = new THREE.Mesh(spotGeo, new THREE.MeshBasicMaterial({ map: spotTex, color: new THREE.Color(0.32, 0.42, 0.75), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+      const spot = new THREE.Mesh(spotGeo, new THREE.MeshBasicMaterial({ map: spotTex, color: new THREE.Color(0.17, 0.25, 0.52), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
       spot.renderOrder = 2;
       cone.visible = spot.visible = false;
       this.group.add(cone, spot);
@@ -620,11 +624,19 @@ export class Arena {
     /* ----- sun lens flare ----- */
     this.flare = new Lensflare();
     const core = flareTex('core'), ring = flareTex('ring'), hex = flareTex('hex');
-    this.flare.addElement(new LensflareElement(core, 420, 0, new THREE.Color(1, 0.85, 0.7)));
-    this.flare.addElement(new LensflareElement(ring, 220, 0.25, new THREE.Color(1, 0.6, 0.4)));
-    this.flare.addElement(new LensflareElement(hex, 40, 0.45, new THREE.Color(0.35, 0.25, 0.45)));
-    this.flare.addElement(new LensflareElement(hex, 60, 0.62, new THREE.Color(0.2, 0.35, 0.45)));
-    this.flare.addElement(new LensflareElement(ring, 120, 0.85, new THREE.Color(0.4, 0.28, 0.2)));
+    // [texture, size, distance, dusk colour (warm sun), night colour (cold, dimmer moonlight)]
+    const els: [THREE.Texture, number, number, number[], number[]][] = [
+      [core, 420, 0, [1, 0.85, 0.7], [0.62, 0.74, 1]],
+      [ring, 220, 0.25, [1, 0.6, 0.4], [0.3, 0.42, 0.75]],
+      [hex, 40, 0.45, [0.35, 0.25, 0.45], [0.22, 0.24, 0.45]],
+      [hex, 60, 0.62, [0.2, 0.35, 0.45], [0.16, 0.3, 0.42]],
+      [ring, 120, 0.85, [0.4, 0.28, 0.2], [0.14, 0.2, 0.34]],
+    ];
+    for (const [tex, size, dist, day, night] of els) {
+      const el = new LensflareElement(tex, size, dist, new THREE.Color(...day));
+      this.flareEls.push({ el, size, day: new THREE.Color(...day), night: new THREE.Color(...night) });
+      this.flare.addElement(el);
+    }
     this.sunHolder.add(this.flare);
     this.group.add(this.sunHolder);
 
@@ -666,6 +678,11 @@ export class Arena {
 
   setNight(n: boolean) {
     this.night = n;
+    // the flare follows the moon after dark: cold and smaller instead of the warm dusk sun
+    for (const f of this.flareEls) {
+      f.el.color.copy(n ? f.night : f.day);
+      f.el.size = f.size * (n ? 0.75 : 1);
+    }
     // colony lights burn brighter after dark
     for (const g of this.glowMats) g.m.emissiveIntensity = g.base * (n ? 2.2 : 1);
     for (const s of this.searchlights) s.cone.visible = s.spot.visible = n;
