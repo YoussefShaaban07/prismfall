@@ -186,6 +186,11 @@ export class Arena {
   windBoost = 1;
   rotors: { o: THREE.Object3D; speed: number; sweep: boolean }[] = [];
   searchlights: { cone: THREE.Mesh; spot: THREE.Mesh; base: THREE.Vector3; phase: number; speed: number }[] = [];
+  private chase!: THREE.InstancedMesh;
+  private blinkers: THREE.Mesh[] = [];
+  private chaseC = new THREE.Color();
+  private slUp = new THREE.Vector3(0, 1, 0);
+  private slDir = new THREE.Vector3();
   night = false;
   private glowMats: { m: THREE.MeshStandardMaterial; base: number }[] = [];
 
@@ -587,6 +592,31 @@ export class Arena {
       this.searchlights.push({ cone, spot, base, phase: i * 1.7, speed: 0.18 + i * 0.03 });
     }
 
+    /* ----- night runway: chase lights around the perimeter + aviation blinkers on the light towers ----- */
+    {
+      const n = 132;
+      const geo = new THREE.SphereGeometry(0.3, 8, 6);
+      const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
+      this.chase = new THREE.InstancedMesh(geo, mat, n);
+      const m = new THREE.Matrix4();
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * TAU;
+        m.makeTranslation(Math.cos(a) * (R + 1.3), 0.22, Math.sin(a) * (R + 1.3));
+        this.chase.setMatrixAt(i, m);
+        this.chase.setColorAt(i, new THREE.Color(0, 0, 0));
+      }
+      this.chase.visible = false;
+      this.group.add(this.chase);
+      const bGeo = new THREE.SphereGeometry(0.35, 10, 8);
+      for (const s of this.searchlights) {
+        const b = new THREE.Mesh(bGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(4, 0.25, 0.15), toneMapped: false }));
+        b.position.copy(s.base).add(new THREE.Vector3(0, 2.2, 0));
+        b.visible = false;
+        this.group.add(b);
+        this.blinkers.push(b);
+      }
+    }
+
     /* ----- sun lens flare ----- */
     this.flare = new Lensflare();
     const core = flareTex('core'), ring = flareTex('ring'), hex = flareTex('hex');
@@ -639,20 +669,38 @@ export class Arena {
     // colony lights burn brighter after dark
     for (const g of this.glowMats) g.m.emissiveIntensity = g.base * (n ? 2.2 : 1);
     for (const s of this.searchlights) s.cone.visible = s.spot.visible = n;
+    this.chase.visible = n;
+    for (const b of this.blinkers) b.visible = n;
+  }
+
+  /** Runway chase: pulses run around the perimeter in both directions; towers blink red. */
+  private updateRunway(time: number) {
+    if (!this.night) return;
+    const n = this.chase.count;
+    const c = this.chaseC;
+    for (let i = 0; i < n; i++) {
+      const u = i / n;
+      const a = Math.pow(Math.max(0, Math.sin((u * 6 - time * 0.55) * TAU * 0.5)), 24);
+      const b = Math.pow(Math.max(0, Math.sin((u * 4 + time * 0.35) * TAU * 0.5)), 24);
+      const base = 0.35;
+      c.setRGB(base * 0.5 + a * 4 + b * 0.8, base * 0.8 + a * 3.2 + b * 1.8, base * 1.6 + a * 1.8 + b * 4.2);
+      this.chase.setColorAt(i, c);
+    }
+    if (this.chase.instanceColor) this.chase.instanceColor.needsUpdate = true;
+    for (let i = 0; i < this.blinkers.length; i++) this.blinkers[i].visible = ((time * 0.9 + i * 0.25) % 1) < 0.22;
   }
 
   private updateSearchlights(time: number) {
     if (!this.night) return;
-    const up = new THREE.Vector3(0, 1, 0);
+    const up = this.slUp;
     for (const s of this.searchlights) {
       const t = time * s.speed + s.phase;
       const r = 14 + Math.sin(t * 1.3) * 30 + 20;
       const tx = Math.cos(t) * r, tz = Math.sin(t * 0.8) * r;
-      const target = new THREE.Vector3(tx, 0, tz);
-      const dir = target.clone().sub(s.base);
+      const dir = this.slDir.set(tx, 0, tz).sub(s.base);
       const len = dir.length();
       s.cone.position.copy(s.base);
-      s.cone.quaternion.setFromUnitVectors(up, dir.clone().normalize().negate());
+      s.cone.quaternion.setFromUnitVectors(up, dir.normalize().negate());
       s.cone.scale.set(1, len, 1);
       s.spot.position.set(tx, 0.09, tz);
       s.spot.scale.set(13, 1, 13);
@@ -661,6 +709,7 @@ export class Arena {
 
   update(dt: number, time: number, px: number, pz: number, danger: number) {
     this.updateSearchlights(time);
+    this.updateRunway(time);
     for (const r of this.rotors) {
       if (r.sweep) r.o.rotation.y = Math.sin(time * r.speed * 2 + r.speed * 40) * 1.2 + r.speed * 20;
       else r.o.rotation.y += dt * r.speed;
