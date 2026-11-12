@@ -12,6 +12,9 @@ export interface CardData {
   ship: string;
   sector: string;
   mods: string[];
+  /** transparent studio render of the ship, drawn as the card's hero */
+  portrait?: HTMLCanvasElement | null;
+  accent?: string;
 }
 
 /** Render a 1200x630 run summary image (social-card size). */
@@ -34,6 +37,30 @@ export function renderShareCard(d: CardData): HTMLCanvasElement {
   grad.addColorStop(1, 'rgba(11,6,16,0.1)');
   g.fillStyle = grad;
   g.fillRect(0, 0, W, H);
+
+  if (d.portrait) {
+    // hero ship on the right: a coloured halo, a soft floor shadow, then the render itself
+    const cx = 900, cy = 300, R = 270;
+    const halo = g.createRadialGradient(cx, cy, 10, cx, cy, R);
+    halo.addColorStop(0, (d.accent ?? '#5ef2ff') + '66');
+    halo.addColorStop(0.5, (d.accent ?? '#5ef2ff') + '22');
+    halo.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = halo;
+    g.fillRect(cx - R, cy - R, R * 2, R * 2);
+    g.save();
+    g.globalAlpha = 0.5;
+    g.fillStyle = '#000';
+    g.beginPath();
+    g.ellipse(cx, cy + 190, 200, 26, 0, 0, Math.PI * 2);
+    g.filter = 'blur(14px)';
+    g.fill();
+    g.restore();
+    g.save();
+    g.shadowColor = d.accent ?? '#5ef2ff';
+    g.shadowBlur = 40;
+    g.drawImage(d.portrait, cx - 300, cy - 300, 600, 600);
+    g.restore();
+  }
 
   const disp = "900 64px Orbitron, 'Segoe UI', sans-serif";
   const lg = g.createLinearGradient(60, 0, 560, 0);

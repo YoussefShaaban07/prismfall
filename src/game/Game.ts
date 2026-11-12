@@ -243,6 +243,8 @@ export class Game {
       snap: this.snap, victory: this.won, score: Math.round(this.score), time: this.T, level: this.player.level, kills: this.kills,
       bosses: this.bossesKilled, ship: this.player.shipDef.name, sector: this.night ? 'NIGHT SHIFT' : 'DUSK OUTPOST',
       mods: [...this.mods].map((m) => MODS.find((x) => x.id === m)!.name),
+      portrait: this.shipPortrait(),
+      accent: '#' + new THREE.Color(this.player.shipDef.accent).getHexString(),
     });
     ui.onCodex = (open, kind, id) => {
       this.hangarOpen = open;
@@ -638,6 +640,49 @@ export class Game {
   private syncPhotoBar() {
     const ph = this.photo;
     this.ui.setPhotoBar(Game.LOOKS[ph.look].name, ph.dof, Math.round(Math.log(ph.aperture / 0.0004) / Math.log(1.4)));
+  }
+
+  /** A studio render of the current ship (transparent background) for the share card. */
+  private shipPortrait(): HTMLCanvasElement | null {
+    let rr: THREE.WebGLRenderer;
+    const size = 640;
+    try {
+      const canvas = document.createElement('canvas');
+      rr = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, preserveDrawingBuffer: true });
+    } catch {
+      return null;
+    }
+    rr.setSize(size, size, false);
+    rr.setPixelRatio(1);
+    rr.toneMapping = THREE.ACESFilmicToneMapping;
+    rr.outputColorSpace = THREE.SRGBColorSpace;
+    const def = this.player.shipDef;
+    const scene = new THREE.Scene();
+    const accent = new THREE.Color(def.accent);
+    scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x2a1830, 0.85));
+    const key = new THREE.DirectionalLight(0xfff0e0, 2.4);
+    key.position.set(4, 6, 5);
+    const rim = new THREE.DirectionalLight(accent, 5);
+    rim.position.set(-5, 2, -6);
+    const fill = new THREE.PointLight(accent, 30, 12);
+    fill.position.set(0, -2.5, 2.5);
+    scene.add(key, rim, fill);
+    const ship = this.assets.object(def.model, 3.2, heroMapper(def.accent, 1.1));
+    const holder = new THREE.Group();
+    ship.rotation.y = SHIP_YAW;
+    holder.add(ship);
+    holder.rotation.set(0.5, 0.75, -0.12); // three-quarter hero angle, nose toward the viewer's left
+    scene.add(holder);
+    const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
+    cam.position.set(0, 0.4, 8.2);
+    cam.lookAt(0, 0, 0);
+    rr.render(scene, cam);
+    const out = document.createElement('canvas');
+    out.width = out.height = size;
+    out.getContext('2d')!.drawImage(rr.domElement, 0, 0);
+    rr.dispose();
+    rr.forceContextLoss();
+    return out;
   }
 
   /** Render one clean frame and download it as a PNG. */
