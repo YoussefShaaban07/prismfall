@@ -1119,10 +1119,6 @@ export class Game {
       cam.setViewOffset(this.r.width, this.r.height, -this.r.width * 0.16, 0, this.r.width, this.r.height);
     } else cam.clearViewOffset();
     if (this.state === 'menu') {
-      if (this.showShip) {
-        this.showShip.rotation.y = this.time * 0.5;
-        this.showShip.position.y = 2.2 + Math.sin(this.time * 1.5) * 0.2;
-      }
       // title flythrough: a slow loop that dips low over the colony, sweeps the mountains, returns to the pad
       const T = (this.time * 0.012) % 1;
       this.menuPath.getPointAt(T, this.camPos);
