@@ -739,7 +739,13 @@ export class Game {
   private qWinRaw = 0;
   private qUpVotes = 0;
   private qFloorT = 0;
+  /** Pin full resolution (screenshots, benchmarks): ?fixedres or set from the console. */
+  fixedRes = new URLSearchParams(location.search).has('fixedres');
   private autoQuality(_dt: number, rawMs: number) {
+    if (this.fixedRes) {
+      if (this.r.renderScale < 1) this.r.setRenderScale(1);
+      return;
+    }
     if (this.state !== 'play' && this.state !== 'menu') return;
     if (rawMs <= 0 || rawMs > 1000) return; // tab was hidden
     this.qWinRaw += rawMs;
