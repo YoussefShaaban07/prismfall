@@ -21,6 +21,61 @@ const POWER_DEF: Record<PowerKind, { model: ModelName; color: number; size: numb
   bomb: { model: 'machine_barrel', color: 0xffaa33, size: 1.5 },
 };
 
+const iconCache = new Map<PowerKind, THREE.CanvasTexture>();
+/** Holographic badge naming each supply at a glance: + repair, U tractor, starburst payload. */
+function powerIcon(kind: PowerKind, color: number) {
+  const hit = iconCache.get(kind);
+  if (hit) return hit;
+  const S = 128, c = document.createElement('canvas');
+  c.width = c.height = S;
+  const x = c.getContext('2d')!;
+  const col = '#' + new THREE.Color(color).getHexString();
+  x.translate(S / 2, S / 2);
+  // hexagon frame
+  x.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + Math.PI / 6;
+    x[i ? 'lineTo' : 'moveTo'](Math.cos(a) * 52, Math.sin(a) * 52);
+  }
+  x.closePath();
+  x.fillStyle = 'rgba(10,6,20,0.55)';
+  x.fill();
+  x.lineWidth = 6;
+  x.strokeStyle = col;
+  x.shadowColor = col;
+  x.shadowBlur = 16;
+  x.stroke();
+  x.fillStyle = '#fff';
+  x.strokeStyle = '#fff';
+  x.lineCap = 'round';
+  if (kind === 'heal') {
+    x.fillRect(-9, -28, 18, 56);
+    x.fillRect(-28, -9, 56, 18);
+  } else if (kind === 'magnet') {
+    x.lineWidth = 15;
+    x.beginPath();
+    x.arc(0, -2, 20, Math.PI, 0, true);
+    x.moveTo(-20, -2); x.lineTo(-20, -26);
+    x.moveTo(20, -2); x.lineTo(20, -26);
+    x.stroke();
+    x.fillStyle = col;
+    x.fillRect(-28, -34, 16, 10);
+    x.fillRect(12, -34, 16, 10);
+  } else {
+    x.beginPath();
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * Math.PI * 2, r = i % 2 ? 13 : 32;
+      x[i ? 'lineTo' : 'moveTo'](Math.cos(a) * r, Math.sin(a) * r);
+    }
+    x.closePath();
+    x.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  iconCache.set(kind, t);
+  return t;
+}
+
 export class Pickups {
   gems: Gem[] = [];
   powers: Power[] = [];
@@ -186,6 +241,11 @@ export class Pickups {
       }),
     );
     beam.position.set(x, 0, z);
+    const icon = new THREE.Sprite(new THREE.SpriteMaterial({ map: powerIcon(kind, def.color), transparent: true, depthWrite: false, depthTest: false, toneMapped: false }));
+    icon.scale.setScalar(1.9);
+    icon.position.y = 2.7;
+    icon.renderOrder = 7;
+    obj.add(icon);
     this.scene.add(obj, beam);
     this.powers.push({ kind, x, z, t: 0, obj, beam });
   }
