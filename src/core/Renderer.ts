@@ -211,6 +211,24 @@ export class Renderer {
     this.distort = new ShaderPass(DistortShader);
     this.composer.addPass(this.distort);
     this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.6, 0.45, 1.0);
+    // Local bloom compression: the two blurriest mips measure how much glow surrounds each pixel;
+    // where a whole region is blazing (a pile of explosions in a 600-enemy fight) the bloom is
+    // compressed so the centre doesn't wash to white, while isolated glows keep full strength.
+    {
+      const cm = this.bloom.compositeMaterial;
+      cm.uniforms.uCompress = { value: 1.6 };
+      cm.fragmentShader = cm.fragmentShader
+        .replace('uniform float bloomRadius;', 'uniform float bloomRadius;\nuniform float uCompress;')
+        .replace(
+          'float bloomAlpha = max( bloom.r, max( bloom.g, bloom.b ) );',
+          `float energy = dot(texture2D(blurTexture4, vUv).rgb + texture2D(blurTexture5, vUv).rgb * 1.5, vec3(0.3, 0.5, 0.2));
+          bloom /= 1.0 + energy * uCompress;
+          float bm = max(bloom.r, max(bloom.g, bloom.b));
+          bloom /= 1.0 + bm * 0.3;
+          float bloomAlpha = max( bloom.r, max( bloom.g, bloom.b ) );`,
+        );
+      cm.needsUpdate = true;
+    }
     this.composer.addPass(this.bloom);
     this.shafts = new ShaderPass(ShaftShader);
     this.composer.addPass(this.shafts);
