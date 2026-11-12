@@ -481,6 +481,29 @@ export class Arena {
             cloudCol = mix(cloudCol, vec3(0.08, 0.1, 0.18), uNight);
             col = mix(col, cloudCol, cl * 0.7);
           }
+          // shooting stars: three slots on staggered timers, each a short bright streak that burns out
+          if (y > 0.1) {
+            float az = atan(vDir.z, vDir.x);
+            float el = asin(clamp(y, -1.0, 1.0));
+            for (int i = 0; i < 3; i++) {
+              float fi = float(i);
+              float tt = uTime / (5.5 + fi * 2.9) + fi * 0.37;
+              float id = floor(tt), ph = fract(tt);
+              if (ph > 0.16) continue;
+              float k = ph / 0.16;
+              vec2 st0 = vec2(h2(vec2(id, fi)) * 6.2832 - 3.1416, 0.35 + h2(vec2(fi + 2.0, id)) * 0.45);
+              float c = cos(st0.y);
+              vec2 dir = normalize(vec2(h2(vec2(id + 3.0, fi)) - 0.5, -0.3 - h2(vec2(fi + 7.0, id)) * 0.4));
+              vec2 head = vec2(st0.x * c, st0.y) + dir * k * 0.55;
+              vec2 d = vec2(az * c, el) - head;
+              d.x = mod(d.x + 3.1416 * c, 6.2832 * c) - 3.1416 * c;
+              float along = dot(d, -dir);
+              float across = abs(d.x * dir.y - d.y * dir.x);
+              float m = step(0.0, along) * (1.0 - smoothstep(0.0, 0.22, along)) * (1.0 - smoothstep(0.0, 0.0026 + along * 0.008, across));
+              m += exp(-dot(d, d) * 9000.0) * 1.5; // the burning head
+              col += vec3(1.0, 0.82, 0.62) * m * sin(k * 3.1416) * (1.6 + uNight * 1.4);
+            }
+          }
           // stars
           vec3 q = floor(vDir * 420.0);
           float st = step(0.9965 - uNight * 0.002, h(q)) * smoothstep(0.08, 0.5, y);
