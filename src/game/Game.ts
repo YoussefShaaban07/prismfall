@@ -1064,7 +1064,7 @@ export class Game {
     if (this.state === 'menu' && this.hangarOpen) {
       const a = this.time * 0.25;
       // a low, close hero angle so the ship (not the pad's near rim) owns the frame
-      const dist = this.r.width > this.r.height ? 8.8 : 13;
+      const dist = this.r.width > this.r.height ? 8.8 : 16.5;
       this.camPos.set(Math.sin(a) * dist, 4.6 + (dist - 8.8) * 0.3, Math.cos(a) * dist);
       cam.position.lerp(this.camPos, 1 - Math.exp(-3 * dt));
       this.camLook.set(0, this.showY - 0.1, 0);
