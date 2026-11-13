@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { Player } from './Player';
 import { addRim, heroMapper } from '../core/Assets';
 import { rand, TAU } from '../core/util';
 import { WSTATS, type WeaponId } from './data';
@@ -62,7 +63,10 @@ export class WeaponSystem {
   mines: { x: number; z: number; t: number; arm: number; life: number; r: number; dmg: number; pull: number; obj: THREE.Group }[] = [];
   private minePool: THREE.Group[] = [];
 
-  constructor(scene: THREE.Scene, private g: Game) {
+  /** the ship these guns are mounted on: the local player, or a teammate's puppet (whose dmg is 0, so its guns are cosmetic) */
+  owner: Player;
+  constructor(scene: THREE.Scene, private g: Game, owner?: Player) {
+    this.owner = owner ?? g.player;
     const geo = new THREE.OctahedronGeometry(0.5, 0);
     geo.scale(0.45, 0.35, 1.5);
     const bladeMat = addRim(
@@ -157,14 +161,14 @@ export class WeaponSystem {
   }
 
   private idx(id: WeaponId) {
-    const P = this.g.player;
+    const P = this.owner;
     if (P.evolved.has(id)) return 5;
     return (P.weapons.get(id) ?? 1) - 1;
   }
 
   update(dt: number) {
     const g = this.g;
-    const P = g.player;
+    const P = this.owner;
     if (P.dead) return;
     for (const [id] of P.weapons) {
       if (id === 'blades' || id === 'wingmen') continue;
@@ -190,7 +194,7 @@ export class WeaponSystem {
 
   private fire(id: WeaponId): boolean {
     const g = this.g;
-    const P = g.player;
+    const P = this.owner;
     const i = this.idx(id);
     switch (id) {
       case 'blaster': {
@@ -324,7 +328,7 @@ export class WeaponSystem {
 
   private novaBlast(r: number, dmg: number, knock: number, visual: boolean) {
     const g = this.g;
-    const P = g.player;
+    const P = this.owner;
     const hits = g.enemies.query(P.x, P.z, r + 2);
     for (const e of hits) {
       if (e.dead) continue;
@@ -351,7 +355,7 @@ export class WeaponSystem {
 
   private lanceBeam(a: number, len: number, w: number, dmg: number, evo: boolean) {
     const g = this.g;
-    const P = g.player;
+    const P = this.owner;
     const dx = Math.sin(a), dz = Math.cos(a);
     for (const e of g.enemies.list) {
       if (e.dead) continue;
@@ -376,7 +380,7 @@ export class WeaponSystem {
 
   private updateWingmen(dt: number) {
     const g = this.g;
-    const P = g.player;
+    const P = this.owner;
     const lv = P.weapons.get('wingmen');
     const i = this.idx('wingmen');
     const S = WSTATS.wingmen;
@@ -478,7 +482,7 @@ export class WeaponSystem {
 
   private updateBlades(dt: number) {
     const g = this.g;
-    const P = g.player;
+    const P = this.owner;
     const lv = P.weapons.get('blades');
     if (!lv) {
       this.bladeMesh.count = this.arcMesh.count = 0;

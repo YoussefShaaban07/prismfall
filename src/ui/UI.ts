@@ -5,6 +5,7 @@ import { ENEMY_LORE, BOSS_LORE, WEAPON_TIPS } from '../game/codex';
 import { renderShareCard, type CardData } from './ShareCard';
 import type { Quality } from '../core/Renderer';
 import { ACHIEVEMENTS, MODS, SHIPS, UPGRADES, dailySetup, modMult, upLv, type MetaState, type ModId, type ShipId, type UpgradeId } from '../game/meta';
+import { Lobby } from './Lobby';
 import { t, tf, translateDom, isAr, LANG, setLang, type Lang } from './i18n';
 
 export interface Settings {
@@ -27,6 +28,7 @@ export interface MinimapData {
   px: number; pz: number; ang: number;
   enemies: { x: number; z: number; boss: boolean; elite: boolean }[];
   powers: { x: number; z: number }[];
+  allies?: { x: number; z: number; color: string; down: boolean }[];
 }
 
 export interface RunStats {
@@ -42,6 +44,7 @@ const $ = <T extends HTMLElement = HTMLElement>(sel: string, root: ParentNode = 
 
 export class UI {
   root: HTMLElement;
+  lobby: Lobby;
   hud!: HTMLElement;
   joy!: HTMLElement;
   knob!: HTMLElement;
@@ -86,6 +89,8 @@ export class UI {
     this.root = document.getElementById('ui')!;
     this.root.innerHTML = TEMPLATE;
     translateDom(this.root);
+    this.lobby = new Lobby(this.root);
+    this.lobby.onBack = () => this.show('#menu');
     this.hud = $('#hud');
     this.joy = $('#joy');
     this.knob = $('#joy .knob');
@@ -94,6 +99,7 @@ export class UI {
     this.mm = ($('#minimap') as HTMLCanvasElement).getContext('2d')!;
 
     $('#playBtn').addEventListener('click', () => this.onPlay());
+    $('#coopBtn').addEventListener('click', () => this.openLobby());
     $('#resumeBtn').addEventListener('click', () => this.onResume());
     $('#quitBtn').addEventListener('click', () => this.onQuit());
     $('#retryBtn').addEventListener('click', () => this.onRetry());
@@ -415,6 +421,14 @@ export class UI {
       if (e.boss) continue;
       c.fillStyle = e.elite ? '#ffd84f' : '#ff3f8f';
       c.fillRect(e.x * k - 1, e.z * k - 1, 2, 2);
+    }
+    for (const a of d.allies ?? []) {
+      // teammates: a ring in their hull colour (hollow when downed)
+      c.strokeStyle = c.fillStyle = a.color;
+      c.lineWidth = 2;
+      c.beginPath();
+      c.arc(a.x * k, a.z * k, 3.5, 0, Math.PI * 2);
+      if (a.down) c.stroke(); else c.fill();
     }
     for (const p of d.powers) {
       c.fillStyle = '#7dff9b';
@@ -873,7 +887,32 @@ export class UI {
     ($('#over') as HTMLElement).style.setProperty('--bg', `url(${url})`);
   }
 
+  openLobby(code = '') {
+    this.hide('#menu');
+    this.lobby.show(code);
+  }
+
+  /** results screen in co-op: only the host can relaunch; everyone can leave */
+  coopOver(host: boolean) {
+    $('#endlessBtn').classList.add('hidden');
+    $('#retryBtn').classList.toggle('hidden', !host);
+    $('#retryBtn').textContent = t(host ? 'FLY AGAIN · SAME CREW' : 'FLY AGAIN');
+    $('#menuBtn').textContent = t('LEAVE ROOM');
+    $('#overSub').textContent = t(host ? 'Relaunch to take the same crew up again.' : 'Waiting for the host to relaunch...');
+  }
+
+  /** teammates' hulls under your own bar */
+  crew(list: { name: string; hp: number; down: boolean; k: number; color: string }[]) {
+    const el = $('#crew');
+    if (!list.length) { if (el.innerHTML) el.innerHTML = ''; return; }
+    const html = list.map((c) => `<div class="cm${c.down ? ' down' : ''}" style="--c:${c.color}"><b>${c.name.replace(/[<>&]/g, '')}</b><i><s style="width:${Math.round((c.down ? c.k : c.hp) * 100)}%"></s></i>${c.down ? `<em>${t('DOWN')}</em>` : ''}</div>`).join('');
+    if (el.innerHTML !== html) el.innerHTML = html;
+  }
+
   showOver(st: RunStats) {
+    $('#retryBtn').classList.remove('hidden');
+    $('#retryBtn').textContent = t('FLY AGAIN');
+    $('#menuBtn').textContent = t('MENU');
     this.hud.classList.add('hidden');
     $('#overTitle').textContent = t(st.victory ? 'COLONY SAVED' : 'SIGNAL LOST');
     $('#overSub').textContent = t(st.victory ? 'The Prism Core is shattered. Mars breathes again.' : 'Your ship went down. The swarm advances.');
@@ -945,6 +984,7 @@ const TEMPLATE = /* html */ `
       <div class="lvrow"><div id="lvTxt" class="lv">LV 1</div>
         <div id="hpbar" class="hpbar"><div id="hpFill"></div><span id="hpTxt">100</span></div></div>
       <div id="slots" class="slots"></div>
+      <div id="crew" class="crew"></div>
     </div>
     <div class="center"><div id="timer" class="timer">00:00</div><div id="goal" class="goal"></div></div>
     <div class="right">
@@ -970,6 +1010,7 @@ const TEMPLATE = /* html */ `
     <div class="tagline">A crystal swarm has fallen from the sky. Hold the line for ten minutes, then shatter the Prism Core.</div>
     <div class="mbtns">
       <button id="playBtn" class="btn primary wide">LAUNCH</button>
+      <button id="coopBtn" class="btn coopbtn wide">CO-OP <small>Online · up to 5 pilots</small></button>
       <button id="mapBtn" class="btn mapbtn wide"></button>
       <button id="dailyBtn" class="btn dailybtn wide">DAILY</button>
       <div class="pair"><button id="hangarBtn" class="btn">HANGAR <span id="menuShards" class="mshards"></span></button><button id="modsBtn" class="btn">MUTATORS</button></div>

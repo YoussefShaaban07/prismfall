@@ -591,3 +591,39 @@ body.photo #hud .top, body.photo .toast { visibility: hidden !important; }
 /* long scores shrink to fit the card instead of spilling off a phone screen */
 #over .st.big b { font-size: min(36px, calc(115cqi / var(--len, 8))); }
 #over .st.big { container-type: inline-size; }
+
+/* ---------- co-op ---------- */
+.coopbtn { letter-spacing: .22em; border-color: rgba(94, 242, 255, .55); background: linear-gradient(90deg, rgba(94, 242, 255, .14), rgba(255, 79, 216, .14)); }
+.coopbtn small { display: block; font-size: 10px; letter-spacing: .14em; color: rgba(255, 255, 255, .55); margin-top: 2px; }
+.lobbypanel { max-width: 440px; gap: 12px; max-height: calc(100dvh - 24px); overflow-y: auto; }
+.lobbypanel .lsub { font-size: 15px; color: rgba(255, 255, 255, .6); }
+.lstep { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+.lfield { display: flex; flex-direction: column; gap: 4px; font-family: var(--display); font-size: 10px; letter-spacing: .25em; color: rgba(255, 255, 255, .55); }
+#lobby input { font: 600 18px var(--body, inherit); color: #fff; background: rgba(0, 0, 0, .45); border: 1px solid rgba(255, 255, 255, .2); border-radius: 10px; padding: 10px 12px; outline: none; pointer-events: auto; }
+#lobby input:focus { border-color: var(--cyan, #5ef2ff); box-shadow: 0 0 14px rgba(94, 242, 255, .35); }
+.lor { text-align: center; font-size: 12px; letter-spacing: .2em; color: rgba(255, 255, 255, .4); text-transform: uppercase; }
+.ljoin { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+#lCode { font-family: var(--display) !important; letter-spacing: .45em; text-align: center; text-transform: uppercase; }
+.lcode { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px; border-radius: 14px; background: rgba(94, 242, 255, .07); border: 1px solid rgba(94, 242, 255, .3); }
+.lcode small { font-family: var(--display); font-size: 10px; letter-spacing: .3em; color: rgba(255, 255, 255, .55); }
+.lcode b { font-family: var(--display); font-size: 40px; letter-spacing: .3em; color: var(--cyan, #5ef2ff); text-shadow: 0 0 22px rgba(94, 242, 255, .6); padding-left: .3em; }
+.btn.small { padding: 6px 12px; font-size: 10px; }
+.lcrew { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.lcrew li { display: grid; grid-template-columns: 28px 1fr auto; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 10px; background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .1); }
+.lcrew li i { font-style: normal; font-family: var(--display); color: var(--gold); text-align: center; }
+.lcrew li b { font-weight: 700; letter-spacing: .04em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lcrew li span { font-family: var(--display); font-size: 10px; letter-spacing: .2em; color: var(--cyan, #5ef2ff); }
+.lcrew li.me { border-color: rgba(94, 242, 255, .5); }
+.lcrew li.empty { opacity: .4; border-style: dashed; }
+.lcrew li.empty b { font-weight: 400; font-style: italic; }
+.lwait { font-size: 14px; text-align: center; color: rgba(255, 255, 255, .6); }
+.lerr { min-height: 1.2em; font-size: 14px; text-align: center; color: #ffb27a; }
+.crew { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; }
+.crew .cm { display: grid; grid-template-columns: 74px 1fr auto; align-items: center; gap: 6px; font-size: 11px; width: clamp(140px, 22vw, 240px); }
+.crew .cm b { font-family: var(--display); font-size: 9px; letter-spacing: .1em; color: var(--c); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-shadow: 0 1px 3px #000; }
+.crew .cm i { height: 6px; border-radius: 3px; background: rgba(0, 0, 0, .55); overflow: hidden; border: 1px solid rgba(255, 255, 255, .12); }
+.crew .cm s { display: block; height: 100%; background: var(--c); box-shadow: 0 0 6px var(--c); text-decoration: none; transition: width .2s; }
+.crew .cm.down s { background: #7dff9b; box-shadow: 0 0 6px #7dff9b; }
+.crew .cm em { font-style: normal; font-family: var(--display); font-size: 8px; letter-spacing: .15em; color: #ff5e7e; animation: lowPulse .6s ease-in-out infinite alternate; }
+.ljoin input, .lfield input { min-width: 0; width: 100%; box-sizing: border-box; }
+.ljoin .btn { min-width: 0; padding-left: 18px; padding-right: 18px; }

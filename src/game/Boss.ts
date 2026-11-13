@@ -307,7 +307,7 @@ export class BossController {
     const a = rand(0, TAU);
     const p = g.spawnPoint(18, 22, a);
     const e = g.enemies.spawn('boss', p.x, p.z)!;
-    const hp = (final ? 2200 : 850 + 550 * idx) * hpScale(g.T) * (g.endless ? 1.5 : 1);
+    const hp = (final ? 2200 : 850 + 550 * idx) * hpScale(g.T) * (g.endless ? 1.5 : 1) * (1 + (g.crewK - 1) * 0.6);
     e.hp = e.maxHp = hp;
     this.stage = 0;
     e.r = final ? 4.2 : 3.4;
@@ -324,6 +324,27 @@ export class BossController {
     g.fx.ring(e.x, e.z, 14, this.color, 1.0, 2);
     g.particles.ring(e.x, 0.5, e.z, this.color, 80, 18, 0.8, 0.9);
     g.shake = Math.max(g.shake, 1.2);
+  }
+
+  /** Co-op guest: the host's boss arrives as a puppet with the host's id. */
+  spawnMirror(final: boolean, idx: number, id: number, x: number, z: number, hp: number): Enemy {
+    const g = this.g;
+    if (this.e) this.clear();
+    this.final = final;
+    this.index = idx;
+    this.build(final, idx);
+    const e = g.enemies.ghost(id, 'boss', x, z, false, '');
+    e.hp = e.maxHp = hp;
+    e.r = final ? 4.2 : 3.4;
+    e.spawnT = 2.2;
+    e.dmg = EDEFS.boss.damage * (1 + g.T / 600);
+    this.stage = 0;
+    this.e = e;
+    this.landed = false;
+    this.name = final ? 'THE PRISM CORE' : BOSS_NAMES[idx % BOSS_NAMES.length];
+    this.group.visible = true;
+    this.group.position.set(e.x, 0, e.z);
+    return e;
   }
 
   clear() {
@@ -450,7 +471,7 @@ export class BossController {
   /** Each mothership has its own signature move; the Core cycles through all of them. */
   private signature(e: Enemy, ux: number, uz: number, aim: number) {
     const g = this.g;
-    const P = g.player;
+    const P = g.nearestShip(e.x, e.z);
     const kind = this.final ? this.sigCount % 3 : this.index % 3;
     const H = g.hazards;
     const dmgK = 1 + g.T / 900;
@@ -539,11 +560,11 @@ export class BossController {
     this.body.position.y = y;
     const sp = Math.hypot(e.vx, e.vz);
     if (!this.final) {
-      const target = sp > 0.5 ? Math.atan2(e.vx, e.vz) : Math.atan2(this.g.player.x - e.x, this.g.player.z - e.z);
+      const target = sp > 0.5 ? Math.atan2(e.vx, e.vz) : Math.atan2(this.g.nearestShip(e.x, e.z).x - e.x, this.g.nearestShip(e.x, e.z).z - e.z);
       e.yaw += angleDiff(e.yaw, target) * Math.min(1, dt * 3);
       this.body.rotation.y = e.yaw;
       this.body.rotation.z = Math.sin(time) * 0.06;
-      const P = this.g.player;
+      const P = this.g.nearestShip(e.x, e.z);
       const aim = Math.atan2(P.x - e.x, P.z - e.z) - e.yaw;
       for (const t of (this.body.userData.turrets as THREE.Object3D[] | undefined) ?? []) {
         const cur = t.rotation.y;

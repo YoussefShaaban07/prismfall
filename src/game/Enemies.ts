@@ -39,6 +39,10 @@ export interface Enemy {
   slow: number;
   affix: '' | 'shielded' | 'regen' | 'volatile';
   shield: number;
+  /** co-op guest: last authoritative state from the host, and whether this copy already dissolved locally */
+  net?: { x: number; z: number; vx: number; vz: number; yaw: number; t: number };
+  ghostDead?: boolean;
+  ghostT?: number;
 }
 
 const INSTANCED: EType[] = ['drone', 'dart', 'spitter', 'meteor', 'shard', 'brute', 'wraith', 'turret', 'bomber'];
@@ -183,7 +187,7 @@ export class EnemyManager {
     const def = EDEFS[type];
     if (type !== 'boss' && !this.canSpawn(type)) return null;
     const T = this.g.T;
-    const hm = hpScale(T) * (elite ? 6 : 1);
+    const hm = hpScale(T) * (elite ? 6 : 1) * (1 + (this.g.crewK - 1) * 0.3);
     const e: Enemy = {
       id: NEXT_ID++,
       type, def, x, z, vx: 0, vz: 0, kx: 0, kz: 0,
@@ -239,7 +243,8 @@ export class EnemyManager {
 
   update(dt: number) {
     const g = this.g;
-    const P = g.player;
+    const LP = g.player;
+    const ships = g.ships();
     const R = ARENA_RADIUS - 0.8;
     for (let i = 0; i < this.list.length; i++) {
       const e = this.list[i];
@@ -253,6 +258,8 @@ export class EnemyManager {
       e.slow = Math.max(0, e.slow - dt);
       if (e.affix === 'regen' && e.hp < e.maxHp) e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.04 * dt);
       if (e.affix) this.affixFx(e, dt);
+      // in co-op every enemy hunts whichever ship is closest
+      const P = g.nearestShip(e.x, e.z, ships);
       const dx = P.x - e.x, dz = P.z - e.z;
       const d = Math.hypot(dx, dz) || 1;
       const ux = dx / d, uz = dz / d;
@@ -451,9 +458,11 @@ export class EnemyManager {
       }
 
       // contact damage
-      if (e.spawnT <= 0 && !P.dead) {
-        const cd = e.r + P.r * 0.85;
-        if (dx * dx + dz * dz < cd * cd) g.hurtPlayer(e.dmg, e);
+      // contact damage is only ever judged for this machine's own ship; teammates judge theirs
+      if (e.spawnT <= 0 && !LP.dead) {
+        const cd = e.r + LP.r * 0.85;
+        const lx = LP.x - e.x, lz = LP.z - e.z;
+        if (lx * lx + lz * lz < cd * cd) g.hurtPlayer(e.dmg, e);
       }
 
       // relocate stragglers that fell far behind
@@ -465,6 +474,55 @@ export class EnemyManager {
       }
     }
 
+    this.finish(dt);
+  }
+
+  /** Co-op guest: a host-owned enemy appears in this world as a puppet. */
+  ghost(id: number, type: EType, x: number, z: number, elite: boolean, affix: Enemy['affix']): Enemy {
+    const def = EDEFS[type];
+    const e: Enemy = {
+      id, type, def, x, z, vx: 0, vz: 0, kx: 0, kz: 0,
+      r: def.radius * (elite ? 1.35 : 1), hp: 1, maxHp: 1, spd: def.speed, dmg: def.damage * (1 + this.g.T / 900) * (elite ? 1.4 : 1), flash: 0,
+      yaw: 0, tumble: rand(0, TAU), st: 0, timer: 0, aimx: 0, aimz: 1, bladeCD: 0, spawnT: 0, dead: false,
+      phase: 0, sub: 0, alpha: 1, elite, slow: 0, affix, shield: 0,
+      net: { x, z, vx: 0, vz: 0, yaw: 0, t: 0 },
+    };
+    this.list.push(e);
+    return e;
+  }
+
+  /** Co-op guest frame: glide every puppet toward the host's latest word, and judge contact only against this ship. */
+  mirror(dt: number) {
+    const g = this.g;
+    const LP = g.player;
+    for (const e of this.list) {
+      if (e.dead || !e.net) continue;
+      const n = e.net;
+      const age = Math.min(0.2, n.t);
+      n.t += dt;
+      const tx = n.x + n.vx * age, tz = n.z + n.vz * age;
+      if (Math.hypot(tx - e.x, tz - e.z) > 10) { e.x = tx; e.z = tz; }
+      const k = 1 - Math.exp(-12 * dt);
+      e.x += (tx - e.x) * k;
+      e.z += (tz - e.z) * k;
+      e.vx = n.vx;
+      e.vz = n.vz;
+      e.yaw += angleDiff(e.yaw, n.yaw) * Math.min(1, dt * 10);
+      if (e.type === 'meteor' || e.type === 'shard') e.tumble += dt * 3;
+      if (e.spawnT > 0) e.spawnT -= dt;
+      e.flash = Math.max(0, e.flash - dt);
+      e.bladeCD -= dt;
+      if (e.affix) this.affixFx(e, dt);
+      if (e.spawnT <= 0 && !LP.dead) {
+        const cd = e.r + LP.r * 0.85;
+        const lx = LP.x - e.x, lz = LP.z - e.z;
+        if (lx * lx + lz * lz < cd * cd) g.hurtPlayer(e.dmg, e);
+      }
+    }
+    this.finish(dt);
+  }
+
+  private finish(dt: number) {
     // age dissolving corpses
     for (let i = this.corpses.length - 1; i >= 0; i--) {
       const c = this.corpses[i];

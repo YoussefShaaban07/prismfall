@@ -362,7 +362,92 @@ export class Player {
       this.ang += turn * Math.min(1, dt * 12);
     }
     this.bank = damp(this.bank, clamp(-turn * 1.2, -0.7, 0.7), 8, dt);
+    this.visuals(dt, time, sp);
+    return dashed;
+  }
 
+  /* ---------- co-op: downed ships wait on the ground for a teammate ---------- */
+  private reviveRing: THREE.Mesh | null = null;
+  private reviveFill: THREE.Mesh | null = null;
+  /** Downed pose (slumped on the sand, engines out) plus a ring that fills as a teammate revives it. */
+  setDowned(down: boolean, k: number) {
+    if (!this.reviveRing) {
+      const mk = (inner: number, op: number) => {
+        const m = new THREE.Mesh(new THREE.RingGeometry(inner, 1, 64).rotateX(-Math.PI / 2),
+          new THREE.MeshBasicMaterial({ color: new THREE.Color(0.5, 1, 0.65).multiplyScalar(2), transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false }));
+        m.position.y = 0.1;
+        m.visible = false;
+        this.scene.add(m);
+        return m;
+      };
+      this.reviveRing = mk(0.94, 0.35);
+      this.reviveFill = mk(0.0, 0.22);
+    }
+    const ring = this.reviveRing!, fill = this.reviveFill!;
+    ring.visible = fill.visible = down;
+    if (!down) return;
+    const holder = this.root.userData.holder as THREE.Group;
+    this.root.visible = true;
+    this.root.position.set(this.x, 0, this.z);
+    holder.position.y = 0.18;
+    holder.rotation.set(0, this.ang, 0);
+    this.ship.rotation.set(0.12, SHIP_YAW, 0.55);
+    this.ship.visible = true;
+    for (const f of this.flames) f.scale.set(1, 1, 0.01);
+    this.shield.visible = false;
+    for (const t of this.trails) t.visible = false;
+    ring.position.set(this.x, 0.1, this.z);
+    ring.scale.setScalar(3.5);
+    fill.position.set(this.x, 0.11, this.z);
+    fill.scale.setScalar(Math.max(0.01, 3.5 * k));
+    (ring.material as THREE.MeshBasicMaterial).opacity = 0.25 + 0.2 * Math.sin(performance.now() / 180);
+  }
+
+  /* ---------- multiplayer puppet: a teammate's ship driven by network state ---------- */
+  /** latest network state for a puppet */
+  net = { x: 0, z: 0, vx: 0, vz: 0, ang: 0, t: 0, dash: false };
+  /** Become a teammate's ship: no light (it would change every material's light count), no magnet ring, harmless guns. */
+  makePuppet() {
+    this.light.removeFromParent();
+    this.magnetRing.visible = false;
+    this.dmg = 0;
+  }
+  updatePuppet(dt: number, time: number) {
+    if (this.dead) { this.updateGhosts(dt); return; }
+    const n = this.net;
+    // extrapolate from the last packet, then ease toward it so jitter never shows
+    const age = Math.min(0.25, n.t);
+    n.t += dt;
+    const tx = n.x + n.vx * age, tz = n.z + n.vz * age;
+    const k = 1 - Math.exp(-14 * dt);
+    if (Math.hypot(tx - this.x, tz - this.z) > 12) { this.x = tx; this.z = tz; }
+    this.x += (tx - this.x) * k;
+    this.z += (tz - this.z) * k;
+    this.vx = n.vx;
+    this.vz = n.vz;
+    const turn = angleDiff(this.ang, n.ang);
+    this.ang += turn * Math.min(1, dt * 12);
+    this.bank = damp(this.bank, clamp(-turn * 1.2, -0.7, 0.7), 8, dt);
+    this.inv = Math.max(0, this.inv - dt);
+    if (n.dash && this.dashT <= 0) this.dashT = 0.2;
+    if (this.dashT > 0) {
+      this.dashT -= dt;
+      this.ghostT -= dt;
+      if (this.ghostT <= 0) { this.ghostT = 0.04; this.spawnGhost(); }
+    }
+    this.updateGhosts(dt);
+    if (this.muzzleT > 0) {
+      this.muzzleT -= dt;
+      const kk = Math.max(0, this.muzzleT / 0.07);
+      this.muzzle.visible = kk > 0;
+      this.muzzle.scale.setScalar((1.2 + (1 - kk) * 0.9) * this.muzzleS);
+      this.muzzle.material.opacity = kk;
+    }
+    this.visuals(dt, time, Math.hypot(this.vx, this.vz));
+    this.magnetRing.visible = false;
+  }
+
+  private visuals(dt: number, time: number, sp: number) {
     // visuals
     const holder = this.root.userData.holder as THREE.Group;
     this.root.position.set(this.x, 0, this.z);
@@ -396,6 +481,5 @@ export class Player {
       t.update(dt, this.tv);
     });
     this.magnetRing.scale.setScalar(this.magnet);
-    return dashed;
   }
 }

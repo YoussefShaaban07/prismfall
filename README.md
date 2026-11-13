@@ -14,6 +14,7 @@ A 3D neon survival shooter set on a Mars colony. A crystal swarm has fallen from
 
 ## Features
 
+- **Online co-op for up to 5 pilots**: one player hosts, friends join with a 5-letter room code or invite link (even mid-run). Peer-to-peer over WebRTC, no accounts or servers to run. Downed pilots can be revived by a teammate
 - **Real-time 3D** with Three.js: PBR materials, HDR environment lighting, texel-snapped shadows, GTAO ambient occlusion, bloom, SMAA/FXAA, depth of field, screen-space shockwave distortion, god rays and a cinematic colour grade
 - **Combat VFX**: dissolve deaths, fireballs, lit smoke, glowing-hot shrapnel, ribbon engine trails, ground light pools and pooled explosion lights
 - **Mars colony arena**: displaced terrain with dunes, mesas and a mountain range, energy force-field with impact ripples, colony buildings, rockets, prism crystals, clouds, lens flare, twin moons and dust/ion storms

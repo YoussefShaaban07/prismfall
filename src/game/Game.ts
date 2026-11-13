@@ -24,7 +24,9 @@ import { LOOKS } from './Boss';
 import { renderIcons } from '../ui/Icons';
 import { t, tf } from '../ui/i18n';
 import { WEAPONS as WDEF, PASSIVES as PDEF } from './data';
-import { EDEFS as ED } from './data';
+import { EDEFS as ED, hpScale } from './data';
+import { Sync } from '../net/Sync';
+import type { Msg } from '../net/Net';
 
 type State = 'menu' | 'play' | 'levelup' | 'paused' | 'over' | 'photo';
 
@@ -48,6 +50,11 @@ export class Game {
   pickups: Pickups;
   hazards: Hazards;
   lighting: Lighting;
+  /** co-op: networking + replication (solo when no room is open) */
+  sync: Sync;
+  /** co-op: progress (0..1) of a teammate reviving this downed ship */
+  reviveK = 0;
+  private allDownT = 0;
 
   colors = {
     cyan: C(0.35, 0.95, 1, 3),
@@ -176,6 +183,9 @@ export class Game {
     this.pickups = new Pickups(scene, assets, this);
     this.hazards = new Hazards(scene, this);
     this.lighting = new Lighting(scene, this);
+    this.sync = new Sync(this);
+    this.sync.install();
+    this.bindNet();
     this.player.root.visible = false;
     for (const t of this.player.trails) t.visible = false;
     this.player.magnetRing.visible = false;
@@ -205,9 +215,12 @@ export class Game {
     this.ui.setMapLabel(this.meta.map, this.nightUnlocked());
     this.ui.renderMods(this.meta);
     this.ui.setCodexMeta(this.meta);
+    // invite links: ?room=CODE opens the co-op lobby with the code filled in
+    const room = new URLSearchParams(location.search).get('room');
+    if (room) this.ui.openLobby(room.toUpperCase().slice(0, 5));
     requestAnimationFrame(this.loop);
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden && this.state === 'play') this.pause();
+      if (document.hidden && this.state === 'play' && !this.sync.mp) this.pause();
     });
   }
 
@@ -226,9 +239,18 @@ export class Game {
         ui.briefing().then(() => this.startRun());
       } else this.startRun();
     };
-    ui.onRetry = () => this.startRun(!!this.dailyKey);
+    ui.onRetry = () => {
+      if (this.sync.host) this.hostStartCoop();
+      else if (!this.sync.guest) this.startRun(!!this.dailyKey);
+    };
     ui.onResume = () => this.togglePause();
-    ui.onQuit = () => this.toMenu();
+    ui.onQuit = () => {
+      if (this.sync.mp) {
+        this.sync.net.leave();
+        this.sync.clearRemotes();
+      }
+      this.toMenu();
+    };
     ui.onEndless = () => this.continueEndless();
     ui.onClick = () => this.audio.sfx('click');
     ui.onSettings = (s) => {
@@ -557,7 +579,10 @@ export class Game {
     this.weapons.reset();
     const ds = daily ? dailySetup() : null;
     this.dailyKey = ds ? ds.key : null;
-    this.mods = new Set(ds ? ds.mods : this.meta.mods);
+    this.mods = new Set(this.sync.mp ? [] : ds ? ds.mods : this.meta.mods);
+    this.sync.resetRemotes();
+    this.reviveK = 0;
+    this.allDownT = 0;
     const ship = SHIPS.find((x) => x.id === (ds ? ds.ship : this.meta.ship)) ?? SHIPS[0];
     this.player.reset(this.meta, ship);
     if (this.mods.has('glass')) {
@@ -585,8 +610,9 @@ export class Game {
     const modNames = [...this.mods].map((m) => MODS.find((x) => x.id === m)!.name).join(' · ');
     if (ds) this.ui.banner('DAILY CHALLENGE', `${ship.name} · ${modNames}`, '#ffd84f', 3000);
     else this.ui.banner('DEFEND THE COLONY', modNames || 'Survive · Level up · Evolve', '#5ef2ff', 2400);
-    // opening ring of drones dropping in
-    for (let i = 0; i < 8; i++) {
+    if (this.sync.mp) this.ui.banner('CO-OP MISSION', `${this.sync.net.lobby.length} pilots · hold the colony together`, '#5ef2ff', 2600);
+    // opening ring of drones dropping in (guests get theirs from the host)
+    if (!this.sync.guest) for (let i = 0; i < 8; i++) {
       const a = (i / 8) * TAU;
       this.enemies.spawn('drone', Math.cos(a) * 14, Math.sin(a) * 14);
     }
@@ -606,6 +632,9 @@ export class Game {
     for (const t of this.player.trails) t.visible = false;
     this.player.magnetRing.visible = false;
     this.weapons.reset();
+    if (!this.sync.mp) this.sync.clearRemotes();
+    for (const r of this.sync.remotes.values()) { r.p.root.visible = false; r.tag.visible = false; r.w.reset(); for (const t of r.p.trails) t.visible = false; r.p.setDowned(false, 0); }
+    this.player.setDowned(false, 0);
     this.ui.hideHud();
     this.audio.intensity = 0;
     document.body.classList.remove('lowhp', 'cine');
@@ -785,7 +814,7 @@ export class Game {
     // deterministic captures always render at full resolution
     if (this.r.renderScale < 1) this.r.setRenderScale(1);
     this.time += dt;
-    if (this.state === 'play') this.update(dt);
+    if (this.state === 'play' || (this.sync.mp && (this.state === 'paused' || this.state === 'levelup'))) this.update(dt);
     this.hurtT = Math.max(0, this.hurtT - dt);
     this.updateCamera(dt);
     this.updateHullLook();
@@ -864,20 +893,23 @@ export class Game {
     this.autoQuality(dt, rawMs);
     this.updatePerf(rawMs);
 
-    if (this.state === 'play') {
+    const live = this.state === 'play' || (this.sync.mp && (this.state === 'paused' || this.state === 'levelup'));
+    if (live) {
+      // co-op: hit-stop, slow-mo and cinematic slow-downs would desync the shared world, so they only play solo
+      const warp = !this.sync.mp;
       if (this.freezeT > 0) {
         this.freezeT -= dt;
-        dt = 0;
+        if (warp) dt = 0;
       }
       if (this.slowT > 0) {
         this.slowT -= dt;
-        dt *= 0.3;
+        if (warp) dt *= 0.3;
       }
       if (this.mods.has('speed')) dt *= 1.15;
       if (this.cineT > 0) {
         this.cineT -= dt;
         document.body.classList.toggle('cine', this.cineT > 0);
-        dt *= 0.62;
+        if (warp) dt *= 0.62;
       }
       this.update(dt);
     } else if (this.state === 'menu') {
@@ -915,7 +947,7 @@ export class Game {
     // Level-up and pause freeze the world behind a blurred overlay. Re-rendering an identical
     // frame every tick also forces the browser to re-blur it, which is what drags integrated GPUs
     // down to single digits; draw a few settle frames and then hold the image.
-    const frozen = this.state === 'levelup' || this.state === 'paused';
+    const frozen = (this.state === 'levelup' || this.state === 'paused') && !this.sync.mp;
     this.frozenT = frozen ? this.frozenT + rawMs / 1000 : 0;
     if (!frozen || this.frozenT < 0.3 || this.frozenDirty) {
       this.frozenDirty = false;
@@ -1237,7 +1269,11 @@ export class Game {
 
   private update(dt: number) {
     const P = this.player;
-    this.T += P.dead ? 0 : dt;
+    const mp = this.sync.mp, guest = this.sync.guest;
+    // the host's clock is the run's clock; guests tick locally between snapshots
+    this.T += guest ? dt : (mp ? this.allDown() : P.dead) ? 0 : dt;
+    // in co-op the world never stops for one pilot's menus: they hover shielded while choosing
+    if (mp && this.state !== 'play' && !P.dead) P.inv = Math.max(P.inv, 0.15);
 
     if (!P.dead) {
       if (P.update(dt, this.input, this.time)) this.onDash();
@@ -1255,22 +1291,24 @@ export class Game {
         const bx = P.x - Math.sin(P.ang) * 1.2, bz = P.z - Math.cos(P.ang) * 1.2;
         this.particles.emit(bx, 0.9, bz, -P.vx * 0.1 + rand(-0.4, 0.4), rand(0, 0.4), -P.vz * 0.1 + rand(-0.4, 0.4), 0.45, 0.45, this.colors.cyan, 3);
       }
-      // the swarm stays broken while the victory fireworks play
-      if (this.victoryT <= 0) this.director(dt);
       this.weapons.update(dt);
     } else {
       const before = this.deathT;
       this.deathT -= dt;
-      this.burnWreck(dt, before);
-      if (this.deathT <= 0) this.endRun(false);
+      if (this.deathT > 0) this.burnWreck(dt, before);
+      if (!mp) { if (this.deathT <= 0) this.endRun(false); }
+      else this.downedTick(dt);
     }
+    // the swarm stays broken while the victory fireworks play
+    if (!guest && this.victoryT <= 0 && !(mp ? this.allDown() : P.dead)) this.sync.world(() => this.director(dt));
 
     for (let i = this.timed.length - 1; i >= 0; i--) {
       const q = this.timed[i];
       q.t -= dt;
       if (q.t <= 0) { this.timed.splice(i, 1); q.fn(); }
     }
-    this.enemies.update(dt);
+    if (guest) this.enemies.mirror(dt);
+    else this.sync.world(() => this.enemies.update(dt));
     this.proj.update(dt);
     this.hazards.update(dt, this.time);
     this.pickups.update(dt);
@@ -1339,6 +1377,11 @@ export class Game {
       });
       const b = this.boss.e;
       this.ui.setBoss(b ? this.boss.name : null, b ? b.hp / b.maxHp : 0);
+      if (this.sync.mp) {
+        this.ui.crew([...this.sync.remotes.values()].map((r) => ({
+          name: r.name, hp: r.p.hp / Math.max(1, r.p.maxHp), down: r.p.dead, k: r.reviveK, color: '#' + new THREE.Color(r.p.shipDef.accent).getHexString(),
+        })));
+      } else this.ui.crew([]);
     }
     // off-screen threat arrows
     {
@@ -1361,11 +1404,170 @@ export class Game {
         px: P.x, pz: P.z, ang: P.ang,
         enemies: this.enemies.list.map((e) => ({ x: e.x, z: e.z, boss: e.type === 'boss', elite: e.elite })),
         powers: this.pickups.powers.map((p) => ({ x: p.x, z: p.z })),
+        allies: [...this.sync.remotes.values()].map((r) => ({ x: r.p.x, z: r.p.z, color: '#' + new THREE.Color(r.p.shipDef.accent).getHexString(), down: r.p.dead })),
       });
     }
 
-    if (this.pendingLevels > 0 && !P.dead && this.state === 'play' && this.victoryT <= 0) this.openLevelUp();
+    if (this.pendingLevels > 0 && !P.dead && this.state === 'play' && this.victoryT <= 0 && !this.ui.levelUpOpen()) this.openLevelUp();
+
+    if (mp) {
+      this.sync.tick(dt);
+      // the host calls the run when every ship is down
+      if (this.sync.host && this.victoryT <= 0) {
+        this.allDownT = this.allDown() ? this.allDownT + dt : 0;
+        if (this.allDownT > 2.5 && this.state !== 'over') {
+          this.sync.net.broadcast({ t: 'over', victory: false });
+          this.endRun(false);
+        }
+      }
+    }
   }
+
+  /* ======================= co-op ======================= */
+
+  /** every ship in the run is down */
+  private allDown() {
+    if (!this.player.dead) return false;
+    for (const r of this.sync.remotes.values()) if (!r.p.dead) return false;
+    return true;
+  }
+
+  /** Downed in co-op: wait on the sand; a teammate hovering close fills the ring and brings you back. */
+  private downedTick(dt: number) {
+    const P = this.player;
+    let near = false;
+    for (const r of this.sync.remotes.values()) if (!r.p.dead && Math.hypot(r.p.x - P.x, r.p.z - P.z) < 3.8) near = true;
+    if (this.deathT <= 0) {
+      this.reviveK = near ? Math.min(1, this.reviveK + dt / 2.5) : Math.max(0, this.reviveK - dt * 0.25);
+      if (this.reviveK >= 1) this.reviveSelf();
+    }
+    P.setDowned(P.dead, this.reviveK);
+  }
+
+  private reviveSelf() {
+    const P = this.player;
+    P.dead = false;
+    P.hp = P.maxHp * 0.5;
+    P.inv = 2.5;
+    this.reviveK = 0;
+    this.deathT = 0;
+    P.setDowned(false, 0);
+    P.root.visible = true;
+    for (const t of P.trails) t.visible = true;
+    P.magnetRing.visible = true;
+    this.ui.banner('BACK IN THE FIGHT', 'Revived by your crew', '#7dff9b', 1800);
+    this.audio.sfx('heal');
+    this.fx.ring(P.x, P.z, 7, 0x7dff9b, 0.7, 3);
+    this.particles.ring(P.x, 0.6, P.z, this.colors.green, 50, 12, 0.5, 0.6);
+    this.lighting.flash(P.x, P.z, 0x7dff9b, 40, 14, 0.5);
+  }
+
+  /** Guest: a local weapon hit an enemy the host owns. Show it now, report it, predict the kill. */
+  private guestHit(e: Enemy, amt: number, kx: number, kz: number, src: string) {
+    const crit = chance(0.08);
+    if (crit) amt *= 2;
+    if (e.shield > 0) this.particles.emit(e.x, e.def.hover + 0.5, e.z, rand(-3, 3), rand(1, 3), rand(-3, 3), 0.25, 0.35, this.colors.cyan, 3);
+    this.sync.reportHit(e, amt, kx, kz);
+    this.damageDealt += amt;
+    e.flash = 0.08;
+    if (this.settings.numbers && (crit || amt >= 40 || chance(0.12)) && this.fx.floaters.filter((f) => f.active).length < 22) {
+      this.fx.text(e.x, 2.2, e.z, String(Math.round(amt)), crit ? 'crit' : src);
+    }
+    this.audio.sfx('hit');
+    if (e.shield > 0) return;
+    e.hp -= amt;
+    if (e.hp <= 0 && e.type !== 'boss' && !e.ghostDead) {
+      // dissolve right away; the host's explosion follows a heartbeat later
+      e.dead = true;
+      e.ghostDead = true;
+      e.ghostT = performance.now();
+      this.enemies.addCorpse(e, kx * 0.3, kz * 0.3);
+    }
+  }
+
+  /** Host: tell guests about a boss that just landed (and late joiners about one already here). */
+  private announceBoss(to?: string) {
+    const e = this.boss.e;
+    if (!e) return;
+    const d = { final: this.boss.final, idx: this.boss.index, id: e.id, x: Math.round(e.x * 10) / 10, z: Math.round(e.z * 10) / 10, hp: Math.round(e.maxHp) };
+    if (to) this.sync.net.send(to, { t: 's', ev: [['!', 'boss', d]] });
+    else this.sync.push('boss', d);
+  }
+
+  private bindNet() {
+    const net = this.sync.net;
+    net.onMsg = (from, m) => this.sync.onMsg(from, m);
+    net.onLobby = () => {
+      // drop puppets for pilots who left
+      const ids = new Set(net.lobby.map((p) => p.id));
+      for (const id of [...this.sync.remotes.keys()]) if (!ids.has(id)) this.sync.removeRemote(id);
+      this.ui.lobby.render(net);
+    };
+    net.onJoin = (id) => {
+      const lp = net.lobby.find((p) => p.id === id);
+      this.sync.addRemote(id, lp?.name ?? 'Pilot', lp?.ship ?? 'comet');
+      if (net.inRun && this.state !== 'over' && this.state !== 'menu') {
+        net.send(id, this.startMsg());
+        this.announceBoss(id);
+      }
+    };
+    net.onLeave = (id) => this.sync.removeRemote(id);
+    net.onClosed = (why) => {
+      this.sync.clearRemotes();
+      if (this.state !== 'menu') this.toMenu();
+      this.ui.lobby.close();
+      this.ui.toast('CO-OP', why);
+    };
+    this.ui.lobby.onHost = async (name) => {
+      store.set('prismfall.pilot', name);
+      await net.host(name, this.meta.ship);
+      this.ui.lobby.render(net);
+    };
+    this.ui.lobby.onJoin = async (code, name) => {
+      store.set('prismfall.pilot', name);
+      await net.join(code, name, this.meta.ship);
+      this.ui.lobby.render(net);
+    };
+    this.ui.lobby.onLaunch = () => this.hostStartCoop();
+    this.ui.lobby.onLeave = () => {
+      net.leave();
+      this.sync.clearRemotes();
+    };
+    this.ui.lobby.defaultName = store.get<string>('prismfall.pilot', 'Pilot-' + Math.floor(1000 + Math.random() * 9000));
+  }
+
+  private startMsg(): Msg {
+    return { t: 'start', night: this.night, T: Math.round(this.T * 10) / 10, crew: this.sync.net.lobby };
+  }
+
+  /** Host: launch (or relaunch) a co-op run for everyone in the room. */
+  hostStartCoop() {
+    if (!this.sync.host) return;
+    this.ui.lobby.close();
+    this.ui.hideAll();
+    this.startRun(false);
+    this.sync.net.inRun = true;
+    this.sync.net.broadcast(this.startMsg());
+  }
+
+  /** Guest: the host launched. */
+  startCoopRun(m: Msg) {
+    this.ui.lobby.close();
+    this.ui.hideAll();
+    if (!!m.night !== this.night) this.setTheme(!!m.night);
+    this.startRun(false);
+    this.T = Number(m.T) || 0;
+  }
+
+  coopOver(victory: boolean) {
+    if (this.state === 'over') return;
+    this.endRun(victory);
+  }
+
+  coopToLobby() {
+    this.toMenu();
+  }
+
 
   private director(dt: number) {
     const T = this.T;
@@ -1380,6 +1582,7 @@ export class Game {
       this.bossWarn -= dt;
       if (this.bossWarn <= 0) {
         this.boss.spawn(this.pendingFinal);
+        this.announceBoss();
         this.cineT = 3.4;
         this.ui.bossCard(this.boss.name, this.pendingFinal ? 'FINAL BATTLE' : tf('MOTHERSHIP {0}', ['I', 'II', 'III', 'IV', 'V'][this.bossesKilled] ?? this.bossesKilled + 1));
         if (this.endless || this.won) this.nextBoss = T + 100;
@@ -1391,12 +1594,12 @@ export class Game {
     }
 
     // regular spawns
-    const rate = Math.min(22, 0.9 + T / 42 + Math.pow(T / 120, 2)) * (this.boss.e ? 0.22 : 1) * (this.endless ? 1.3 : 1) * (this.night ? 1.15 : 1) * (this.mods.has('tide') ? 1.4 : 1);
+    const rate = Math.min(22, 0.9 + T / 42 + Math.pow(T / 120, 2)) * (this.boss.e ? 0.22 : 1) * (this.endless ? 1.3 : 1) * (this.night ? 1.15 : 1) * (this.mods.has('tide') ? 1.4 : 1) * (1 + (this.crewK - 1) * 0.55);
     this.spawnAcc += rate * dt;
     let guard = 0;
     while (this.spawnAcc >= 1 && guard++ < 20) {
       this.spawnAcc -= 1;
-      if (this.enemies.count() >= 520) break;
+      if (this.enemies.count() >= (this.sync.mp ? 420 : 520)) break;
       const type = this.pickType();
       const p = this.spawnPoint(24, 31);
       this.enemies.spawn(type, p.x, p.z);
@@ -1406,11 +1609,12 @@ export class Game {
     if (T >= this.nextSurge) {
       this.nextSurge += 52;
       if (!this.boss.e && this.bossWarn <= 0) {
+        const anchor = this.anchorShip();
         const n = Math.min(42, 14 + Math.floor(T / 12));
         const type: EType = T > 200 && chance(0.5) ? 'shard' : 'drone';
         for (let i = 0; i < n; i++) {
           const a = (i / n) * TAU;
-          let x = this.player.x + Math.cos(a) * 17, z = this.player.z + Math.sin(a) * 17;
+          let x = anchor.x + Math.cos(a) * 17, z = anchor.z + Math.sin(a) * 17;
           const d = Math.hypot(x, z);
           if (d > ARENA_RADIUS - 2) {
             x *= (ARENA_RADIUS - 2) / d;
@@ -1448,8 +1652,32 @@ export class Game {
     return pickWeighted(w);
   }
 
+  /** every ship the swarm can hunt: this one plus, on the host, every teammate's puppet */
+  ships(): Player[] {
+    if (!this.sync.host) return [this.player];
+    const out = [this.player];
+    for (const r of this.sync.remotes.values()) out.push(r.p);
+    return out;
+  }
+  nearestShip(x: number, z: number, ships = this.ships()): Player {
+    let best = ships[0], bd = Infinity;
+    for (const s of ships) {
+      if (s.dead) continue;
+      const d = (s.x - x) ** 2 + (s.z - z) ** 2;
+      if (d < bd) { bd = d; best = s; }
+    }
+    return best;
+  }
+  /** a random living ship to centre spawns and surges on */
+  private anchorShip(): Player {
+    const live = this.ships().filter((s) => !s.dead);
+    return live.length ? live[Math.floor(Math.random() * live.length)] : this.player;
+  }
+  /** co-op scaling: more pilots, more swarm */
+  get crewK() { return this.sync.mp ? Math.max(1, this.sync.remotes.size + 1) : 1; }
+
   spawnPoint(minD: number, maxD: number, angle?: number) {
-    const P = this.player;
+    const P = this.anchorShip();
     const lim = ARENA_RADIUS - 2.5;
     for (let i = 0; i < 12; i++) {
       const a = angle ?? rand(0, TAU);
@@ -1467,6 +1695,9 @@ export class Game {
 
   damage(e: Enemy, amt: number, kx: number, kz: number, src = '') {
     if (e.dead) return;
+    // a teammate's cosmetic guns (their ship's dmg is 0): show the hit, the real damage arrives over the network
+    if (amt <= 0) { e.flash = Math.max(e.flash, 0.05); return; }
+    if (this.sync.guest) { this.guestHit(e, amt, kx, kz, src); return; }
     const crit = chance(0.08);
     if (crit) amt *= 2;
     if (e.shield > 0) {
@@ -1496,6 +1727,10 @@ export class Game {
   }
 
   private kill(e: Enemy) {
+    this.sync.world(() => this.killInner(e));
+  }
+
+  private killInner(e: Enemy) {
     e.dead = true;
     if (e.type === 'boss') {
       this.bossDeath(e);
@@ -1720,7 +1955,14 @@ export class Game {
     this.fx.scorch(e.x, e.z, 2.2);
     this.audio.sfx('boom');
     this.shake = Math.max(this.shake, 0.45);
-    if (!P.dead && Math.hypot(P.x - e.x, P.z - e.z) < r + P.r) this.hurtPlayer(e.dmg, null, e);
+    void P;
+    this.areaHurt(e.x, e.z, r, e.dmg);
+  }
+
+  /** a blast that hurts whichever ship is inside it (replayed on every co-op machine for its own ship) */
+  areaHurt(x: number, z: number, r: number, dmg: number) {
+    const P = this.player;
+    if (!P.dead && Math.hypot(P.x - x, P.z - z) < r + P.r) this.hurtPlayer(dmg, null, { x, z });
   }
 
   /** Each mothership dies in its own way. */
@@ -1847,7 +2089,13 @@ export class Game {
     }
     P.hp = 0;
     P.dead = true;
-    P.root.visible = false;
+    this.reviveK = 0;
+    P.root.visible = this.sync.mp;
+    if (this.sync.mp) {
+      // close a level-up left open: a downed ship can't take upgrades
+      if (this.state === 'levelup') { this.ui.hide('#levelup'); this.state = 'play'; }
+      this.ui.banner('SHIP DOWN', this.sync.remotes.size ? 'A teammate can fly over you to revive you' : 'Hold on...', '#ff5e7e', 2600);
+    }
     P.magnetRing.visible = false;
     for (const t of P.trails) t.visible = false;
     this.deathT = 2.2;
@@ -1951,7 +2199,7 @@ export class Game {
   /* ======================= level up ======================= */
 
   private openLevelUp() {
-    this.state = 'levelup';
+    this.state = 'levelup'; // in co-op the loop keeps the world running behind this
     this.input.releaseAll();
     this.audio.sfx('level');
     this.choices = rollChoices(this.player);
@@ -2048,13 +2296,15 @@ export class Game {
   /** Periodic dust storm (ion storm with lightning at night): thick fog, wind-blown dust, reduced visibility. */
   private weather(dt: number) {
     const S = this.storm;
-    if (S.dur <= 0 && this.T >= S.next && !this.boss.e && this.bossWarn <= 0) {
+    if (!this.sync.guest && S.dur <= 0 && this.T >= S.next && !this.boss.e && this.bossWarn <= 0) {
       S.dur = 32;
       S.t = 0;
-      this.ui.banner(this.night ? 'ION STORM' : 'DUST STORM', 'Visibility dropping', this.night ? '#8ab0ff' : '#ffb27a', 2200);
-      this.audio.sfx('nova');
+      this.sync.world(() => {
+        this.ui.banner(this.night ? 'ION STORM' : 'DUST STORM', 'Visibility dropping', this.night ? '#8ab0ff' : '#ffb27a', 2200);
+        this.audio.sfx('nova');
+      });
     }
-    let target = 0;
+    let target = this.sync.guest ? this.sync.hostStorm : 0;
     if (S.dur > 0) {
       S.t += dt;
       target = S.t < S.dur - 4 ? 1 : 0;
@@ -2304,6 +2554,7 @@ export class Game {
       bosses: this.bossesKilled, best, newBest, damage: this.damageDealt, weapons: this.player.weapons, evolved: this.player.evolved,
     });
     this.audio.intensity = 0;
+    if (this.sync.mp) this.ui.coopOver(this.sync.host);
     void clamp;
   }
 }
